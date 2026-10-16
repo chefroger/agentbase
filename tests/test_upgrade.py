@@ -240,7 +240,7 @@ def _classify_subprocess_cmd(cmd) -> str:
 
     **只看程序名与参数，不看路径**。历史事故（2026-10-13 CI 随机失败）：
     旧实现用 `" ".join(cmd)` 做子串匹配，而 mkdtemp 的随机后缀恰好是
-    `ypipz09g` → `git clone ... /tmp/trade-test-ypipz09g/...` 被判成 pip 命令
+    `ypipz09g` → `git clone ... /tmp/agentbase-test-ypipz09g/...` 被判成 pip 命令
     → 假 subprocess 给 clone 返回失败码 → `test_pip_failure_is_fatal` 随机红。
     概率约万分之一，CI 上撞到了。
     """
@@ -375,10 +375,10 @@ class TestUpdateStepSeverity:
     def test_command_classifier_ignores_paths_containing_pip(self):
         """回归：命令的**路径**里含 "pip"/"git" 不得改变分类（CI 随机红的根因）。
 
-        用事故现场的真实路径（/tmp/trade-test-ypipz09g）钉住。
+        用事故现场的真实路径（/tmp/agentbase-test-ypipz09g）钉住。
         """
         clone = ["git", "clone", "https://github.com/x/y.git",
-                 "/tmp/trade-test-ypipz09g/agentbase"]
+                 "/tmp/agentbase-test-ypipz09g/agentbase"]
         assert _classify_subprocess_cmd(clone) == "git-other"
         assert _classify_subprocess_cmd(["git", "-C", "/tmp/gitlab-proj", "pull", "--ff-only"]) == "git-pull"
         assert _classify_subprocess_cmd(["git", "-C", "/p", "stash"]) == "git-stash"

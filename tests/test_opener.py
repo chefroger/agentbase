@@ -47,13 +47,13 @@ class TestAlreadyRunning:
         assert "已在运行" in msg
 
     def test_opens_trade_path_not_root(self):
-        """打开的必须是 /trade 界面，不是站点根。"""
+        """打开的必须是 /agentbase 界面，不是站点根。"""
         rec = _Recorder()
 
         opener.open_trade(probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
                           focuser=lambda _m: False, timeout=1.0)
 
-        assert rec.opened[0].endswith("/trade")
+        assert rec.opened[0].endswith("/agentbase")
 
 
 class TestColdStart:

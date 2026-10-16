@@ -91,7 +91,7 @@ def open_trade(
         opener: 打开界面的函数 ``(url) -> bool``；默认用 webbrowser
         focuser: 聚焦已有窗口的函数 ``(marker) -> bool``（可注入以便测试）
     """
-    url = f"{base_url}/trade"
+    url = f"{base_url}/agentbase"
 
     # 区分「本来就在跑」与「这次被我们启动」—— 文案不同，别把刚启动的说成已在运行
     was_running = probe(base_url)

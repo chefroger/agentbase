@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # 扫描范围：仓库里我们自己的源码（跳过依赖、构建产物、缓存）
-_SCAN_DIRS = ("trade", "tests", "scripts")
+_SCAN_DIRS = ("agentbase", "tests", "scripts")
 _SKIP_PARTS = {"__pycache__", "build", "dist", ".git", "node_modules"}
 # 守卫文件自身必须跳过 —— 它为了说明"什么是坏的"而**故意**写着那个写法
 # （docstring 里的反面例子 + test_guard_itself_catches_the_bug_shape 的样本字符串），
@@ -95,6 +95,6 @@ class TestRepoLayoutAssumptions:
     依赖 CWD 的写法在两种环境下行为不同。
     """
 
-    @pytest.mark.parametrize("rel", ["trade", "agentbase/hermes_chat_memory_plugin"])
+    @pytest.mark.parametrize("rel", ["agentbase", "agentbase/hermes_chat_memory_plugin"])
     def test_repo_root_resolution_works(self, rel):
         assert (REPO_ROOT / rel).is_dir(), f"从 __file__ 推不出 {rel}，仓库布局假设失效"

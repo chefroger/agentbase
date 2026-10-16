@@ -42,7 +42,7 @@ if _template_dir.is_dir():
 
 # hidden imports that PyInstaller may miss
 _hidden_imports = [
-    "trade", "agentbase.api", "agentbase.api.companies", "agentbase.api.onboarding",
+    "agentbase", "agentbase.api", "agentbase.api.companies", "agentbase.api.onboarding",
     "agentbase.api.libraries", "agentbase.api.customers", "agentbase.api.conversations",
     "agentbase.api.chat", "agentbase.api.memory", "agentbase.api.deps",
     "agentbase.osint", "agentbase.osint.constants", "agentbase.osint.whois",
@@ -69,7 +69,7 @@ _hidden_imports = [
 
 a = Analysis(
     [str(ROOT / "server.py")],
-    pathex=[str(ROOT), str(ROOT / "trade")],
+    pathex=[str(ROOT), str(ROOT / "agentbase")],
     binaries=[],
     datas=_static_files + _skill_files + _template_files,
     hiddenimports=_hidden_imports,

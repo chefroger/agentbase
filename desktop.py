@@ -51,7 +51,7 @@ def main():
     # 5. 打开 WebView 窗口
     import webview
 
-    url = f"http://{host}:{port}/trade"
+    url = f"http://{host}:{port}/agentbase"
     webview.create_window(
         "Smart Trade AI",
         url,

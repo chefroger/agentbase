@@ -167,7 +167,7 @@ def _license_file_path() -> Path:
         base = Path(val)
     elif os.name == "nt":
         local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        base = Path(local) / "trade"
+        base = Path(local) / "agentbase"
     else:
         base = Path.home() / ".agentbase"
     _LICENSE_FILE = base / "data" / "license.json"

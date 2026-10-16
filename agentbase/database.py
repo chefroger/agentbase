@@ -25,7 +25,7 @@ def _get_db_path() -> Path:
     if not agentbase_home:
         # Windows: %LOCALAPPDATA%\trade, macOS/Linux: ~/.agentbase
         if os.name == "nt":
-            agentbase_home = str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "trade")
+            agentbase_home = str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "agentbase")
         else:
             agentbase_home = str(Path.home() / ".agentbase")
     data_dir = Path(agentbase_home) / "data"
@@ -376,7 +376,7 @@ def _needs_schema_work(conn: sqlite3.Connection) -> bool:
 def _backup_db(db_path: Path) -> Path | None:
     """在 schema 变更前自动备份数据库。
 
-    备份到 ~/.agentbase/backups/trade-YYYYMMDD-HHMMSS.db。
+    备份到 ~/.agentbase/backups/agentbase-YYYYMMDD-HHMMSS.db。
     如果数据库尚不存在（全新安装），则跳过备份。
     返回备份路径，无备份时返回 None。
     """
@@ -412,7 +412,7 @@ _BACKUP_KEEP = 5
 def prune_old_backups(backup_dir: Path, keep: int = _BACKUP_KEEP) -> list[Path]:
     """只保留最近 `keep` 份自动备份，其余删除。返回被删列表。
 
-    只处理形如 `trade-YYYYMMDD-HHMMSS.db` 的自动备份；**手工备份
+    只处理形如 `agentbase-YYYYMMDD-HHMMSS.db` 的自动备份；**手工备份
     （如 trade-before-restore-*.db）一律不动** —— 那是用户特意留的。
     """
     import re as _re

@@ -148,7 +148,7 @@ class TestDispatch:
         """`trade osint <目标>` 要被 bootstrap 认出来并退出，不起服务。"""
         from agentbase import bootstrap
 
-        monkeypatch.setattr(sys, "argv", ["trade", "osint", "acme.com"])
+        monkeypatch.setattr(sys, "argv", ["agentbase", "osint", "acme.com"])
         ran = {}
         monkeypatch.setattr("agentbase.osint.cli.main", lambda argv: ran.setdefault("argv", argv) or 0)
 

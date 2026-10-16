@@ -75,7 +75,7 @@ def _get_package_skills_dir() -> Path | None:
         p = Path(prefix)
         if not p.is_dir():
             continue
-        candidate = p / "trade" / "__init__.py"
+        candidate = p / "agentbase" / "__init__.py"
         if candidate.exists():
             skills_dir = candidate.parent.parent / "skills"
             if skills_dir.is_dir():

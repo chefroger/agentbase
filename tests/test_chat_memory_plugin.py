@@ -416,7 +416,7 @@ class TestChatMemoryPluginE2E:
         路径必须**从本文件位置推**，不能写死 —— 第一版写死了开发机的绝对路径，
         本地全绿、CI 上 6 个用例全挂在 FileNotFoundError（仓库不在那个路径下）。
         """
-        plugin_path = Path(__file__).resolve().parent.parent / "trade" / "hermes_chat_memory_plugin"
+        plugin_path = Path(__file__).resolve().parent.parent / "agentbase" / "hermes_chat_memory_plugin"
         spec = importlib.util.spec_from_file_location("chat_memory_plugin", plugin_path / "__init__.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

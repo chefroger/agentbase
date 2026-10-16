@@ -2,7 +2,7 @@
 
 历史 bug：函数把 `HERMES_HOME` 本身当成 Hermes checkout 插进 sys.path。但
 HERMES_HOME 是**数据根目录**（~/.hermes），checkout 在其下的 `hermes-agent/`。
-而 `~/.local/bin/trade` 包装脚本恰好 `export HERMES_HOME=/Users/.../.hermes`，
+而 `~/.local/bin/agentbase` 包装脚本恰好 `export HERMES_HOME=/Users/.../.hermes`，
 于是插进去的是数据根目录（里面没有 hermes_cli）。
 
 这个缺陷长期被掩盖：venv 的 site-packages 里另有一份 hermes-agent 兜底。

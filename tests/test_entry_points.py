@@ -2,7 +2,7 @@
 
 历史缺陷：`[project.scripts]` 里 `trade = server:main`、`desktop = desktop:main`
 指向**仓库根的顶层模块**，而 `packages.find` 只收 `trade` 包、也没有声明 `py-modules`
-→ 任何 pip 安装后这两个命令都是 `ModuleNotFoundError`（实测 `~/.agentbase/venv/bin/trade`
+→ 任何 pip 安装后这两个命令都是 `ModuleNotFoundError`（实测 `~/.agentbase/venv/bin/agentbase`
 报 `No module named 'server'`）。
 
 另外 `server.py` 原先在**模块顶层**执行 `setup(); main()`，意味着

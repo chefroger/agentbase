@@ -668,7 +668,7 @@ class _FakeClient:
 class TestTradeUiTokenScope:
     """session token 只下发给本机回环客户端。
 
-    token 是唯一凭据，而 /trade 页面本身无需鉴权即可获取 —— 一旦 --host 0.0.0.0，
+    token 是唯一凭据，而 /agentbase 页面本身无需鉴权即可获取 —— 一旦 --host 0.0.0.0，
     局域网内任意主机 fetch 该页就能拿到 token 并接管全部 API（含 /system/update）。
     """
 

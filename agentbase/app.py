@@ -214,7 +214,7 @@ def _remote_ui_allowed() -> bool:
 def _client_may_receive_token(request) -> bool:
     """是否允许向该客户端下发 session token。
 
-    session token 是唯一凭据，而 /trade 页面无需鉴权即可获取 ——
+    session token 是唯一凭据，而 /agentbase 页面无需鉴权即可获取 ——
     若绑定 --host 0.0.0.0 时照常下发，局域网内任意主机 fetch 该页即可拿到
     token 并接管全部 API（包括 /system/update 这类系统端点）。
     默认只给本机回环客户端；确需局域网访问时用 AGENTBASE_ALLOW_REMOTE_UI=1 显式开启。
@@ -481,9 +481,9 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
         )
         return (["cmd", "/c", script], str(log_file))
 
-    # POSIX：安装脚本是 install.sh，启动器是 ~/.local/bin/trade
+    # POSIX：安装脚本是 install.sh，启动器是 ~/.local/bin/agentbase
     sh = agentbase_dir / "scripts" / "install.sh"
-    launcher = Path.home() / ".local" / "bin" / "trade"
+    launcher = Path.home() / ".local" / "bin" / "agentbase"
     if not sh.is_file():
         return None
 
@@ -851,7 +851,7 @@ def create_app() -> FastAPI:
 
 
 def serve_app(app: FastAPI) -> None:
-    """注册 /trade SPA 路由（需要 app 实例和 _SESSION_TOKEN）。"""
+    """注册 /agentbase SPA 路由（需要 app 实例和 _SESSION_TOKEN）。"""
     # 静态文件查找优先级：PyInstaller _MEIPASS > 运行时目录 > 开发目录
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         _STATIC_DIR = Path(sys._MEIPASS) / "static"
@@ -868,7 +868,7 @@ def serve_app(app: FastAPI) -> None:
     if _STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-    @app.get("/trade", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/agentbase", response_class=HTMLResponse, include_in_schema=False)
     async def agentbase_chat_ui(request: Request):
         """Serve the B2B chat interface with session token injected.
 
@@ -888,7 +888,7 @@ def serve_app(app: FastAPI) -> None:
                     '<h1>请在本机浏览器中打开</h1>'
                     '<p>本服务只向本机（回环地址）浏览器下发会话凭据，'
                     '以免局域网内其它主机取得凭据后接管全部接口。</p>'
-                    '<p>请在这台机器上访问 <code>http://127.0.0.1:{port}/trade</code>。</p>'
+                    '<p>请在这台机器上访问 <code>http://127.0.0.1:{port}/agentbase</code>。</p>'
                     '<p style="color:#666;font-size:0.9rem;">确需局域网访问时，'
                     '可在启动前设置环境变量 <code>AGENTBASE_ALLOW_REMOTE_UI=1</code>（会降低安全性）。</p>'
                     '</body></html>'
@@ -942,7 +942,7 @@ def main() -> None:
     from agentbase.bootstrap import background_github_skills_sync
     background_github_skills_sync()
 
-    url = f"http://{args.host}:{args.port}/trade"
+    url = f"http://{args.host}:{args.port}/agentbase"
     print(f"\n  Foreign Trade Assistant → {url}")
     print(f"  Session token: {_SESSION_TOKEN[:8]}...（完整 token 已注入 API 页面）")
     print()

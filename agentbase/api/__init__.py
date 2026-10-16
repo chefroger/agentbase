@@ -65,7 +65,7 @@ def _enforce_company_binding(
 
 # 所有 /api/agentbase/* 路由默认要求 session token + 公司绑定
 router = APIRouter(
-    tags=["trade"],
+    tags=["agentbase"],
     dependencies=[Depends(require_session), Depends(_enforce_company_binding)],
 )
 

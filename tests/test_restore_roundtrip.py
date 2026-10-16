@@ -11,7 +11,7 @@
    `rglob("agentbase.db")` 兜底被碰巧救回 —— 这让整条路径"看起来是对的"。
 
 2. **重启回退是死代码**：`_build_restart_command()` 返回
-   `[sys.executable, "-m", "trade"]`，但**仓库里没有 `agentbase/__main__.py`**
+   `[sys.executable, "-m", "agentbase"]`，但**仓库里没有 `agentbase/__main__.py`**
    → 子进程 `No module named agentbase.__main__` 秒退；而 Popen 本身成功，
    所以照样打印「↻ Trade 服务已重新启动」。用户被告知服务已起，实际已下线。
 
@@ -45,7 +45,7 @@ def _no_real_restart(monkeypatch):
 @pytest.fixture
 def agentbase_env(monkeypatch, tmp_path):
     """临时 AGENT_HOME / HERMES_HOME，带一份可辨别的数据。"""
-    agentbase_home = tmp_path / "trade"
+    agentbase_home = tmp_path / "agentbase"
     hermes_home = tmp_path / "hermes"
     (agentbase_home / "data").mkdir(parents=True)
     (agentbase_home / "companies" / "acme").mkdir(parents=True)
@@ -165,7 +165,7 @@ class TestRestartCommandIsRunnable:
 
         if "-m" in cmd:
             mod = cmd[cmd.index("-m") + 1]
-            assert mod != "trade", (
+            assert mod != "agentbase", (
                 "`-m agentbase` 需要 agentbase/__main__.py，而它不存在 —— 重启必然秒退，"
                 "但 Popen 成功所以仍会打印「已重新启动」"
             )

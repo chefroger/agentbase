@@ -807,8 +807,8 @@ async function recoverAuth(method, path, body) {
     if (_authRecovering) return null;
     _authRecovering = true;
     try {
-        // 服务重启后旧页面 token 失效：重新拉取 /trade 提取新 token
-        var fresh = await fetch('/trade?_=' + Date.now(), { cache: 'no-store' });
+        // 服务重启后旧页面 token 失效：重新拉取 /agentbase 提取新 token
+        var fresh = await fetch('/agentbase?_=' + Date.now(), { cache: 'no-store' });
         if (fresh.ok) {
             var html = await fresh.text();
             var m = html.match(/(?:const|let|var)\s+TOKEN\s*=\s*"([^"]+)"/);
@@ -1068,7 +1068,7 @@ async function _waitForRestartAndReload(onTimeout, maxSeconds) {
                     _saveReloadState();  // 保存当前浏览位置，reload 后恢复
                     _clearRuntimeCaches();
                     try { sessionStorage.removeItem('_upgrade_in_progress'); } catch(_) {}
-                    location.href = '/trade?_=' + Date.now();
+                    location.href = '/agentbase?_=' + Date.now();
                     return;
                 }
             }

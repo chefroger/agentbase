@@ -35,7 +35,7 @@ from agentbase import company_admin
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """临时库 + 临时「桌面」，建一家公司并真的落出目录结构。"""
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path / "trade"))
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path / "agentbase"))
     desktop = tmp_path / "Desktop"
     desktop.mkdir()
 
@@ -270,7 +270,7 @@ class TestDispatch:
         """`trade company list` 要被 bootstrap 认出来并退出，不起服务。"""
         from agentbase import bootstrap
 
-        monkeypatch.setattr(sys, "argv", ["trade", "company", "list"])
+        monkeypatch.setattr(sys, "argv", ["agentbase", "company", "list"])
         ran = {}
         monkeypatch.setattr(
             "agentbase.company_admin.main", lambda argv: ran.setdefault("argv", argv) or 0
@@ -284,7 +284,7 @@ class TestDispatch:
     def test_unknown_subcommand_does_not_dispatch(self, monkeypatch):
         from agentbase import bootstrap
 
-        monkeypatch.setattr(sys, "argv", ["trade", "--no-browser"])
+        monkeypatch.setattr(sys, "argv", ["agentbase", "--no-browser"])
 
         assert bootstrap.dispatch_subcommands() is False
 

@@ -322,4 +322,4 @@ class TestNoStrayLaunchersOnDesktop:
 
         monkeypatch.delenv("AGENT_HOME", raising=False)
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "la"))
-        assert "trade" in str(ws.launcher_dir())
+        assert "agentbase" in str(ws.launcher_dir())

@@ -387,7 +387,7 @@ mkdir -p "$AGENT_HOME/companies"
 # 导出 trade 命令到 ~/.local/bin（放 PATH 里）
 # ─────────────────────────────────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
-cat > "$HOME/.local/bin/trade" << LAUNCHER
+cat > "$HOME/.local/bin/agentbase" << LAUNCHER
 #!/bin/bash
 export HERMES_HOME="\${HERMES_HOME:-$HOME/.hermes}"
 # 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes 自带的 store python
@@ -396,7 +396,7 @@ export HERMES_HOME="\${HERMES_HOME:-$HOME/.hermes}"
 export HERMES_DISABLE_LAZY_INSTALLS="1"
 exec "$VENV_DIR/bin/python" "$AGENTBASE_DIR/server.py" "\$@"
 LAUNCHER
-chmod +x "$HOME/.local/bin/trade"
+chmod +x "$HOME/.local/bin/agentbase"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 检查 PATH 中是否有 ~/.local/bin
@@ -443,7 +443,7 @@ echo -e "${BOLD}${GREEN}══ 安装完成 ══${NC}"
 echo ""
 echo -e "  启动方式:"
 echo -e "    新终端: ${BOLD}trade${NC}"
-echo -e "    当前终端: ${BOLD}$HOME/.local/bin/trade${NC}"
+echo -e "    当前终端: ${BOLD}$HOME/.local/bin/agentbase${NC}"
 echo ""
 echo -e "  启动后打开: ${CYAN}http://127.0.0.1:9120/agentbase${NC}"
 echo ""
@@ -472,7 +472,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     <string>com.agentbase.assistant</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$HOME/.local/bin/trade</string>
+        <string>$HOME/.local/bin/agentbase</string>
         <string>--no-browser</string>
     </array>
     <key>RunAtLoad</key>
@@ -525,7 +525,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$HOME/.local/bin/trade --no-browser
+ExecStart=$HOME/.local/bin/agentbase --no-browser
 Restart=on-failure
 RestartSec=10
 

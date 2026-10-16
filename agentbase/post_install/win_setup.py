@@ -47,7 +47,7 @@ def launcher_dir() -> Path:
         return Path(val)
     if os.name == "nt":
         local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        return Path(local) / "trade"
+        return Path(local) / "agentbase"
     return Path.home() / ".agentbase"
 
 
@@ -93,7 +93,7 @@ def resolve_trade_command(agentbase_dir: Path, *, executable: str | None = None)
     """
     exe = executable or sys.executable
     exe_dir = Path(exe).parent
-    for name in ("agentbase.exe", "trade"):
+    for name in ("agentbase.exe", "agentbase"):
         candidate = exe_dir / name
         if candidate.is_file():
             return f'"{to_batch_path(candidate)}"'

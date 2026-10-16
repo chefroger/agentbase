@@ -148,7 +148,7 @@ class TestWindowsLauncherPath:
     """
 
     def test_app_py_points_at_local_bin(self):
-        src = (ROOT / "trade" / "app.py").read_text(encoding="utf-8")
+        src = (ROOT / "agentbase" / "app.py").read_text(encoding="utf-8")
         line = next(
             (ln for ln in src.splitlines() if "launcher" in ln and "agentbase.cmd" in ln),
             None,

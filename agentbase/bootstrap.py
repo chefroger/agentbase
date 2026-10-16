@@ -604,7 +604,7 @@ def _local_chat_memory_plugin_source() -> Path | None:
     """
     _meipass = getattr(sys, "_MEIPASS", None)
     if _meipass:
-        cand = Path(_meipass) / "trade" / "hermes_chat_memory_plugin"
+        cand = Path(_meipass) / "agentbase" / "hermes_chat_memory_plugin"
         if cand.is_dir():
             return cand
 
@@ -617,7 +617,7 @@ def _local_chat_memory_plugin_source() -> Path | None:
             _trade_home = str(Path(_local) / "agentbase")
         else:
             _trade_home = str(Path.home() / ".agentbase")
-    cand = Path(_trade_home) / "agentbase" / "trade" / "hermes_chat_memory_plugin"
+    cand = Path(_trade_home) / "agentbase" / "agentbase" / "hermes_chat_memory_plugin"
     if cand.is_dir():
         return cand
 

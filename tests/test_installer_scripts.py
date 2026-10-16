@@ -313,7 +313,7 @@ class TestLauncherDisablesHermesLazyInstalls:
 
     def test_bash_launcher_sets_flag(self):
         assert self.FLAG in _code_lines(SH), (
-            "install.sh 生成的 ~/.local/bin/trade 未禁用 Hermes 懒加载重启"
+            "install.sh 生成的 ~/.local/bin/agentbase 未禁用 Hermes 懒加载重启"
         )
 
     def test_powershell_launcher_sets_flag(self):

@@ -151,8 +151,8 @@ def _ensure_macos_auto_start(agentbase_dir: Path) -> None:
         print("  ✓ 开机自启动任务已存在")
         return
 
-    # trade 命令路径（优先 ~/.local/bin/trade，其次 PATH 中的 trade）
-    agentbase_bin = os.environ.get("HOME", str(Path.home())) + "/.local/bin/trade"
+    # trade 命令路径（优先 ~/.local/bin/agentbase，其次 PATH 中的 trade）
+    agentbase_bin = os.environ.get("HOME", str(Path.home())) + "/.local/bin/agentbase"
     plist_content = textwrap.dedent(f"""\
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -22,7 +22,7 @@ _FORBIDDEN_DIRS = [
     (Path.home() / ".agentbase").resolve(),
     (Path.home() / ".ssh").resolve(),
     (Path(_LOCAL_APP) / "hermes").resolve(),    # Windows Hermes 路径
-    (Path(_LOCAL_APP) / "trade").resolve(),     # Windows Trade 路径
+    (Path(_LOCAL_APP) / "agentbase").resolve(),     # Windows Trade 路径
     Path("/etc").resolve(),
     Path("/root").resolve(),
 ]
