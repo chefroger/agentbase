@@ -17,10 +17,10 @@
 
 ## 统一后的结构
 
-    trade-autostart.bat   把 trade 的输出重定向到 trade-autostart.log（失败可查）
+    agentbase-autostart.bat   把 trade 的输出重定向到 trade-autostart.log（失败可查）
     agentbase-autostart.vbs   以隐藏窗口启动上面的 bat（不弹终端）
     计划任务 SmartTradeAI  登录时运行 wscript.exe "<vbs>"（隐藏窗口）
-    桌面快捷方式          指向 trade-open.vbs → `trade open`（起服务 + 开浏览器）
+    桌面快捷方式          指向 agentbase-open.vbs → `trade open`（起服务 + 开浏览器）
 
 日志重定向很关键：隐藏窗口之后就看不到 stdout 了，没有日志文件等于把排查能力
 一起藏了。

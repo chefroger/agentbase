@@ -38,7 +38,7 @@ def _get_trade_home() -> Path:
     """解析 Trade 用户数据目录（AGENT_HOME 环境变量 → 平台默认路径）。
 
     macOS/Linux: ~/.agentbase/
-    Windows:     %LOCALAPPDATA%\agentbase\\
+    Windows:     %LOCALAPPDATA%\agentbase\
     """
     val = os.environ.get("AGENT_HOME", "").strip()
     if val:

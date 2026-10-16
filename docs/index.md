@@ -361,7 +361,7 @@ hermes gateway install
 
 **这一步正常情况下不需要你做。** 首次运行 `trade` 时，程序会自动完成：
 
-1. 在 `%LOCALAPPDATA%\agentbase\` 生成隐藏窗口启动器（`trade-autostart.bat` + `.vbs`）
+1. 在 `%LOCALAPPDATA%\agentbase\` 生成隐藏窗口启动器（`agentbase-autostart.bat` + `.vbs`）
 2. 注册登录自启的计划任务 `SmartTradeAI`（**不弹终端窗口**）
 3. 在桌面创建 **Trade** 快捷方式（双击 = 启动服务并打开界面）
 4. 清理旧版遗留的、会弹终端窗口的自启方式
@@ -385,7 +385,7 @@ hermes gateway install
 ```powershell
 $tradeExe = (Get-Command trade -ErrorAction Stop).Source
 $dir = "$env:LOCALAPPDATA\trade"
-$bat  = "$dir\trade-autostart.bat"
+$bat  = "$dir\agentbase-autostart.bat"
 $vbs  = "$dir\agentbase-autostart.vbs"
 $log  = "$dir\trade-autostart.log"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -420,9 +420,9 @@ $ws = New-Object -ComObject WScript.Shell
 $lnk = "$([Environment]::GetFolderPath('Desktop'))\Trade.lnk"
 $sc = $ws.CreateShortcut($lnk)
 $sc.TargetPath = "wscript.exe"
-# 注意指向 trade-open.vbs（打开界面），不是 agentbase-autostart.vbs（那个只启动服务、
+# 注意指向 agentbase-open.vbs（打开界面），不是 agentbase-autostart.vbs（那个只启动服务、
 # 不开浏览器）—— 早期文档写错了这一处，照抄会得到"启动了但页面不弹"的快捷方式
-$sc.Arguments = "\"$env:LOCALAPPDATA\agentbase\trade-open.vbs\""
+$sc.Arguments = "\"$env:LOCALAPPDATA\agentbase\agentbase-open.vbs\""
 $sc.Description = "打开 Trade 外贸 AI 助手"
 $sc.Save()
 ```
