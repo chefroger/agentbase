@@ -417,7 +417,7 @@ def prune_old_backups(backup_dir: Path, keep: int = _BACKUP_KEEP) -> list[Path]:
     """
     import re as _re
 
-    pattern = _re.compile(r"^trade-\d{8}-\d{6}\.db$")
+    pattern = _re.compile(r"^agentbase-\d{8}-\d{6}\.db$")
     try:
         candidates = sorted(
             (p for p in backup_dir.iterdir()

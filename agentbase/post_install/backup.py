@@ -258,7 +258,7 @@ def _resolve_backup_root(tmp_dir: Path) -> Path:
 
     判据：目录下是否存在 `data/` 或 `companies/`。
     """
-    nested = tmp_dir / ".trade"
+    nested = tmp_dir / ".agentbase"
     if nested.is_dir() and any(
         (nested / sub).exists() for sub in ("data", "companies", "prompts")
     ):

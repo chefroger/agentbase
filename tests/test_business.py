@@ -435,6 +435,8 @@ class TestRootPathValidation:
             str(home / ".ssh"),
             str(home / ".ssh" / "known_hosts"),
             str(home / ".hermes"),
+            str(home / ".agentbase"),
+            # 原 Trade 的数据目录：agentbase 与 Trade 必须零干扰，也必须拒绝
             str(home / ".trade"),
             str(home),          # 家目录本身
             str(Path(home.anchor).resolve()),  # 根目录（跨平台）

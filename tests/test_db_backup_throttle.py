@@ -110,7 +110,7 @@ class TestInitDbDoesNotBackUpUnnecessarily:
         """把库建好（首次 init_db 不备份 —— 库文件还不存在）。返回路径三元组。"""
         import agentbase.database as dbmod
 
-        agentbase_home = tmp_path / ".trade"
+        agentbase_home = tmp_path / ".agentbase"
         (agentbase_home / "data").mkdir(parents=True)
         db_path = agentbase_home / "data" / "agentbase.db"
         monkeypatch.setattr(dbmod, "_get_db_path", lambda: db_path)
