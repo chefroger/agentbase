@@ -384,7 +384,7 @@ hermes gateway install
 
 ```powershell
 $tradeExe = (Get-Command trade -ErrorAction Stop).Source
-$dir = "$env:LOCALAPPDATA\trade"
+$dir = "$env:LOCALAPPDATA\agentbase"
 $bat  = "$dir\agentbase-autostart.bat"
 $vbs  = "$dir\agentbase-autostart.vbs"
 $log  = "$dir\trade-autostart.log"

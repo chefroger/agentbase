@@ -138,7 +138,7 @@ class TestWindowsLauncherPath:
     """app.py 找 agentbase.cmd 的位置，必须与 install.ps1 **实际生成**它的位置一致。
 
     这是一个**跨文件契约**：两边各自演化、谁也不知道对方，正是这类 bug 的温床。
-    2026-10-16 评审抓到过一次真实后果 —— app.py 写的是 `%LOCALAPPDATA%\agentbase\agentbase.cmd`
+    2026-10-16 评审抓到过一次真实后果 —— app.py 写的是 `%LOCALAPPDATA%\\agentbase\\agentbase.cmd`
     而 install.ps1 写在 `%LOCALAPPDATA%\\local\\bin\\agentbase.cmd`，差了 `local\\bin` 一层。
     于是 Windows 用户点「开始重建」→ venv 重建**全部成功** → 最后一步 `start` 找不到
     文件 → 服务起不来，界面卡在「正在重建」直到 15 分钟超时。

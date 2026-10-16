@@ -78,7 +78,7 @@ if (-not $PythonCmd) {
 # ─────────────────────────────────────────────────────────────────────────────
 # 创建 venv
 # ─────────────────────────────────────────────────────────────────────────────
-$TradeHome = if ($env:AGENT_HOME) { $env:AGENT_HOME } else { "$env:LOCALAPPDATA\trade" }
+$TradeHome = if ($env:AGENT_HOME) { $env:AGENT_HOME } else { "$env:LOCALAPPDATA\agentbase" }
 $VenvReal = "$TradeHome\venv"
 $VenvDir  = $VenvReal
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）

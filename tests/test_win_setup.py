@@ -60,13 +60,13 @@ class TestBatchPathRewriting:
 
 class TestGeneratedScripts:
     def test_autostart_has_no_browser_and_logs(self):
-        bat = ws.build_autostart_bat('"%LOCALAPPDATA%\agentbase\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\agentbase\a.log")
+        bat = ws.build_autostart_bat('"%LOCALAPPDATA%\\agentbase\\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\\agentbase\\a.log")
 
         assert "--no-browser" in bat, "开机自启不该打开浏览器"
         assert "> " in bat and "2>&1" in bat, "必须重定向日志 —— 隐藏窗口后就没别的排查手段了"
 
     def test_open_has_open_subcommand(self):
-        bat = ws.build_open_bat('"%LOCALAPPDATA%\agentbase\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\agentbase\o.log")
+        bat = ws.build_open_bat('"%LOCALAPPDATA%\\agentbase\\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\\agentbase\\o.log")
 
         assert " open " in bat, "快捷方式应调用 `trade open`（起服务 + 开浏览器）"
         assert "--no-browser" not in bat, "open 子命令自己负责开浏览器"
@@ -230,7 +230,7 @@ class TestTaskDetectionIsStrict:
     def test_pointing_at_expected_vbs_is_ok(self):
         xml = (
             "<Command>C:\\Windows\\System32\\wscript.exe</Command>"
-            '<Arguments>"C:\\Users\\x\\AppData\\Local\agentbase\\agentbase-autostart.vbs"</Arguments>'
+            '<Arguments>"C:\\Users\\x\\AppData\\Local\\agentbase\\agentbase-autostart.vbs"</Arguments>'
         )
 
         assert ws.is_vbs_launcher_task(
@@ -263,7 +263,7 @@ class TestVbsIsAsciiSafe:
 
     def test_vbs_uses_env_var_not_literal_path(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\张伟\AppData\Local")
-        bat = Path(r"C:\Users\张伟\AppData\Local\agentbase\agentbase-autostart.bat")
+        bat = Path(r"C:\Users\张伟\AppData\Local\agentbase\trade-autostart.bat")
 
         vbs = ws.build_hidden_vbs(bat)
 
@@ -316,7 +316,7 @@ class TestNoStrayLaunchersOnDesktop:
         assert stray.is_file(), "检测过程把文件删了"
 
     def test_launcher_dir_is_never_the_desktop(self, tmp_path, monkeypatch):
-        """启动器目录落在 AGENT_HOME / %LOCALAPPDATA%\\trade，绝不是桌面。"""
+        """启动器目录落在 AGENT_HOME / %LOCALAPPDATA%\\agentbase，绝不是桌面。"""
         monkeypatch.setenv("AGENT_HOME", str(tmp_path / "th"))
         assert ws.launcher_dir() == tmp_path / "th"
 
