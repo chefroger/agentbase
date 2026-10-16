@@ -31,7 +31,7 @@ _warnings.filterwarnings("ignore", message=r".*No module named 'hermes_cli\.tool
 
 
 # ── sys.path 调整：Trade 包优先于 Hermes ──────────────────────────────────
-# Hermes 也有 `trade/` 包；我们的 `trade/` 必须优先。
+# Hermes 也有 `agentbase/` 包；我们的 `agentbase/` 必须优先。
 # NOTE: 当 hermes-agent 作为独立 pip 包发布后，此块可移除。
 def _resolve_hermes_checkout() -> str:
     r"""解析 Hermes 源码目录（含 `hermes_cli` 包的那个目录）；找不到返回空串。
@@ -80,7 +80,7 @@ def _adjust_sys_path():
 
     _hermes_checkout = _resolve_hermes_checkout()
     if _hermes_checkout and _hermes_checkout not in sys.path:
-        # Hermes 放在第 1 位，Trade 仍在第 0 位（避免 trade/ 包名冲突）
+        # Hermes 放在第 1 位，Trade 仍在第 0 位（避免 agentbase/ 包名冲突）
         sys.path.insert(1, _hermes_checkout)
 
     # 如果 HERMES_HOME 未设置但我们找到了 Hermes 路径，注入环境变量
@@ -1211,7 +1211,7 @@ def start_doctor_if_needed() -> None:
             # 自检自身出错绝不冒泡 —— 它只是诊断工具
             print(f"[doctor] 自检未能完成：{e}")
 
-    threading.Thread(target=_run, name="trade-doctor", daemon=True).start()
+    threading.Thread(target=_run, name="agentbase-doctor", daemon=True).start()
 
 
 def ensure_desktop_integration() -> None:

@@ -74,7 +74,7 @@ test('界面认识后端给的 rebuild_trade_venv 方向', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const js = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.js'), 'utf8');
-    const py = fs.readFileSync(path.join(__dirname, '..', 'trade', 'hermes_compat.py'), 'utf8');
+    const py = fs.readFileSync(path.join(__dirname, '..', 'agentbase', 'hermes_compat.py'), 'utf8');
 
     assert.ok(js.includes('rebuild_trade_venv'), 'app.js 未处理 rebuild_trade_venv');
     assert.ok(py.includes('"rebuild_trade_venv"'), '后端未产出 rebuild_trade_venv');

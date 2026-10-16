@@ -210,7 +210,7 @@ def _setup_work_directory(
             base = Path(agentbase_home) / "work"
         else:
             import tempfile
-            base = Path(tempfile.mkdtemp(prefix="trade-work-"))
+            base = Path(tempfile.mkdtemp(prefix="agentbase-work-"))
     else:
         base = _get_desktop_path()
 

@@ -339,7 +339,7 @@ class TestPowerShellChecksPipExitCodes:
     历史 bug：Step 2（装 Hermes）显式查了退出码，Step 3（装 Trade 依赖）没查 ——
     而脚本自己在 105 行注释过「PowerShell 里原生命令非零退出不会抛异常」，
     同一个坑只堵了一半。后果：弱网下 requirements.txt 装失败，脚本照样打印
-    「✓ Foreign Trade Assistant 安装完成」→「══ 安装完成 ══」，用户运行 trade
+    「✓ Foreign Trade Assistant 安装完成」→「══ 安装完成 ══」，用户运行 agentbase
     只得到一句 ModuleNotFoundError，且开机自启任务每次登录都静默失败。
 
     macOS 走 install.sh（`set -e`，pip 失败即中止）所以开发机看不出来；

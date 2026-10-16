@@ -333,7 +333,7 @@ python server.py
 ## 项目结构
 
 ```
-trade/                     B2B 业务层
+agentbase/                     B2B 业务层
 ├── api/                   FastAPI 路由（10 个业务域）
 ├── osint/                 客户背调模块（6 层检测）
 ├── skill_router.py        Skill 自动匹配引擎
@@ -356,7 +356,7 @@ server.py                  FastAPI 入口
 pip install -e ".[dev,docs]"
 python -m pytest tests/ -v                  # Python 测试
 node --test "tests_js/**/*.test.js"         # 前端工具函数测试（零依赖，需 Node）
-ruff check trade/ server.py                 # 代码检查
+ruff check agentbase/ server.py                 # 代码检查
 ```
 
 > 前端测试与 Python 测试都由 CI 执行（`.github/workflows/test.yml`）。

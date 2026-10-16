@@ -386,7 +386,7 @@ hermes gateway install
 $tradeExe = (Get-Command trade -ErrorAction Stop).Source
 $dir = "$env:LOCALAPPDATA\trade"
 $bat  = "$dir\trade-autostart.bat"
-$vbs  = "$dir\trade-autostart.vbs"
+$vbs  = "$dir\agentbase-autostart.vbs"
 $log  = "$dir\trade-autostart.log"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
@@ -406,7 +406,7 @@ WshShell.Run "cmd /c ""$bat""", 0, False
 **10.2 注册登录自启（计划任务，隐藏窗口）**
 
 ```powershell
-schtasks /create /tn SmartTradeAI /sc onlogon /rl limited /f /tr "wscript.exe \"$env:LOCALAPPDATA\agentbase\trade-autostart.vbs\""
+schtasks /create /tn SmartTradeAI /sc onlogon /rl limited /f /tr "wscript.exe \"$env:LOCALAPPDATA\agentbase\agentbase-autostart.vbs\""
 ```
 
 **10.3 创建桌面快捷方式**
@@ -420,7 +420,7 @@ $ws = New-Object -ComObject WScript.Shell
 $lnk = "$([Environment]::GetFolderPath('Desktop'))\Trade.lnk"
 $sc = $ws.CreateShortcut($lnk)
 $sc.TargetPath = "wscript.exe"
-# 注意指向 trade-open.vbs（打开界面），不是 trade-autostart.vbs（那个只启动服务、
+# 注意指向 trade-open.vbs（打开界面），不是 agentbase-autostart.vbs（那个只启动服务、
 # 不开浏览器）—— 早期文档写错了这一处，照抄会得到"启动了但页面不弹"的快捷方式
 $sc.Arguments = "\"$env:LOCALAPPDATA\agentbase\trade-open.vbs\""
 $sc.Description = "打开 Trade 外贸 AI 助手"
@@ -429,7 +429,7 @@ $sc.Save()
 
 **10.4 验证**
 
-执行 `wscript.exe "$env:LOCALAPPDATA\agentbase\trade-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9120/agentbase**。能看到界面、且**没有弹出终端窗口**即为正确。
+执行 `wscript.exe "$env:LOCALAPPDATA\agentbase\agentbase-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9120/agentbase**。能看到界面、且**没有弹出终端窗口**即为正确。
 
 > 打不开就看 `%LOCALAPPDATA%\agentbase\trade-autostart.log`。最常见的是 `ModuleNotFoundError`，说明 trade 没装好。
 

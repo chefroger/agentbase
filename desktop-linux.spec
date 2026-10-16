@@ -12,13 +12,13 @@ a = Analysis(
     datas=[
         (str(_PROJECT_ROOT / 'skills'), 'skills'),
         (str(_PROJECT_ROOT / '.agentbase-template'), '.agentbase-template'),
-        (str(_PROJECT_ROOT / 'trade'), 'trade'),
+        (str(_PROJECT_ROOT / 'agentbase'), 'agentbase'),
         (str(_PROJECT_ROOT / 'static'), 'static'),
         (str(_PROJECT_ROOT / 'pyproject.toml'), '.'),
     ],
     hiddenimports=[
         'uvicorn.loops.auto', 'uvicorn.protocols.http.auto',
-        'trade', 'agentbase.api', 'agentbase.api.chat', 'agentbase.api.cron',
+        'agentbase', 'agentbase.api', 'agentbase.api.chat', 'agentbase.api.cron',
         'agentbase.api.companies', 'agentbase.api.customers', 'agentbase.api.libraries',
         'agentbase.api.orders', 'agentbase.api.conversations', 'agentbase.api.memory',
         'agentbase.api.onboarding', 'agentbase.api.license', 'agentbase.api.deps',

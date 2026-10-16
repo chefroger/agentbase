@@ -49,7 +49,7 @@ def _get_trade_home() -> Path:
     # Windows 平台：使用 %LOCALAPPDATA%\agentbase\ 作为数据目录
     if os.name == "nt":
         local_appdata = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        return Path(local_appdata) / "trade"
+        return Path(local_appdata) / "agentbase"
     # macOS / Linux 平台：使用 ~/.agentbase/ 作为默认数据目录
     return Path.home() / ".agentbase"
 

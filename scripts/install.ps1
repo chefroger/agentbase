@@ -236,7 +236,7 @@ if (-not (Invoke-CloneOrUpdate "agentbase" $TradeRepo $TradeDir)) { exit 1 }
 Push-Location $TradeDir
 # 装依赖 + trade 自身。
 # 每个 pip 后都必须查 $LASTEXITCODE —— 原生命令非零退出不抛异常（见本文件前面的说明），
-# 不查就会在弱网/磁盘满时把失败当成成功，用户之后运行 trade 只得到
+# 不查就会在弱网/磁盘满时把失败当成成功，用户之后运行 agentbase 只得到
 # ModuleNotFoundError，且开机自启任务每次登录静默失败。
 & $PipCmd install -r requirements.txt
 if ($LASTEXITCODE -ne 0) {

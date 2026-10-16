@@ -139,7 +139,7 @@ def retain(
     content: str,
     context: str = "",
     *,
-    bank_id: str = "trade",
+    bank_id: str = "agentbase",
     document_id: str | None = None,
     tags: list[str] | None = None,
 ) -> bool:
@@ -153,7 +153,7 @@ def retain(
         return False
 
     try:
-        metadata = {"source": "trade-ai-assistant"}
+        metadata = {"source": "agentbase-ai-assistant"}
         kwargs: dict[str, Any] = {
             "bank_id": bank_id,
             "content": content,
@@ -181,7 +181,7 @@ def retain(
 def recall(
     query: str,
     *,
-    bank_id: str = "trade",
+    bank_id: str = "agentbase",
     budget: str = "mid",
     max_tokens: int = 4096,
 ) -> str | None:
@@ -215,7 +215,7 @@ def recall(
 def reflect(
     query: str,
     *,
-    bank_id: str = "trade",
+    bank_id: str = "agentbase",
     budget: str = "mid",
 ) -> str | None:
     """从 Hindsight 长期记忆中综合生成答案。
@@ -238,8 +238,8 @@ def reflect(
 def _bank_id(company_id: int | None) -> str:
     """构造按公司隔离的 bank_id。"""
     if company_id:
-        return f"trade-company-{company_id}"
-    return "trade-default"
+        return f"agentbase-company-{company_id}"
+    return "agentbase-default"
 
 
 def retain_conversation(
@@ -249,7 +249,7 @@ def retain_conversation(
     library_name: str = "",
     customer_name: str = "",
     company_id: int | None = None,
-    bank_id: str = "trade-default",
+    bank_id: str = "agentbase-default",
 ) -> bool:
     """将完整的对话轮次推送到 Hindsight 记忆。
 

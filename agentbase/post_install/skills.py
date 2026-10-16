@@ -47,7 +47,7 @@ def _get_trade_home() -> Path:
         local_appdata = os.environ.get(
             "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
         )
-        return Path(local_appdata) / "trade"
+        return Path(local_appdata) / "agentbase"
     return Path.home() / ".agentbase"
 
 

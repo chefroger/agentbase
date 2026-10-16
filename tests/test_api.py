@@ -494,7 +494,7 @@ class TestWorkDirUpload:
 
         from fastapi import UploadFile
 
-        work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
+        work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
         monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",
@@ -522,7 +522,7 @@ class TestWorkDirUpload:
 
         from fastapi import UploadFile
 
-        work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
+        work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
         monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",
@@ -567,7 +567,7 @@ class TestWorkDirUpload:
 
         from fastapi import UploadFile
 
-        work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
+        work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
         monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",

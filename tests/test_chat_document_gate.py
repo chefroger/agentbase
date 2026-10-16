@@ -292,7 +292,7 @@ async def test_gate_releases_hermes_task_record(env, agent_stub):
         payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
         await chat.app(payload, env["cid"])
 
-    assert released and released[0].startswith("trade-doc-")
+    assert released and released[0].startswith("agentbase-doc-")
 
 
 async def _collect_stream(env, agent_stub, query, evidence):

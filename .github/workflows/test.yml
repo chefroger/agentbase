@@ -17,9 +17,9 @@ jobs:
       - run: pip install ruff
       - name: Python syntax check
         run: |
-          python -m compileall -q trade/ server.py
+          python -m compileall -q agentbase/ server.py
           echo "✓ All files compile successfully"
-      - run: ruff check trade/ server.py
+      - run: ruff check agentbase/ server.py
       - name: Frontend utils tests (node:test, 零依赖)
         run: node --test "tests_js/**/*.test.js"
 

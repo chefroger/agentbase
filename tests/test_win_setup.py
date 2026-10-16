@@ -101,7 +101,7 @@ class TestGeneratedScripts:
 
 class TestTaskXmlDetection:
     def test_detects_new_style_vbs_task(self):
-        xml = '<Command>wscript.exe</Command><Arguments>"C:\\x\\trade-autostart.vbs"</Arguments>'
+        xml = '<Command>wscript.exe</Command><Arguments>"C:\\x\\agentbase-autostart.vbs"</Arguments>'
         assert ws.is_vbs_launcher_task(xml) is True
 
     def test_old_style_python_task_is_not_vbs(self):
@@ -136,7 +136,7 @@ class TestScheduledTaskReplacement:
         old_xml = '<Command>python.exe</Command><Arguments>server.py</Arguments>'
         self._patch_run(monkeypatch, old_xml, calls)
 
-        msg = ws.ensure_scheduled_task(Path(r"C:\x\trade-autostart.vbs"))
+        msg = ws.ensure_scheduled_task(Path(r"C:\x\agentbase-autostart.vbs"))
 
         kinds = [c[1].lstrip("/") for c in calls if c[0] == "schtasks"]
         assert "delete" in kinds, "旧任务（python.exe，会弹窗）没有被注销替换"
@@ -148,11 +148,11 @@ class TestScheduledTaskReplacement:
         # 必须指向**我们期望的那个** vbs —— 判据已收紧：指向别的脚本算需要替换
         new_xml = (
             "<Command>wscript.exe</Command>"
-            '<Arguments>"C:\\x\\trade-autostart.vbs"</Arguments>'
+            '<Arguments>"C:\\x\\agentbase-autostart.vbs"</Arguments>'
         )
         self._patch_run(monkeypatch, new_xml, calls)
 
-        msg = ws.ensure_scheduled_task(Path(r"C:\x\trade-autostart.vbs"))
+        msg = ws.ensure_scheduled_task(Path(r"C:\x\agentbase-autostart.vbs"))
 
         kinds = [c[1].lstrip("/") for c in calls if c[0] == "schtasks"]
         assert "delete" not in kinds and "create" not in kinds
@@ -162,7 +162,7 @@ class TestScheduledTaskReplacement:
         calls: list[list[str]] = []
         self._patch_run(monkeypatch, "", calls)
 
-        msg = ws.ensure_scheduled_task(Path(r"C:\x\trade-autostart.vbs"))
+        msg = ws.ensure_scheduled_task(Path(r"C:\x\agentbase-autostart.vbs"))
 
         kinds = [c[1].lstrip("/") for c in calls if c[0] == "schtasks"]
         assert "create" in kinds
@@ -173,7 +173,7 @@ class TestScheduledTaskReplacement:
         calls: list[list[str]] = []
         self._patch_run(monkeypatch, "", calls)
 
-        ws.ensure_scheduled_task(Path(r"C:\x\trade-autostart.vbs"))
+        ws.ensure_scheduled_task(Path(r"C:\x\agentbase-autostart.vbs"))
 
         create = next(c for c in calls if c[0] == "schtasks" and c[1] == "/create")
         tr = create[create.index("/tr") + 1]
@@ -224,24 +224,24 @@ class TestTaskDetectionIsStrict:
         )
 
         assert ws.is_vbs_launcher_task(
-            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\trade-autostart.vbs")
+            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\agentbase-autostart.vbs")
         ) is False
 
     def test_pointing_at_expected_vbs_is_ok(self):
         xml = (
             "<Command>C:\\Windows\\System32\\wscript.exe</Command>"
-            '<Arguments>"C:\\Users\\x\\AppData\\Local\\trade\\trade-autostart.vbs"</Arguments>'
+            '<Arguments>"C:\\Users\\x\\AppData\\Local\\trade\\agentbase-autostart.vbs"</Arguments>'
         )
 
         assert ws.is_vbs_launcher_task(
-            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\trade-autostart.vbs")
+            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\agentbase-autostart.vbs")
         ) is True
 
     def test_bare_wscript_command_is_ok(self):
         """schtasks 存的是裸文件名 wscript.exe 时也算对。"""
         xml = (
             "<Command>wscript.exe</Command>"
-            '<Arguments>"C:\\x\\trade-autostart.vbs"</Arguments>'
+            '<Arguments>"C:\\x\\agentbase-autostart.vbs"</Arguments>'
         )
         assert ws.is_vbs_launcher_task(xml) is True
 
@@ -249,7 +249,7 @@ class TestTaskDetectionIsStrict:
         """`cmd /c wscript ...` 这种包一层的写法会真的闪一下窗口，判为需要替换。"""
         xml = (
             "<Command>cmd.exe</Command>"
-            '<Arguments>/c wscript "C:\\x\\trade-autostart.vbs"</Arguments>'
+            '<Arguments>/c wscript "C:\\x\\agentbase-autostart.vbs"</Arguments>'
         )
         assert ws.is_vbs_launcher_task(xml) is False
 
@@ -287,15 +287,15 @@ class TestNoStrayLaunchersOnDesktop:
     """
 
     def test_detects_stray_vbs(self, tmp_path):
-        (tmp_path / "trade-autostart.vbs").write_text("x", encoding="utf-8")
+        (tmp_path / "agentbase-autostart.vbs").write_text("x", encoding="utf-8")
 
         found = ws.find_stray_desktop_launchers(tmp_path)
 
-        assert [p.name for p in found] == ["trade-autostart.vbs"]
+        assert [p.name for p in found] == ["agentbase-autostart.vbs"]
 
     def test_detects_all_four_launcher_names(self, tmp_path):
-        for name in ("trade-autostart.vbs", "trade-open.vbs",
-                     "trade-autostart.bat", "trade-open.bat"):
+        for name in ("agentbase-autostart.vbs", "agentbase-open.vbs",
+                     "agentbase-autostart.bat", "agentbase-open.bat"):
             (tmp_path / name).write_text("x", encoding="utf-8")
 
         assert len(ws.find_stray_desktop_launchers(tmp_path)) == 4
@@ -308,7 +308,7 @@ class TestNoStrayLaunchersOnDesktop:
 
     def test_does_not_delete_anything(self, tmp_path):
         """只报告不删除 —— 删桌面上的文件必须由人决定。"""
-        stray = tmp_path / "trade-autostart.vbs"
+        stray = tmp_path / "agentbase-autostart.vbs"
         stray.write_text("x", encoding="utf-8")
 
         ws.find_stray_desktop_launchers(tmp_path)

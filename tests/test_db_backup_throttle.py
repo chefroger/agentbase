@@ -122,11 +122,11 @@ class TestInitDbDoesNotBackUpUnnecessarily:
         """核心断言：schema 已最新时 init_db 不产生备份文件。"""
         dbmod, agentbase_home, _ = self._init_once(tmp_path, monkeypatch)
         backup_dir = agentbase_home / "backups"
-        before = list(backup_dir.glob("trade-*.db")) if backup_dir.is_dir() else []
+        before = list(backup_dir.glob("agentbase-*.db")) if backup_dir.is_dir() else []
 
         dbmod.init_db()  # 第二次：什么都不需要改
 
-        after = list(backup_dir.glob("trade-*.db")) if backup_dir.is_dir() else []
+        after = list(backup_dir.glob("agentbase-*.db")) if backup_dir.is_dir() else []
         assert after == before, f"schema 没变却新增了备份：{set(after) - set(before)}"
 
     def test_repeated_init_does_not_accumulate(self, tmp_path, monkeypatch):
@@ -137,7 +137,7 @@ class TestInitDbDoesNotBackUpUnnecessarily:
             dbmod.init_db()
 
         backup_dir = agentbase_home / "backups"
-        count = len(list(backup_dir.glob("trade-*.db"))) if backup_dir.is_dir() else 0
+        count = len(list(backup_dir.glob("agentbase-*.db"))) if backup_dir.is_dir() else 0
         assert count == 0, f"5 次重复启动产生了 {count} 个备份（每次 573KB，永不清理）"
 
 
@@ -148,16 +148,16 @@ class TestPruneOldBackups:
         d = tmp_path / "backups"
         d.mkdir()
         for i in range(10):
-            (d / f"trade-2026010{i}-120000.db").write_text("x", encoding="utf-8")
+            (d / f"agentbase-2026010{i}-120000.db").write_text("x", encoding="utf-8")
 
         removed = prune_old_backups(d, keep=3)
 
         assert len(removed) == 7
         remaining = sorted(p.name for p in d.iterdir())
         assert remaining == [
-            "trade-20260107-120000.db",
-            "trade-20260108-120000.db",
-            "trade-20260109-120000.db",
+            "agentbase-20260107-120000.db",
+            "agentbase-20260108-120000.db",
+            "agentbase-20260109-120000.db",
         ]
 
     def test_never_deletes_manual_backups(self, tmp_path):
@@ -166,10 +166,10 @@ class TestPruneOldBackups:
 
         d = tmp_path / "backups"
         d.mkdir()
-        manual = d / "trade-before-restore-20260101-000000.db"
+        manual = d / "agentbase-before-restore-20260101-000000.db"
         manual.write_text("x", encoding="utf-8")
         for i in range(5):
-            (d / f"trade-2026010{i}-120000.db").write_text("x", encoding="utf-8")
+            (d / f"agentbase-2026010{i}-120000.db").write_text("x", encoding="utf-8")
 
         prune_old_backups(d, keep=1)
 
@@ -180,7 +180,7 @@ class TestPruneOldBackups:
 
         d = tmp_path / "backups"
         d.mkdir()
-        (d / "trade-20260101-120000.db").write_text("x", encoding="utf-8")
+        (d / "agentbase-20260101-120000.db").write_text("x", encoding="utf-8")
 
         assert prune_old_backups(d, keep=5) == []
 

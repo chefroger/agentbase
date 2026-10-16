@@ -2,9 +2,9 @@
 
 ## 历史 bug（三处，全部只在真还原时暴露）
 
-1. **路径前缀错配**：备份时 arcname 带 `.trade/` 前缀
-   （`backup.py:68` 写 `.agentbase/data/agentbase.db`、`:78` 写 `.trade/{rel}`），
-   解压到 tmp_dir 后文件落在 `tmp_dir/.trade/...`，可还原代码找的是
+1. **路径前缀错配**：备份时 arcname 带 `.agentbase/` 前缀
+   （`backup.py:68` 写 `.agentbase/data/agentbase.db`、`:78` 写 `.agentbase/{rel}`），
+   解压到 tmp_dir 后文件落在 `tmp_dir/.agentbase/...`，可还原代码找的是
    `tmp_dir/"data"/"agentbase.db"` 与 `tmp_dir/"companies"` —— **永远不存在**，
    于是 `if exists()` 静默跳过，**不报错、不警告**，最后打印「✓ 已还原」。
    公司档案 / 提示词 / 记忆 / skills 全都没回来，只有 DB 因为
@@ -90,7 +90,7 @@ class TestRoundtripRestoresData:
 
         assert (th / "companies" / "acme" / "profile.md").is_file(), (
             f"公司档案没有还原（restore 返回：{msg!r}）—— "
-            "备份的 arcname 带 .trade/ 前缀，还原却在不带前缀的路径找"
+            "备份的 arcname 带 .agentbase/ 前缀，还原却在不带前缀的路径找"
         )
         assert (th / "prompts" / "system.md").is_file(), "提示词没有还原"
         assert (th / "prompts" / "system.md").read_text(encoding="utf-8") == "自定义提示词"

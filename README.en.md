@@ -280,7 +280,7 @@ If you really need to reach the UI from another device, set `AGENTBASE_ALLOW_REM
 ## Project Structure
 
 ```
-trade/                     B2B business layer
+agentbase/                     B2B business layer
 ├── api/                   FastAPI routes (10 business domains)
 ├── osint/                 Client due diligence module (6-layer verification)
 ├── skill_router.py        Skill auto-matching engine
@@ -303,7 +303,7 @@ server.py                  FastAPI entry point
 pip install -e ".[dev,docs]"
 python -m pytest tests/ -v                  # Python tests
 node --test "tests_js/**/*.test.js"         # Frontend utility tests (zero deps, requires Node)
-ruff check trade/ server.py                 # Lint
+ruff check agentbase/ server.py                 # Lint
 ```
 
 > Both the Python and frontend test suites run in CI (`.github/workflows/test.yml`).

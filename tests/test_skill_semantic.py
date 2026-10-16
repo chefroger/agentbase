@@ -110,7 +110,7 @@ def test_match_skill_hybrid_confident_keyword(monkeypatch):
     # 这里通过 sys.modules 注入假模块
     import agentbase
 
-    monkeypatch.setattr(trade, "skill_router", fake_mod, raising=False)
+    monkeypatch.setattr(agentbase, "skill_router", fake_mod, raising=False)
     best, alts = skill_semantic.match_skill_hybrid("背景调查 背调 查公司")
     assert best["skill_name"] == "b2b-osint"
     assert best["source"] == "keyword"
@@ -128,7 +128,7 @@ def test_match_skill_hybrid_never_raises(monkeypatch):
     fake_mod._score_skills = boom
     import agentbase
 
-    monkeypatch.setattr(trade, "skill_router", fake_mod, raising=False)
+    monkeypatch.setattr(agentbase, "skill_router", fake_mod, raising=False)
     best, alts = skill_semantic.match_skill_hybrid("anything")
     assert best is None and alts == []
 

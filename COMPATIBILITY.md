@@ -242,9 +242,9 @@ Hermes 的安装走**固定 tag**（`scripts/install.sh` 的 `HERMES_REF`，当�
 4. 全部通过 → 更新上方矩阵 + 更新 pyproject.toml 的 tested 版本注释
 ```
 
-> 另：Hermes 的耦合点在 `trade/` 内的完整清单见 `CLAUDE.md` 的「Hermes Coupling Points」一节；
+> 另：Hermes 的耦合点在 `agentbase/` 内的完整清单见 `CLAUDE.md` 的「Hermes Coupling Points」一节；
 > 代码里对 Hermes 的**真实 import 点**（权威来源）可用
-> `grep -rn "import run_agent\|from hermes_cli\|import hermes_constants" trade/ pre_install_check.py` 列出。
+> `grep -rn "import run_agent\|from hermes_cli\|import hermes_constants" agentbase/ pre_install_check.py` 列出。
 
 ## 断裂记录
 
@@ -255,4 +255,4 @@ Hermes 的安装走**固定 tag**（`scripts/install.sh` 的 `HERMES_REF`，当�
 | 0.14.0 | `config["model"]` 从 dict 变为 str | `helpers.py` 和 `memory.py` 中 `model_cfg.get("provider")` 报 AttributeError | `_parse_model_config_str()` 兼容两种格式 |
 | 0.14.0 | `hermes_cli.models.name_to_models` 移除 | `memory.py` import 失败 | 改用 `_PROVIDER_MODELS` |
 | 0.14.0 | `run_agent.py` 从 `chefroger/hermes-agent` fork 迁移到上游 `NousResearch/hermes-agent` | pyproject.toml git 依赖指向旧 fork | 更新 git URL 指向 `NousResearch/hermes-agent` |
-| 上游 main（安装印章 0.21.5+9141，领先 tag 9141 commits） | `hermes_bootstrap.py` 引入「借用启动」：判定「当前解释器 ≠ Hermes store 解释器」后，把 `server.py` **重新 exec 到 Hermes 自带的 Python**（`%LOCALAPPDATA%\hermes\tools\python-3.14.7+...\python.exe`） | 那个解释器里没有 trade 包 → 子进程死在 `server.py:11 from agentbase.app import main`（`ModuleNotFoundError: No module named 'trade'`，退出码 1）→ 父进程 `raise RelaunchExit(1)`。**`RelaunchExit` 继承 `SystemExit`**，而 `chat.py` 的重试循环只捕 `Exception` → agent 线程静默死亡（`Future exception was never retrieved`）→ 前端既收不到 `response` 也收不到 `error` → 只显示「⚠️ Agent 未返回有效回复」。**注意：单纯 `import run_agent` 不报错**（relaunch 到 store python 后能成功，只是白跑一遍），只有重新执行 server.py 才炸 —— 所以安装验证（`/api/status`、providers、面板）全部通过，一聊天就废。 | ① `agentbase/bootstrap.py:load_env_and_set_yolo()` 设 `HERMES_DISABLE_LAZY_INSTALLS=1`（上游正式的 sealed-venv 开关，见 Hermes `tools/lazy_deps.py`；作用域仅限 Trade 进程树，不影响用户自己的 `hermes` CLI）；② `install.sh` / `install.ps1` 生成的启动器里再设一次（**必须写进生成器** —— `agentbase.cmd` 是 install.ps1 的产物，手改会被重装抹掉）；③ `agentbase/api/chat.py` 补捕 `BaseException` 并取出 `agent_task.exception()` 上报，让这类失败不再变哑。 |
+| 上游 main（安装印章 0.21.5+9141，领先 tag 9141 commits） | `hermes_bootstrap.py` 引入「借用启动」：判定「当前解释器 ≠ Hermes store 解释器」后，把 `server.py` **重新 exec 到 Hermes 自带的 Python**（`%LOCALAPPDATA%\hermes\tools\python-3.14.7+...\python.exe`） | 那个解释器里没有 trade 包 → 子进程死在 `server.py:11 from agentbase.app import main`（`ModuleNotFoundError: No module named 'agentbase'`，退出码 1）→ 父进程 `raise RelaunchExit(1)`。**`RelaunchExit` 继承 `SystemExit`**，而 `chat.py` 的重试循环只捕 `Exception` → agent 线程静默死亡（`Future exception was never retrieved`）→ 前端既收不到 `response` 也收不到 `error` → 只显示「⚠️ Agent 未返回有效回复」。**注意：单纯 `import run_agent` 不报错**（relaunch 到 store python 后能成功，只是白跑一遍），只有重新执行 server.py 才炸 —— 所以安装验证（`/api/status`、providers、面板）全部通过，一聊天就废。 | ① `agentbase/bootstrap.py:load_env_and_set_yolo()` 设 `HERMES_DISABLE_LAZY_INSTALLS=1`（上游正式的 sealed-venv 开关，见 Hermes `tools/lazy_deps.py`；作用域仅限 Trade 进程树，不影响用户自己的 `hermes` CLI）；② `install.sh` / `install.ps1` 生成的启动器里再设一次（**必须写进生成器** —— `agentbase.cmd` 是 install.ps1 的产物，手改会被重装抹掉）；③ `agentbase/api/chat.py` 补捕 `BaseException` 并取出 `agent_task.exception()` 上报，让这类失败不再变哑。 |

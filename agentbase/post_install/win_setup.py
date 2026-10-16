@@ -18,7 +18,7 @@
 ## 统一后的结构
 
     trade-autostart.bat   把 trade 的输出重定向到 trade-autostart.log（失败可查）
-    trade-autostart.vbs   以隐藏窗口启动上面的 bat（不弹终端）
+    agentbase-autostart.vbs   以隐藏窗口启动上面的 bat（不弹终端）
     计划任务 SmartTradeAI  登录时运行 wscript.exe "<vbs>"（隐藏窗口）
     桌面快捷方式          指向 trade-open.vbs → `trade open`（起服务 + 开浏览器）
 
@@ -204,12 +204,12 @@ def _write_script(path: Path, content: str) -> None:
 def ensure_launcher_scripts(agentbase_dir: Path) -> dict:
     """生成/刷新 bat + vbs 启动器。返回路径字典。"""
     d = launcher_dir()
-    autostart_bat = d / "trade-autostart.bat"
-    autostart_vbs = d / "trade-autostart.vbs"
-    open_bat = d / "trade-open.bat"
-    open_vbs = d / "trade-open.vbs"
-    autostart_log = to_batch_path(d / "trade-autostart.log")
-    open_log = to_batch_path(d / "trade-open.log")
+    autostart_bat = d / "agentbase-autostart.bat"
+    autostart_vbs = d / "agentbase-autostart.vbs"
+    open_bat = d / "agentbase-open.bat"
+    open_vbs = d / "agentbase-open.vbs"
+    autostart_log = to_batch_path(d / "agentbase-autostart.log")
+    open_log = to_batch_path(d / "agentbase-open.log")
 
     command = resolve_trade_command(agentbase_dir)
 
@@ -268,10 +268,10 @@ def ensure_scheduled_task(vbs_path: Path) -> str:
 # 桌面上**不该出现**的启动器脚本名（它们只在 launcher_dir() 里）：
 # 把 .vbs/.bat 直接放桌面等于多一个可执行文件 —— 容易被误删、也可能被杀软拦。
 _STRAY_LAUNCHER_NAMES = (
-    "trade-autostart.vbs",
-    "trade-open.vbs",
-    "trade-autostart.bat",
-    "trade-open.bat",
+    "agentbase-autostart.vbs",
+    "agentbase-open.vbs",
+    "agentbase-autostart.bat",
+    "agentbase-open.bat",
 )
 
 

@@ -11,13 +11,13 @@ import pytest
 # 在第 0 步：在所有 import 之前设置 AGENT_HOME
 # 这样 agentbase.company 模块级别的 AGENT_HOME 常量就会指向临时路径
 if "AGENT_HOME" not in os.environ:
-    os.environ["AGENT_HOME"] = tempfile.mkdtemp(prefix="trade-test-")
+    os.environ["AGENT_HOME"] = tempfile.mkdtemp(prefix="agentbase-test-")
 
 # 同样必须在 import 之前设置 HERMES_HOME：cron / license / skill_router / memory
 # 都在 import 期按它解析目录，且 treat 会**写入** ~/.hermes（skills、memories/MEMORY.md）。
 # 不隔离的后果真实发生过：测试里的 install_skills() 覆盖了真实的 ~/.hermes/skills。
 if "HERMES_HOME" not in os.environ:
-    os.environ["HERMES_HOME"] = tempfile.mkdtemp(prefix="trade-test-hermes-")
+    os.environ["HERMES_HOME"] = tempfile.mkdtemp(prefix="agentbase-test-hermes-")
 
 
 @pytest.fixture(autouse=True)

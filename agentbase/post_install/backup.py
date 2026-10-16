@@ -76,14 +76,14 @@ def backup_trade(output_dir: str | None = None) -> str:
                 for f in company_dir.rglob("*"):
                     if f.is_file():
                         rel = str(f.relative_to(agentbase_home))
-                        sources.append((f, f".trade/{rel}"))
+                        sources.append((f, f".agentbase/{rel}"))
 
     # 3) 系统提示词（prompts/system.md 等）
     prompts_dir = agentbase_home / "prompts"
     if prompts_dir.is_dir():
         for f in prompts_dir.rglob("*"):
             if f.is_file():
-                sources.append((f, f".trade/{f.relative_to(agentbase_home)}"))
+                sources.append((f, f".agentbase/{f.relative_to(agentbase_home)}"))
 
     # 4) Hermes 记忆文件（.md / .json / .txt）
     memories_dir = hermes_home / "memories"
@@ -163,9 +163,9 @@ def restore_trade(backup_file: str = "") -> str:
 
     # 步骤 2: 定位备份内容的根目录
     #
-    # 备份写入的 arcname 带 `.trade/` 前缀（见本文件 backup_trade 的
-    # ".agentbase/data/agentbase.db"、".trade/{rel}"）。解压后内容在
-    # `tmp_dir/.trade/...`，而历史上还原代码找的是 `tmp_dir/companies`、
+    # 备份写入的 arcname 带 `.agentbase/` 前缀（见本文件 backup_trade 的
+    # ".agentbase/data/agentbase.db"、".agentbase/{rel}"）。解压后内容在
+    # `tmp_dir/.agentbase/...`，而历史上还原代码找的是 `tmp_dir/companies`、
     # `tmp_dir/data/agentbase.db` —— 永远不存在，于是 if exists() 静默跳过、
     # 不报错，最后照样说"已还原"。公司档案/提示词/记忆全丢，只有 DB 被
     # rglob 兜底碰巧救回，让整条路径看起来是对的。
@@ -207,7 +207,7 @@ def restore_trade(backup_file: str = "") -> str:
         current_db.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(
             current_db,
-            agentbase_home / "data" / f"trade-before-restore-{backup_ts}.db",
+            agentbase_home / "data" / f"agentbase-before-restore-{backup_ts}.db",
         )
 
     # 步骤 5: 替换数据库
@@ -253,7 +253,7 @@ def restore_trade(backup_file: str = "") -> str:
 def _resolve_backup_root(tmp_dir: Path) -> Path:
     """定位解压后的备份内容根目录。
 
-    新版备份把内容放在 `.trade/` 前缀下（`tmp_dir/.trade/...`）；也容忍
+    新版备份把内容放在 `.agentbase/` 前缀下（`tmp_dir/.agentbase/...`）；也容忍
     没有前缀的备份（早期版本或手工打包），此时根目录就是 tmp_dir 本身。
 
     判据：目录下是否存在 `data/` 或 `companies/`。
@@ -425,11 +425,11 @@ def _print_manual_restart_instructions(sys_name: str, label: str) -> None:
     """当所有自动重启方式都失败时，打印明确的手动操作指引。"""
     print("  💡 Trade 代码已更新。请重启 Trade 以应用更改：")
     if sys_name == "Windows":
-        print("     关闭当前 Trade 窗口后重新运行 trade 命令")
+        print("     关闭当前 Trade 窗口后重新运行 agentbase 命令")
     elif sys_name == "Darwin":
         print(f"     launchctl unload ~/Library/LaunchAgents/{label}.plist")
         print(f"     launchctl load ~/Library/LaunchAgents/{label}.plist")
-        print("     或手动运行: trade")
+        print("     或手动运行: agentbase")
     else:
         print(f"     systemctl --user restart {label}")
-        print("     或手动运行: trade")
+        print("     或手动运行: agentbase")

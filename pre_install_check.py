@@ -244,7 +244,7 @@ def get_latest_official_version() -> str | None:
         req = urllib.request.Request(
             "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest",
             headers={"Accept": "application/vnd.github+json",
-                     "User-Agent": "trade-pre-install-check/1.0"},
+                     "User-Agent": "agentbase-pre-install-check/1.0"},
             timeout=10,
         )
         with urllib.request.urlopen(req) as resp:
@@ -261,7 +261,7 @@ def get_latest_official_commit() -> str | None:
         req = urllib.request.Request(
             "https://api.github.com/repos/NousResearch/hermes-agent/commits/main",
             headers={"Accept": "application/vnd.github+json",
-                     "User-Agent": "trade-pre-install-check/1.0"},
+                     "User-Agent": "agentbase-pre-install-check/1.0"},
             timeout=10,
         )
         with urllib.request.urlopen(req) as resp:

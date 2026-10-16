@@ -46,7 +46,7 @@ def is_server_up(base_url: str = DEFAULT_BASE_URL, timeout: float = 1.5) -> bool
 
 
 def _server_script_path() -> Path | None:
-    """定位 server.py（仓库根，与 trade/ 同级）。"""
+    """定位 server.py（仓库根，与 agentbase/ 同级）。"""
     candidate = Path(__file__).resolve().parent.parent / "server.py"
     return candidate if candidate.is_file() else None
 
@@ -101,7 +101,7 @@ def open_trade(
         if server_py is None:
             return (
                 "✗ 找不到 server.py，无法启动服务。请重新安装 Trade，"
-                f"或手动运行 trade 后访问 {url}"
+                f"或手动运行 agentbase 后访问 {url}"
             )
 
         print("[open] Trade 未运行，正在后台启动 ...")

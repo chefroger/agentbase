@@ -172,7 +172,7 @@ async def app(
 
     _MAX_AGENT_RETRIES = 2  # 最多重试 2 次（共 3 次尝试），与 SSE 流式端点保持一致
 
-    request_task_id = f"trade-doc-{cid}-{time.time_ns()}" if document_task else None
+    request_task_id = f"agentbase-doc-{cid}-{time.time_ns()}" if document_task else None
     # 回调收集的证据：公开版 Hermes 没有对外读取快照接口，靠这个兜底。
     evidence = ReadEvidenceCollector() if document_task else None
 
@@ -320,7 +320,7 @@ async def chat_stream(
                 _log.info("Document gate skipped (truncated=%s, files=%d)",
                           document_task.truncated, len(document_task.files))
                 document_task = None
-    request_task_id = f"trade-doc-{cid}-{time.time_ns()}" if document_task else None
+    request_task_id = f"agentbase-doc-{cid}-{time.time_ns()}" if document_task else None
     # 回调收集的证据：公开版 Hermes 没有对外读取快照接口，靠这个兜底。
     evidence = ReadEvidenceCollector() if document_task else None
 

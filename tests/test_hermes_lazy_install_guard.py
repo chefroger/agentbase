@@ -14,7 +14,7 @@
 那个解释器里没有 trade 包，子进程死在：
 
     server.py line 11: from agentbase.app import main
-    ModuleNotFoundError: No module named 'trade'   → 退出码 1
+    ModuleNotFoundError: No module named 'agentbase'   → 退出码 1
 
 父进程随即 `raise RelaunchExit(1)`。而 `RelaunchExit` 继承 **SystemExit**（属
 BaseException，不是 Exception），Trade 的重试循环与所有 `except Exception` 都抓不到，

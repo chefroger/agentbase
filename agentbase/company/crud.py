@@ -27,7 +27,7 @@ elif os.name == "nt":
     _local_appdata = os.environ.get(
         "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
     )
-    AGENT_HOME = Path(_local_appdata) / "trade"
+    AGENT_HOME = Path(_local_appdata) / "agentbase"
 else:
     AGENT_HOME = Path.home() / ".agentbase"  # macOS / Linux 默认路径
 

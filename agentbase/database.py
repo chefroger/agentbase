@@ -398,7 +398,7 @@ def _backup_db(db_path: Path) -> Path | None:
 
     backup_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = backup_dir / f"trade-{ts}.db"
+    backup_path = backup_dir / f"agentbase-{ts}.db"
     shutil.copy2(str(db_path), str(backup_path))
     prune_old_backups(backup_dir)
     return backup_path

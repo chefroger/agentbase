@@ -110,13 +110,13 @@ def _find_static_dir() -> Path:
 @router.get("/customers/template")
 def download_customer_template():
     """下载 CSV 客户导入模板。"""
-    template_path = _find_static_dir() / "trade-customer-template.csv"
+    template_path = _find_static_dir() / "agentbase-customer-template.csv"
     if not template_path.is_file():
         raise HTTPException(status_code=404, detail="Template not found")
     return FileResponse(
         str(template_path),
         media_type="text/csv",
-        filename="trade-customer-template.csv",
+        filename="agentbase-customer-template.csv",
     )
 
 
