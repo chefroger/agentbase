@@ -37,7 +37,7 @@ class TestBatchPathRewriting:
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\张伟\AppData\Local")
         monkeypatch.delenv("USERPROFILE", raising=False)
 
-        out = ws.to_batch_path(r"C:\Users\张伟\AppData\Local\trade\venv\Scripts\agentbase.exe")
+        out = ws.to_batch_path(r"C:\Users\张伟\AppData\Local\agentbase\venv\Scripts\agentbase.exe")
 
         assert out == r"%LOCALAPPDATA%\agentbase\venv\Scripts\agentbase.exe"
         assert out.isascii(), "仍然含非 ASCII —— cmd 读取时会乱码"
@@ -224,17 +224,17 @@ class TestTaskDetectionIsStrict:
         )
 
         assert ws.is_vbs_launcher_task(
-            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\agentbase-autostart.vbs")
+            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\agentbase\agentbase-autostart.vbs")
         ) is False
 
     def test_pointing_at_expected_vbs_is_ok(self):
         xml = (
             "<Command>C:\\Windows\\System32\\wscript.exe</Command>"
-            '<Arguments>"C:\\Users\\x\\AppData\\Local\\trade\\agentbase-autostart.vbs"</Arguments>'
+            '<Arguments>"C:\\Users\\x\\AppData\\Local\agentbase\\agentbase-autostart.vbs"</Arguments>'
         )
 
         assert ws.is_vbs_launcher_task(
-            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\trade\agentbase-autostart.vbs")
+            xml, expected_vbs=Path(r"C:\Users\x\AppData\Local\agentbase\agentbase-autostart.vbs")
         ) is True
 
     def test_bare_wscript_command_is_ok(self):
@@ -263,7 +263,7 @@ class TestVbsIsAsciiSafe:
 
     def test_vbs_uses_env_var_not_literal_path(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\张伟\AppData\Local")
-        bat = Path(r"C:\Users\张伟\AppData\Local\trade\trade-autostart.bat")
+        bat = Path(r"C:\Users\张伟\AppData\Local\agentbase\trade-autostart.bat")
 
         vbs = ws.build_hidden_vbs(bat)
 
@@ -274,7 +274,7 @@ class TestVbsIsAsciiSafe:
     def test_vbs_still_hides_window(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\a\AppData\Local")
 
-        vbs = ws.build_hidden_vbs(Path(r"C:\Users\a\AppData\Local\trade\t.bat"))
+        vbs = ws.build_hidden_vbs(Path(r"C:\Users\a\AppData\Local\agentbase\t.bat"))
 
         assert ", 0, False" in vbs
 
