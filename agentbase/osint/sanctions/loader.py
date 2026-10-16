@@ -92,7 +92,7 @@ def _resolve_cache_dir() -> Path:
 
     优先级: AGENT_HOME 环境变量 > 平台默认路径。
     macOS/Linux: ~/.agentbase/cache/sanctions/
-    Windows:     %LOCALAPPDATA%\agentbase\cache\\sanctions\\
+    Windows:     %LOCALAPPDATA%\\agentbase\\cache\\sanctions\\
     """
     val = os.environ.get("AGENT_HOME", "").strip()
     if val:

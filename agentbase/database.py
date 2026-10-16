@@ -18,7 +18,7 @@ from pathlib import Path
 def _get_db_path() -> Path:
     """解析用户 Trade 数据目录下的 agentbase.db 路径。
 
-    优先级: AGENT_HOME 环境变量 → ~/.agentbase/（macOS/Linux）或 %LOCALAPPDATA%\agentbase\（Windows）。
+    优先级: AGENT_HOME 环境变量 → ~/.agentbase/（macOS/Linux）或 %LOCALAPPDATA%\\agentbase\\（Windows）。
     """
     agentbase_home = os.environ.get("AGENT_HOME", "").strip()
     # 如果 AGENT_HOME 环境变量未设置，则使用系统默认路径

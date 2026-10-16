@@ -21,7 +21,9 @@ _FORBIDDEN_DIRS = [
     (Path.home() / ".hermes").resolve(),
     (Path.home() / ".agentbase").resolve(),
     # 原 Trade 项目的数据目录：agentbase 与 Trade 必须零干扰，
-    # agent 绝不能把文件写进对方的地盘。**不要因为"改名"把它删掉。**
+    # agent 绝不能把文件写进对方的地盘。
+    # **注意：这一条是故意保留的，p1_rename.py 的 dq-dot-trade 规则会把它改成
+    # .agentbase —— 重跑脚本后必须手工补回。**
     (Path.home() / ".trade").resolve(),
     (Path.home() / ".ssh").resolve(),
     (Path(_LOCAL_APP) / "hermes").resolve(),        # Windows Hermes 路径
