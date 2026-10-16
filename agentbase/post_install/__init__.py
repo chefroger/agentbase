@@ -7,7 +7,7 @@ Trade AI Assistant — Post-install 工具包。
   - backup: 系统数据备份/还原 (agentbase-backup / agentbase-restore)
   - __init__: CLI 入口 + 重导出
 
-从 trade.post_install import xxx 保持向后兼容。
+从 agentbase.post_install import xxx 保持向后兼容。
 """
 
 from agentbase.post_install.backup import backup_trade, restore_trade

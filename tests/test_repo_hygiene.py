@@ -80,7 +80,7 @@ class TestNoHardcodedHomePaths:
         防止将来有人把正则改松（改到匹配不到任何东西）而守卫静默失效 ——
         一个永远通过的守卫比没有守卫更糟，因为它给人虚假的安全感。
         """
-        bug = 'plugin_path = Path("/Users/rogerlau/Desktop/x/trade/hermes_chat_memory_plugin")'
+        bug = 'plugin_path = Path("/Users/rogerlau/Desktop/x/agentbase/hermes_chat_memory_plugin")'
         assert _HARDCODED_FS_CALL.search(bug), "守卫匹配不到当初的 bug 写法，已失效"
 
         # 反例：把家目录路径当**测试数据**（不碰磁盘）不该被误报
@@ -95,6 +95,6 @@ class TestRepoLayoutAssumptions:
     依赖 CWD 的写法在两种环境下行为不同。
     """
 
-    @pytest.mark.parametrize("rel", ["trade", "trade/hermes_chat_memory_plugin"])
+    @pytest.mark.parametrize("rel", ["trade", "agentbase/hermes_chat_memory_plugin"])
     def test_repo_root_resolution_works(self, rel):
         assert (REPO_ROOT / rel).is_dir(), f"从 __file__ 推不出 {rel}，仓库布局假设失效"

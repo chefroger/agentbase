@@ -70,10 +70,10 @@ class TestSmokeChatModule:
             from agentbase.database import init_db
             init_db()
 
-            from agentbase.api.chat import router, app, trade_chat_stream
+            from agentbase.api.chat import router, app, chat_stream
             assert router is not None
             assert callable(app)
-            assert callable(trade_chat_stream)
+            assert callable(chat_stream)
 
     def test_create_agent_factory(self, monkeypatch, tmp_path):
         """create_agent 不再写 os.environ。"""
@@ -175,10 +175,10 @@ class TestChatEndpointHTTP:
                             lambda cid: {"company_id": cid, "data_dir": str(tmp_path), "agent_identity_md": "", "is_active": 1})
 
         import agentbase.helpers
-        monkeypatch.setattr(trade.helpers, "check_provider", lambda: None)
-        monkeypatch.setattr(trade.helpers, "get_agent_kwargs", lambda: {"provider":"x","model":"x","base_url":"","api_key":""})
-        monkeypatch.setattr(trade.helpers, "build_query", lambda c, l, q, **kw: q)
-        monkeypatch.setattr(trade.helpers, "create_agent", lambda **kw: _A())
+        monkeypatch.setattr(agentbase.helpers, "check_provider", lambda: None)
+        monkeypatch.setattr(agentbase.helpers, "get_agent_kwargs", lambda: {"provider":"x","model":"x","base_url":"","api_key":""})
+        monkeypatch.setattr(agentbase.helpers, "build_query", lambda c, l, q, **kw: q)
+        monkeypatch.setattr(agentbase.helpers, "create_agent", lambda **kw: _A())
 
         # chat.py 在模块级别 import create_agent，已被其他测试缓存，需 patch 两处
         import agentbase.api.chat as chat_mod
@@ -192,9 +192,9 @@ class TestChatEndpointHTTP:
         # 构建独立 app
         from fastapi import FastAPI
 
-        from agentbase.api import router as trade_router
+        from agentbase.api import router as api_router
         app = FastAPI()
-        app.include_router(trade_router, prefix="/api/trade")
+        app.include_router(api_router, prefix="/api/agentbase")
 
         import httpx
         transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)

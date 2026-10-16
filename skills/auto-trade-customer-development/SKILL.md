@@ -83,7 +83,7 @@ injection_prompt: |
   - 发送间隔：默认每封间隔 60-120 秒随机（避免被标记为群发）
   - 输出：send_log[]（公司/收件人/状态/时间/错误信息如有）
 
-  【Phase 6 — 入库】调用 trade.customer.bulk_save
+  【Phase 6 — 入库】调用 agentbase.customer.bulk_save
   - 把所有触达过的客户（无论是否发送）写入 SQLite
   - 字段：name / contact / country / tier (A/B/C) / linkedin_url / company_website / email / whatsapp / source="auto-pipeline" / note="Phase X 状态描述"
   - 已存在的客户（按 company_website 或 email 去重）更新 last_contacted_at

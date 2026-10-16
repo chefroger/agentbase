@@ -14,8 +14,8 @@ Smart Trade AI — 客户/文档语义检索（优化路线 P0-2）。
   文档：标题+摘要），本模块只管存取。
 
 环境变量：
-    TRADE_VEC_TOP_K        默认返回条数（默认 10）
-    TRADE_VEC_MIN_SCORE    最低分（默认 0.42，score=1/(1+distance)）。
+    AGENTBASE_VEC_TOP_K        默认返回条数（默认 10）
+    AGENTBASE_VEC_MIN_SCORE    最低分（默认 0.42，score=1/(1+distance)）。
                            **别凭感觉调**：L2 归一化下无关向量的距离恒为 √2，
                            score 有恒定正交基线 0.4142 —— 低于它等于不过滤。
 """
@@ -389,7 +389,7 @@ def _default_top_k() -> int:
     import os
 
     try:
-        return int(os.environ.get("TRADE_VEC_TOP_K", "10"))
+        return int(os.environ.get("AGENTBASE_VEC_TOP_K", "10"))
     except (ValueError, TypeError):
         return 10
 
@@ -409,12 +409,12 @@ def _default_min_score() -> float:
     0.43 对应 cos≈0.12，会把"弱相关但真实"的命中（cos 0.05~0.12）一起切掉，
     而本功能的降级链是「向量命中为空 → 关键词 LIKE」，自然语言查询在 LIKE 下
     基本查不到东西 → 用户得到**空结果**。搜索场景里，弱结果比空结果好。
-    **评测集里要同时盯 recall，不能只看"不过滤噪声"**（TRADE_VEC_MIN_SCORE 可覆盖）。
+    **评测集里要同时盯 recall，不能只看"不过滤噪声"**（AGENTBASE_VEC_MIN_SCORE 可覆盖）。
     """
     import os
 
     try:
-        return float(os.environ.get("TRADE_VEC_MIN_SCORE", "0.42"))
+        return float(os.environ.get("AGENTBASE_VEC_MIN_SCORE", "0.42"))
     except (ValueError, TypeError):
         return 0.42
 

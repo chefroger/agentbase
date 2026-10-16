@@ -50,7 +50,7 @@ def memory_recall(
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-# _parse_model_string 已删除，统一使用 trade.helpers._parse_model_config_str
+# _parse_model_string 已删除，统一使用 agentbase.helpers._parse_model_config_str
 
 
 # ── LLM 提供商 ────────────────────────────────────────────────────────────

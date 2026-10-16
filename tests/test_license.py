@@ -147,7 +147,7 @@ class TestEncodeDecode:
 
     def test_encode_without_private_key_fails(self, monkeypatch):
         """没有私钥时编码应抛出异常"""
-        monkeypatch.delenv("TRADE_LICENSE_PRIVATE_KEY", raising=False)
+        monkeypatch.delenv("AGENTBASE_LICENSE_PRIVATE_KEY", raising=False)
         with mock.patch.object(Path, "is_file", return_value=False):
             from agentbase.license import _encode_activation_code
             with pytest.raises(ValueError, match="私钥"):
@@ -413,7 +413,7 @@ class TestLicenseSignature:
 
     def test_sign_without_private_key_fails(self, monkeypatch):
         """无私钥时 _sign_license 抛出异常"""
-        monkeypatch.delenv("TRADE_LICENSE_PRIVATE_KEY", raising=False)
+        monkeypatch.delenv("AGENTBASE_LICENSE_PRIVATE_KEY", raising=False)
         with mock.patch.object(Path, "is_file", return_value=False):
             from agentbase.license import _sign_license
             with pytest.raises(ValueError, match="私钥"):

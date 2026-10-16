@@ -69,7 +69,7 @@ def _sync_dir_rsync(src: Path, dst: Path) -> None:
                 item.unlink()
 
 
-def _sync_trade_template(template_src: Path, trade_home: Path) -> None:
+def _sync_trade_template(template_src: Path, agentbase_home: Path) -> None:
     """将 .agentbase-template/ 中新增的模板文件同步到 Trade 运行时目录。
 
     仅复制新增的文件，不覆盖用户已有数据。
@@ -78,7 +78,7 @@ def _sync_trade_template(template_src: Path, trade_home: Path) -> None:
     if not template_src.is_dir():
         return
 
-    _dest = trade_home / ".agentbase-template"
+    _dest = agentbase_home / ".agentbase-template"
     if not _dest.exists():
         # 模板目录不存在：全量复制
         shutil.copytree(template_src, _dest, dirs_exist_ok=False)
@@ -100,7 +100,7 @@ def _sync_trade_template(template_src: Path, trade_home: Path) -> None:
 
     # 植入初始 system prompt（仅当目标文件尚不存在时，不覆盖用户编辑的内容）
     prompts_src = template_src / "prompts" / "system.md"
-    prompts_dir = trade_home / "prompts"
+    prompts_dir = agentbase_home / "prompts"
     prompts_dst = prompts_dir / "system.md"
     if prompts_src.is_file() and not prompts_dst.is_file():
         prompts_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +111,7 @@ def _sync_trade_template(template_src: Path, trade_home: Path) -> None:
 
 # ── 开机自启动 ────────────────────────────────────────────────────────────
 
-def _ensure_auto_start(trade_dir: Path) -> None:
+def _ensure_auto_start(agentbase_dir: Path) -> None:
     """确保 Trade 在操作系统启动时自动运行（幂等操作：已存在则跳过）。
 
     支持的平台：
@@ -120,49 +120,49 @@ def _ensure_auto_start(trade_dir: Path) -> None:
       - Linux:   systemd user unit
     """
     if os.name == "nt":
-        _ensure_windows_auto_start(trade_dir)
+        _ensure_windows_auto_start(agentbase_dir)
     elif sys.platform == "darwin":
-        _ensure_macos_auto_start(trade_dir)
+        _ensure_macos_auto_start(agentbase_dir)
     elif sys.platform == "linux":
-        _ensure_linux_auto_start(trade_dir)
+        _ensure_linux_auto_start(agentbase_dir)
 
 
-def _ensure_windows_auto_start(trade_dir: Path) -> None:
+def _ensure_windows_auto_start(agentbase_dir: Path) -> None:
     """Windows: 开机自启（隐藏窗口）+ 桌面快捷方式。
 
-    委托给 `trade.post_install.win_setup` —— 那里是唯一实现，install.ps1 和
+    委托给 `agentbase.post_install.win_setup` —— 那里是唯一实现，install.ps1 和
     服务启动路径也调它。历史教训：这段逻辑曾有三份互相不一致的拷贝，其中两份
     跑 python.exe（登录必弹终端窗口），只有文档里的手动教程是对的。
     """
     from agentbase.post_install.win_setup import ensure_windows_setup
 
-    for msg in ensure_windows_setup(trade_dir):
+    for msg in ensure_windows_setup(agentbase_dir):
         print(f"  {msg}")
 
 
-def _ensure_macos_auto_start(trade_dir: Path) -> None:
-    """macOS: 创建 launchd plist 用户级守护进程（Label: com.trade.assistant）。
+def _ensure_macos_auto_start(agentbase_dir: Path) -> None:
+    """macOS: 创建 launchd plist 用户级守护进程（Label: com.agentbase.assistant）。
 
     plist 写入 ~/Library/LaunchAgents/，login 时自动加载。
     """
     plist_dir = Path.home() / "Library" / "LaunchAgents"
-    plist_file = plist_dir / "com.trade.assistant.plist"
+    plist_file = plist_dir / "com.agentbase.assistant.plist"
     if plist_file.is_file():
         print("  ✓ 开机自启动任务已存在")
         return
 
     # trade 命令路径（优先 ~/.local/bin/trade，其次 PATH 中的 trade）
-    trade_bin = os.environ.get("HOME", str(Path.home())) + "/.local/bin/trade"
+    agentbase_bin = os.environ.get("HOME", str(Path.home())) + "/.local/bin/trade"
     plist_content = textwrap.dedent(f"""\
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0">
     <dict>
         <key>Label</key>
-        <string>com.trade.assistant</string>
+        <string>com.agentbase.assistant</string>
         <key>ProgramArguments</key>
         <array>
-            <string>{trade_bin}</string>
+            <string>{agentbase_bin}</string>
             <string>--no-browser</string>
         </array>
         <key>RunAtLoad</key>
@@ -182,7 +182,7 @@ def _ensure_macos_auto_start(trade_dir: Path) -> None:
     print("  ✓ 已设置开机自启动")
 
 
-def _ensure_linux_auto_start(trade_dir: Path) -> None:
+def _ensure_linux_auto_start(agentbase_dir: Path) -> None:
     """Linux: 创建 systemd user unit → daemon-reload → enable → start。"""
     unit_dir = Path.home() / ".config" / "systemd" / "user"
     unit_file = unit_dir / "agentbase.service"
@@ -191,7 +191,7 @@ def _ensure_linux_auto_start(trade_dir: Path) -> None:
         return
 
     py_exe = sys.executable
-    server_py = str(trade_dir / "server.py")
+    server_py = str(agentbase_dir / "server.py")
     unit_content = textwrap.dedent(f"""\
     [Unit]
     Description=Smart Trade AI
@@ -309,7 +309,7 @@ def update_trade() -> dict:
       6. auto-start check
       7. database migration
     """
-    trade_dir = _get_trade_home() / "agentbase"
+    agentbase_dir = _get_trade_home() / "agentbase"
     # errors = 致命失败（git / pip / 数据库），必须阻止重启
     # warnings = 非致命失败（skills / 模板 / 开机自启），记录并上报但继续重启
     errors: list[str] = []
@@ -349,14 +349,14 @@ def update_trade() -> dict:
         }
 
     # ── Step 1: git pull / clone ───────────────────────────────────────────
-    if not trade_dir.is_dir():
+    if not agentbase_dir.is_dir():
         _emit("→ Step 1/7: git clone (install directory not found) ...")
-        _emit(f"  Target: {trade_dir}")
-        trade_dir.parent.mkdir(parents=True, exist_ok=True)
+        _emit(f"  Target: {agentbase_dir}")
+        agentbase_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
             clone_result = subprocess.run(
                 ["git", "clone", "https://github.com/chefroger/smart-trade-ai.git",
-                 str(trade_dir)],
+                 str(agentbase_dir)],
                 capture_output=True, text=True, timeout=300,
             )
         except FileNotFoundError:
@@ -368,13 +368,13 @@ def update_trade() -> dict:
             _emit(f"  ❌ git clone failed: {err}")
             errors.append(f"git clone failed: {err}")
             return {"ok": False, "version": "", "error": err, "errors": errors, "warnings": warnings, "messages": messages}
-        _emit(f"  ✓ Repository cloned to {trade_dir}")
+        _emit(f"  ✓ Repository cloned to {agentbase_dir}")
     else:
         _emit("→ Step 1/7: git pull ...")
         try:
             result = subprocess.run(
                 ["git", "pull", "--ff-only", "origin", "main"],
-                cwd=str(trade_dir), capture_output=True, text=True, timeout=120,
+                cwd=str(agentbase_dir), capture_output=True, text=True, timeout=120,
             )
         except FileNotFoundError:
             _emit("  ❌ git 命令未找到，请先安装 Git for Windows 并重启终端")
@@ -385,24 +385,24 @@ def update_trade() -> dict:
             _emit(f"  ⚠ git pull failed: {err_text}")
             _emit("  💡 尝试自动 stash 后重试...")
             stash = subprocess.run(
-                ["git", "stash"], cwd=str(trade_dir),
+                ["git", "stash"], cwd=str(agentbase_dir),
                 capture_output=True, text=True, timeout=30,
             )
             if stash.returncode == 0:
                 pull2 = subprocess.run(
                     ["git", "pull", "--ff-only", "origin", "main"],
-                    cwd=str(trade_dir), capture_output=True, text=True, timeout=120,
+                    cwd=str(agentbase_dir), capture_output=True, text=True, timeout=120,
                 )
                 if pull2.returncode == 0:
                     _emit("  ✓ git pull (after stash) OK")
                     pop = subprocess.run(
-                        ["git", "stash", "pop"], cwd=str(trade_dir),
+                        ["git", "stash", "pop"], cwd=str(agentbase_dir),
                         capture_output=True, text=True, timeout=30,
                     )
                     # stash pop 可能因冲突失败，此时改动仍留在 stash 里，必须告知用户
                     if pop.returncode != 0:
                         _emit(f"  ⚠ git stash pop 冲突，改动仍留在 stash 中：{pop.stderr.strip()}")
-                        _emit(f"  💡 请手动处理：cd {trade_dir} && git stash pop")
+                        _emit(f"  💡 请手动处理：cd {agentbase_dir} && git stash pop")
                         warnings.append("local changes remain stashed (git stash pop conflicted)")
                 else:
                     err2 = pull2.stderr.strip()
@@ -410,7 +410,7 @@ def update_trade() -> dict:
                     # 关键：本地改动已被 stash 且未 pop，工作区看起来「改动消失了」——
                     # 必须明确告知用户改动在哪、怎么取回，不能静默吞掉
                     _emit("  ⚠ 你的本地改动已被暂存到 git stash（未自动恢复）")
-                    _emit(f"  💡 恢复方式：cd {trade_dir} && git stash pop")
+                    _emit(f"  💡 恢复方式：cd {agentbase_dir} && git stash pop")
                     errors.append(f"git pull failed: {err2}")
                     warnings.append("local changes were stashed and not restored (run: git stash pop)")
                     return {"ok": False, "version": "", "error": err2, "errors": errors,
@@ -430,7 +430,7 @@ def update_trade() -> dict:
     except ImportError:
         import tomli as _toml_v
     try:
-        pyproject = trade_dir / "pyproject.toml"
+        pyproject = agentbase_dir / "pyproject.toml"
         # 显式 utf-8：Windows 默认 cp1252，pyproject.toml 含中文注释会读失败
         data = _toml_v.loads(pyproject.read_text(encoding="utf-8"))
         new_version = data.get("project", {}).get("version", "")
@@ -472,7 +472,7 @@ def update_trade() -> dict:
     # 明确拒绝通过 pip 构建（直接抛 RuntimeError），它由安装脚本单独
     # editable 安装；让 pip 去解析这个依赖会让整次升级失败。
     _emit("→ Step 4/7: pip install ...")
-    req_file = trade_dir / "requirements.txt"
+    req_file = agentbase_dir / "requirements.txt"
     if req_file.is_file():
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
@@ -483,7 +483,7 @@ def update_trade() -> dict:
             _emit(f"  ❌ 依赖安装失败: {err}")
             errors.append(f"pip install -r requirements.txt failed: {err[:200]}")
             return {"ok": False, "version": "", "error": err[:200], "errors": errors, "warnings": warnings, "messages": messages}
-    pip_args = [sys.executable, "-m", "pip", "install", "-e", str(trade_dir), "--no-deps"]
+    pip_args = [sys.executable, "-m", "pip", "install", "-e", str(agentbase_dir), "--no-deps"]
     result = subprocess.run(pip_args, capture_output=True, text=True, timeout=600)
     if result.returncode != 0:
         err = result.stderr.strip()
@@ -498,10 +498,10 @@ def update_trade() -> dict:
     # ── Step 5: template sync ─────────────────────────────────────────────
     _emit("→ Step 5/7: template sync ...")
     try:
-        template_src = trade_dir / ".agentbase-template"
-        trade_home = _get_trade_home()
-        trade_home.mkdir(parents=True, exist_ok=True)
-        _sync_trade_template(template_src, trade_home)
+        template_src = agentbase_dir / ".agentbase-template"
+        agentbase_home = _get_trade_home()
+        agentbase_home.mkdir(parents=True, exist_ok=True)
+        _sync_trade_template(template_src, agentbase_home)
         _emit("  ✓ Templates synced")
     except Exception as e:
         _emit(f"  ⚠ Template sync failed: {e}")
@@ -510,7 +510,7 @@ def update_trade() -> dict:
     # ── Step 6: auto-start ────────────────────────────────────────────────
     _emit("→ Step 6/7: auto-start check ...")
     try:
-        _ensure_auto_start(trade_dir)
+        _ensure_auto_start(agentbase_dir)
         _emit("  ✓ Auto-start OK")
     except Exception as e:
         _emit(f"  ⚠ Auto-start setup failed: {e}")
@@ -534,7 +534,7 @@ def update_trade() -> dict:
     ok = not has_critical_errors
 
     # 注意：这里**不再**写 version.txt。
-    # version.txt 的语义是「正在运行的代码版本」，由 trade.app 在进程启动时写入。
+    # version.txt 的语义是「正在运行的代码版本」，由 agentbase.app 在进程启动时写入。
     # 若在此处提前写入目标版本，重启前的窗口里 UI 会显示新版本号，
     # 一旦重启失败（或本次 ok=False）就成了「假升级成功」。
 

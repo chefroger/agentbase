@@ -71,7 +71,7 @@ async def _collect(company: dict) -> str:
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
          patch("agentbase.license.check_license", return_value=(True, "")):
-        resp = await chat.trade_chat_stream(
+        resp = await chat.chat_stream(
             ChatRequest(query="做个网站诊断"), company["id"]
         )
         chunks = []

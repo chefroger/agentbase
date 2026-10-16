@@ -2,10 +2,10 @@
 Trade AI Assistant — 公司数据层。
 
 三模块结构：
-  - crud: companies + trade_companies 表的增删改查 + 审计日志
+  - crud: companies + agentbase_companies 表的增删改查 + 审计日志
   - workdir: 桌面工作目录管理 + .agentbase-template 模板复制
 
-从 trade.company import xxx 的方式保持不变，所有公开 API 通过本 __init__ 重导出。
+从 agentbase.company import xxx 的方式保持不变，所有公开 API 通过本 __init__ 重导出。
 """
 
 # 从 crud 模块导出所有公开的数据库操作函数
@@ -51,7 +51,7 @@ __all__ = [
     "update",
     "delete",
     "purge",
-    # trade_companies 表 CRUD
+    # agentbase_companies 表 CRUD
     "get_trade_company",
     "update_trade_company",
     "get_agent_identity",

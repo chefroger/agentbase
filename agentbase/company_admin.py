@@ -329,7 +329,7 @@ def _known_company_paths_and_names() -> tuple[set[str], set[str]]:
             if row[1]:
                 names.add(str(row[1]).strip().lower())
         for row in conn.execute(
-            "SELECT extra1 FROM trade_companies WHERE extra1 IS NOT NULL AND extra1 != ''"
+            "SELECT extra1 FROM agentbase_companies WHERE extra1 IS NOT NULL AND extra1 != ''"
         ):
             try:
                 wd = _json.loads(row[0]).get("work_dir", "")
@@ -388,7 +388,7 @@ def list_companies() -> str:
         ).fetchall()
         extra = {}
         for r in conn.execute(
-            "SELECT company_id, data_dir, extra1 FROM trade_companies"
+            "SELECT company_id, data_dir, extra1 FROM agentbase_companies"
         ):
             work_dir = ""
             try:
@@ -458,7 +458,7 @@ def purge_company(target: str, *, yes: bool = False, password: str | None = None
 
         conn = get_connection()
         row = conn.execute(
-            "SELECT extra1 FROM trade_companies WHERE company_id = ?", (cid,)
+            "SELECT extra1 FROM agentbase_companies WHERE company_id = ?", (cid,)
         ).fetchone()
         if row and row[0]:
             import json as _json

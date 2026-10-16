@@ -118,8 +118,8 @@ Phase 3: 深度背调 (Deep Verification)
 
 6. **机器判定层（6 层）用一个命令跑** —— 不要凭搜索印象编造判定：
 
-       python -m trade.osint <邮箱|域名|公司名>
-       python -m trade.osint <目标> --json        # 需要结构化数据时
+       python -m agentbase.osint <邮箱|域名|公司名>
+       python -m agentbase.osint <目标> --json        # 需要结构化数据时
 
    覆盖：邮箱注册检测（holehe）/ WHOIS / 企业邮箱验证 / 技术栈 / 制裁名单（OFAC/UN）
    / LinkedIn 核查指令 + 综合评分与建议。
@@ -127,7 +127,7 @@ Phase 3: 深度背调 (Deep Verification)
    规则：
    a) **照抄命令输出的结论与披露**：数据源不可用它会有明确标注（降级），
       不要替它补全，更不要写出"未发现匹配"这类它没给出的结论；
-   b) 对 Phase 1/2 中发现的每个邮箱，单独跑 `python -m trade.osint <邮箱>`，
+   b) 对 Phase 1/2 中发现的每个邮箱，单独跑 `python -m agentbase.osint <邮箱>`，
       核验真实性与社交档案；
    c) LinkedIn 层只生成浏览器操作指令，需用浏览器工具实际执行后再下结论。
 
@@ -223,7 +223,7 @@ STOP RULE（防止无效搜索）:
         "augment_prompt": """你是 b2b-email-intel 技能。当用户需要调查某个邮箱的背景时，请执行以下步骤：
 
 情况 A — 用户提供了邮箱地址：
-  1. 跑 `python -m trade.osint <邮箱> --no-sanctions --no-tech-stack --no-linkedin`
+  1. 跑 `python -m agentbase.osint <邮箱> --no-sanctions --no-tech-stack --no-linkedin`
      查 122 个平台的注册情况 + 企业/个人邮箱判别（WHOIS 一并返回）
   2. **结论照抄命令输出**；它标注降级（如 holehe 未装）时如实转述，别替它补全
   3. 汇总输出：平台注册数 + 社交档案 + 真实性评分 + 风险标记
@@ -1031,7 +1031,7 @@ STOP RULE（防止无效搜索）:
 3. 评分 — 按公司匹配度/决策人可达性/数字足迹/风险/渠道多元性打分排序 A/B/C
 4. 写信 — 对 A/B 级调用 b2b-lead-generation 生成开发信（含替换法 A/B 测试 + 反垃圾自检）
 5. 发送 — 用户确认后调用 auto-smtp-email（默认不自动发送，需用户确认）
-6. 入库 — 调用 trade.customer.bulk_save 写入 SQLite（source="auto-pipeline"）
+6. 入库 — 调用 agentbase.customer.bulk_save 写入 SQLite（source="auto-pipeline"）
 7. 日志 — 写入 ~/.agentbase/audit/auto-pipeline-{date}.md
 
 **铁律**：

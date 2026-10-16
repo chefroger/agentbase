@@ -1,4 +1,4 @@
-"""`python -m trade.osint` / `trade osint` —— 6 层背调的命令行入口。
+"""`python -m agentbase.osint` / `trade osint` —— 6 层背调的命令行入口。
 
 ## 为什么有这个入口（2026-10-14）
 
@@ -169,12 +169,12 @@ class TestPromptsPointAtTheCommand:
         root = Path(__file__).resolve().parent.parent
         return [
             ("skills/b2b-osint/SKILL.md", (root / "skills/b2b-osint/SKILL.md").read_text(encoding="utf-8")),
-            ("trade/skill_registry.py", (root / "trade/skill_registry.py").read_text(encoding="utf-8")),
+            ("agentbase/skill_registry.py", (root / "agentbase/skill_registry.py").read_text(encoding="utf-8")),
         ]
 
     def test_prompts_use_the_cli_command(self):
         for name, text in self._prompts():
-            assert "python -m trade.osint" in text, f"{name} 没有指向可执行的背调命令"
+            assert "python -m agentbase.osint" in text, f"{name} 没有指向可执行的背调命令"
 
     def test_skill_injection_prompt_carries_the_command(self):
         """**注入版**（frontmatter 的 injection_prompt）也必须有命令。
@@ -188,7 +188,7 @@ class TestPromptsPointAtTheCommand:
         root = Path(__file__).resolve().parent.parent
         text = (root / "skills/b2b-osint/SKILL.md").read_text(encoding="utf-8")
         fm = yaml.safe_load(text.split("---", 2)[1])
-        assert "python -m trade.osint" in (fm.get("injection_prompt") or ""), (
+        assert "python -m agentbase.osint" in (fm.get("injection_prompt") or ""), (
             "injection_prompt（注入进 system prompt 的那份）里没有背调命令"
         )
 

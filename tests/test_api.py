@@ -499,7 +499,7 @@ class TestWorkDirUpload:
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 trade_companies.extra1 取已保存的工作目录
+        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
         monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
         monkeypatch.setattr("agentbase.company.update_trade_company",
@@ -527,7 +527,7 @@ class TestWorkDirUpload:
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 trade_companies.extra1 取已保存的工作目录
+        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
         monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
         monkeypatch.setattr("agentbase.company.update_trade_company",
@@ -572,7 +572,7 @@ class TestWorkDirUpload:
                            lambda name, slug, suggested_name="": (work_dir, True))
         monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 trade_companies.extra1 取已保存的工作目录
+        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
         monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
         monkeypatch.setattr("agentbase.company.update_trade_company",
@@ -650,7 +650,7 @@ class TestOnboardingFlow:
             },
         )
         assert result["company"]["name"] == "Flow Test Co"
-        assert "Electronics" in result["trade_company"]["agent_identity_md"]
+        assert "Electronics" in result["agentbase_company"]["agent_identity_md"]
         assert onboarding.is_onboarding_done() is True
 
     def test_create_first_company_duplicate(self, test_db, company_id, setup_mocks):
@@ -687,12 +687,12 @@ class TestTradeUiTokenScope:
     def test_remote_client_blocked_by_default(self, monkeypatch):
         from agentbase import app as app_mod
 
-        monkeypatch.delenv("TRADE_ALLOW_REMOTE_UI", raising=False)
+        monkeypatch.delenv("AGENTBASE_ALLOW_REMOTE_UI", raising=False)
         assert app_mod._client_may_receive_token(_FakeClient("192.168.1.5")) is False
 
     def test_remote_client_allowed_with_explicit_optin(self, monkeypatch):
         """显式开启后允许局域网使用（用户明确知道风险）。"""
         from agentbase import app as app_mod
 
-        monkeypatch.setenv("TRADE_ALLOW_REMOTE_UI", "1")
+        monkeypatch.setenv("AGENTBASE_ALLOW_REMOTE_UI", "1")
         assert app_mod._client_may_receive_token(_FakeClient("192.168.1.5")) is True

@@ -41,7 +41,7 @@ def _resolve_hermes_checkout() -> str:
          `hermes-agent/`；若 HERMES_HOME 本身就指向 checkout 也接受
       2. 平台默认路径（macOS/Linux: `~/.hermes/hermes-agent`，
          Windows: `%LOCALAPPDATA%\hermes\hermes-agent`）
-      3. 与 Trade 平级的 `trade_ai_assistant` 开发目录
+      3. 与 Trade 平级的 `agentbase_ai_assistant` 开发目录
 
     每个候选都必须真的含 `hermes_cli` 目录才采用 —— 否则会把不含包的路径插进
     sys.path（历史 bug：`trade` 包装脚本会 export HERMES_HOME=~/.hermes，
@@ -62,7 +62,7 @@ def _resolve_hermes_checkout() -> str:
         candidates.append(Path(_local) / "hermes" / "hermes-agent")
     else:
         candidates.append(Path.home() / ".hermes" / "hermes-agent")
-    candidates.append(Path(__file__).resolve().parent.parent.parent / "trade_ai_assistant")
+    candidates.append(Path(__file__).resolve().parent.parent.parent / "agentbase_ai_assistant")
 
     for candidate in candidates:
         if _is_checkout(candidate):
@@ -96,7 +96,7 @@ def _adjust_sys_path():
 # 3.14（也是 `pm` 托管运行时的起点）；上一代硬性要求 <3.14，两侧互斥（实测 3.14 下
 # 装 0.19.0 直接 `requires a different Python`）。**已无上限** —— 新版 Hermes 我们
 # 都要跟，卡上限只会把自己锁死。
-# 权威判据在 trade.hermes_compat.hermes_python_compat()（读 checkout 元数据，不导入
+# 权威判据在 agentbase.hermes_compat.hermes_python_compat()（读 checkout 元数据，不导入
 # Hermes）；这里的常量供 doctor / pre_install_check / 测试引用，两处由测试钉住一致。
 _MIN_HERMES_VERSION = "0.21.6"
 
@@ -106,9 +106,9 @@ def dispatch_subcommands() -> bool:
 
     `open` 是桌面快捷方式的目标：确保服务在跑，然后打开界面。
     `doctor` 是安装后自检：验 Hermes 运行环境 / vision / Tavily / Trade 自身。
-    `company` 是公司管理（作者用的隐藏功能，不写进用户文档）：见 trade.company_admin。
+    `company` 是公司管理（作者用的隐藏功能，不写进用户文档）：见 agentbase.company_admin。
     `osint` 是 6 层背调的机器判定入口（skill 提示词也指向同一个命令，
-    等价的跨平台写法是 `python -m trade.osint <目标>`）：见 trade.osint.cli。
+    等价的跨平台写法是 `python -m agentbase.osint <目标>`）：见 agentbase.osint.cli。
 
     Returns True 表示已处理子命令并应退出进程。
     """
@@ -182,7 +182,7 @@ def hermes_is_usable() -> bool:
 def check_hermes_version() -> bool:
     """检查已安装的 Hermes 能否与当前 Python 共存，并打印终端提示。
 
-    判据为 `trade.hermes_compat.hermes_python_compat()`：读 checkout 的 requires-python
+    判据为 `agentbase.hermes_compat.hermes_python_compat()`：读 checkout 的 requires-python
     与版本号，**全程不导入 Hermes**。为什么不能用 import 判 —— 旧版 Hermes 在新 Python
     上崩的是「缺依赖的 ImportError」（缺 openai/pydantic-core 等），用户看到的是依赖
     天书，而不是「版本过旧、去升级」这个可行动的结论。
@@ -461,7 +461,7 @@ def _activate_hermes_env_and_restore_trade_paths() -> None:
 
     只在 Hermes 可用时调用 —— 降级模式（版本过旧）下绝不该 import Hermes。
     """
-    trade_site = _trade_site_packages()
+    agentbase_site = _trade_site_packages()
     try:
         import hermes_bootstrap  # noqa: F401 — 导入的副作用即目的
     except Exception:
@@ -472,7 +472,7 @@ def _activate_hermes_env_and_restore_trade_paths() -> None:
     # 全部跳过 —— 进程表面还能跑，实际只剩 Hermes 的依赖（Trade 的被激活剥掉了）。
     # 2026-10-14 那次事故的现场就是这样：界面只显示「AI Agent 模块未加载」、
     # 完全指不到真因。所以这里必须响亮报出来，不能一声不响地继续。
-    if not trade_site:
+    if not agentbase_site:
         print(
             "  ✗ 无法解析 Trade 自身的 site-packages —— Hermes 激活后可能已剥离 "
             "Trade 的依赖。请把这一行发给技术支持。"
@@ -481,15 +481,15 @@ def _activate_hermes_env_and_restore_trade_paths() -> None:
     # 激活剥掉了 Trade 的 site-packages → 补回（放末尾，让 Hermes 的依赖优先）。
     # 注意这段是**无条件**执行的：即使 hermes_bootstrap 已在 sys.modules 里、
     # 这次 import 没有任何副作用，也要确认路径在位（幂等）。
-    if trade_site and trade_site not in sys.path:
-        sys.path.append(trade_site)
+    if agentbase_site and agentbase_site not in sys.path:
+        sys.path.append(agentbase_site)
 
     # 激活也用托管环境的路径覆盖了 PYTHONPATH；不补回来的话，Trade 起的子进程
     # （如走 holehe 的 OSINT Layer 1）会找不到 Trade 自己的依赖
-    if trade_site:
+    if agentbase_site:
         existing = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
-        if trade_site not in existing:
-            os.environ["PYTHONPATH"] = os.pathsep.join([*existing, trade_site])
+        if agentbase_site not in existing:
+            os.environ["PYTHONPATH"] = os.pathsep.join([*existing, agentbase_site])
 
 
 def load_env_and_set_yolo():
@@ -598,7 +598,7 @@ def _local_chat_memory_plugin_source() -> Path | None:
       1. PyInstaller _MEIPASS（打包后的运行目录）
       2. 运行时目录 ~/.agentbase/agentbase/hermes_chat_memory_plugin
          （upgrade 拉到本地的副本）
-      3. 开发目录 <repo>/trade/hermes_chat_memory_plugin
+      3. 开发目录 <repo>/agentbase/hermes_chat_memory_plugin
 
     这与 _local_skills_sync 的源定位策略同构，照抄。
     """
@@ -633,7 +633,7 @@ def sync_chat_memory_plugin() -> None:
     部署是**幂等**的：文件存在且内容一致就不写。安装脚本与每次 setup() 都调它，
     所以旧版升级时这步会自动让用户的 Hermes 看到新插件。
 
-    副本来自 trade 仓库内的 <repo>/trade/hermes_chat_memory_plugin/（_local_chat_memory_plugin_source），
+    副本来自 trade 仓库内的 <repo>/agentbase/hermes_chat_memory_plugin/（_local_chat_memory_plugin_source），
     目标位置 ~/.hermes/plugins/chat-memory/。与 _local_skills_sync 同样的"hash 比对、逐文件复制"，
     但因为是**目录级**（不是文件级），且插件要求 plugin.yaml + __init__.py + tools.py 三件同存，
     这里用"全文件 hash 集合相等"的判断避免误判。
@@ -1158,7 +1158,7 @@ def _start_hermes_upgrade_in_background() -> None:
     """降级模式下自动在后台升级 Hermes。
 
     用户明确要求「版本过低就直接帮用户升级」—— 桌面端用户看不到终端，让他们自己敲
-    命令等于没做。升级本身会先查 GitHub 可达性（见 trade.hermes_upgrade）：网络不通
+    命令等于没做。升级本身会先查 GitHub 可达性（见 agentbase.hermes_upgrade）：网络不通
     绝不开始，否则失败会同时弄坏 Hermes 与 Trade。
 
     这里吞掉所有异常：自动升级失败不能反过来挡住服务启动，否则界面就出不来了。
@@ -1225,17 +1225,17 @@ def ensure_desktop_integration() -> None:
       - 只在 Windows 执行（macOS/Linux 的自启由 install.sh 的 launchd/systemd 负责）
       - 幂等：已配好就跳过；检测到旧的会弹窗的任务（python.exe）会替换掉
       - 失败只打印警告，**绝不阻断启动** —— 自启是便利功能，不是运行前提
-      - `TRADE_SKIP_AUTOSTART_SETUP=1` 可整体关掉（不想被改系统设置的用户）
+      - `AGENTBASE_SKIP_AUTOSTART_SETUP=1` 可整体关掉（不想被改系统设置的用户）
     """
     if os.name != "nt":
         return
-    if os.environ.get("TRADE_SKIP_AUTOSTART_SETUP", "").strip() == "1":
+    if os.environ.get("AGENTBASE_SKIP_AUTOSTART_SETUP", "").strip() == "1":
         return
 
     try:
-        from agentbase.post_install.win_setup import ensure_windows_setup, trade_dir_from_module
+        from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module
 
-        for msg in ensure_windows_setup(trade_dir_from_module()):
+        for msg in ensure_windows_setup(agentbase_dir_from_module()):
             print(f"  {msg}")
     except Exception as e:
         # 自启配置是便利功能，失败绝不能影响 Trade 本身能不能用

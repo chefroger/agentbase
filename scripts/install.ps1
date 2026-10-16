@@ -170,12 +170,12 @@ Write-Host "Step 2/5: 检查 Hermes Agent" -ForegroundColor White
 
 # **不再把 Hermes 克隆/安装进 Trade 的 venv**（旧的固定 tag 方案已废除）。
 # 现在机器上只有**一份** Hermes：用户自己装的那份。Trade 通过 sys.path 指向它，
-# 并让它的 pm 托管环境提供 Hermes 的依赖（见 trade/bootstrap.py 与 COMPATIBILITY.md）。
+# 并让它的 pm 托管环境提供 Hermes 的依赖（见 agentbase/bootstrap.py 与 COMPATIBILITY.md）。
 #
 # 旧方案把 Hermes 装进 Trade 的 venv，并与用户那份抢同一个 checkout 目录，
 # 结果是「pin 静默失效 + 把用户的 Hermes 降级」（见 COMPATIBILITY.md 跟进记录）。
 #
-# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（trade/hermes_upgrade.py），
+# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（agentbase/hermes_upgrade.py），
 # 所以这里只确认它存在，不在这里改动用户的 Hermes。
 $hermesCmd = $null
 foreach ($candidate in @("$env:LOCALAPPDATA\hermes\hermes-agent\.hermes\bin\hermes.cmd",
@@ -320,7 +320,7 @@ Write-Host "  ✓ Foreign Trade Assistant 安装完成" -ForegroundColor Green
 Write-Host ""
 Write-Host "Step 4/5: 安装 B2B skills" -ForegroundColor White
 
-# 必须用真实存在的入口：此前写的是 `python -m trade.post_install install`，而该包
+# 必须用真实存在的入口：此前写的是 `python -m agentbase.post_install install`，而该包
 # **没有 __main__.py** → 从未生效过；再加上原生命令失败不抛异常，旧代码会在失败时
 # 照样打印「✓ 完成」（虚假成功）。实测新装后 skills 数为 0。
 & $PyCmd -c "from agentbase.post_install import install_skills; install_skills()"
@@ -370,7 +370,7 @@ REM （那里没有 trade 包），agent 线程以 RelaunchExit(SystemExit) 静�
 REM 前端只会看到「Agent 未返回有效响应」。bootstrap.py 里也设了一处，这里是双保险。
 set HERMES_DISABLE_LAZY_INSTALLS=1
 "$PyCmd" "$TradeDir\server.py" %*
-"@ | Out-File -FilePath "$LocalBin\trade.cmd" -Encoding OEM
+"@ | Out-File -FilePath "$LocalBin\agentbase.cmd" -Encoding OEM
 
 # 检测 PATH 中是否已包含 $LocalBin
 $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
@@ -382,11 +382,11 @@ if ($currentPath -notlike "*$LocalBin*") {
 # ─────────────────────────────────────────────────────────────────────────────
 # 开机自启动（隐藏窗口）+ 桌面快捷方式
 #
-# 委托给 trade.post_install.win_setup —— 那是唯一实现，服务启动时也会幂等调用。
+# 委托给 agentbase.post_install.win_setup —— 那是唯一实现，服务启动时也会幂等调用。
 # 以前这里用 Register-ScheduledTask 直接跑 python.exe，是控制台程序 → 登录必弹
 # 终端窗口；而且只在这一处配，走「让 Hermes 装 Trade」流程的用户根本拿不到。
 # ─────────────────────────────────────────────────────────────────────────────
-& $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, trade_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(trade_dir_from_module())]"
+& $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(agentbase_dir_from_module())]"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 Trade 使用，可稍后重试）" -ForegroundColor Yellow
 }
@@ -404,7 +404,7 @@ if ($LASTEXITCODE -ne 0) {
 #   2. doctor 自己会 import Hermes，会触发 pm 激活剥离 venv 的 site-packages；
 #      那一步的恢复也在这个函数里，漏了会让后面 holehe/sqlite-vec 误报「未安装」。
 # 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
-# 会在界面里自动升级 Hermes（见 trade/hermes_upgrade.py）。若这里判失败并退出，
+# 会在界面里自动升级 Hermes（见 agentbase/hermes_upgrade.py）。若这里判失败并退出，
 # 用户就永远看不到那个升级界面了。
 & $PyCmd -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"
 if ($LASTEXITCODE -ne 0) {

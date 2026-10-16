@@ -135,11 +135,11 @@ class TestVenvRebuildScriptWindows:
 
 
 class TestWindowsLauncherPath:
-    """app.py 找 trade.cmd 的位置，必须与 install.ps1 **实际生成**它的位置一致。
+    """app.py 找 agentbase.cmd 的位置，必须与 install.ps1 **实际生成**它的位置一致。
 
     这是一个**跨文件契约**：两边各自演化、谁也不知道对方，正是这类 bug 的温床。
-    2026-10-16 评审抓到过一次真实后果 —— app.py 写的是 `%LOCALAPPDATA%\\trade\\trade.cmd`
-    而 install.ps1 写在 `%LOCALAPPDATA%\\local\\bin\\trade.cmd`，差了 `local\\bin` 一层。
+    2026-10-16 评审抓到过一次真实后果 —— app.py 写的是 `%LOCALAPPDATA%\agentbase\\agentbase.cmd`
+    而 install.ps1 写在 `%LOCALAPPDATA%\\local\\bin\\agentbase.cmd`，差了 `local\\bin` 一层。
     于是 Windows 用户点「开始重建」→ venv 重建**全部成功** → 最后一步 `start` 找不到
     文件 → 服务起不来，界面卡在「正在重建」直到 15 分钟超时。
     比不重建更糟：用户以为一切正常在推进。
@@ -153,20 +153,20 @@ class TestWindowsLauncherPath:
             (ln for ln in src.splitlines() if "launcher" in ln and "agentbase.cmd" in ln),
             None,
         )
-        assert line, "app.py 里没找到 launcher 的 trade.cmd 推导"
+        assert line, "app.py 里没找到 launcher 的 agentbase.cmd 推导"
         for part in ('"local"', '"bin"', '"agentbase.cmd"'):
             assert part in line, (
                 f"launcher 路径缺 {part}，与 install.ps1 的 $LocalBin 不一致：{line.strip()}"
             )
 
     def test_installer_writes_to_the_same_place(self):
-        """锁住契约的另一端：install.ps1 必须把 trade.cmd 放进 LOCALAPPDATA\\local\\bin。"""
+        """锁住契约的另一端：install.ps1 必须把 agentbase.cmd 放进 LOCALAPPDATA\\local\\bin。"""
         ps1 = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
         assert "$LocalBin = \"$env:LOCALAPPDATA\\local\\bin\"" in ps1, (
             "install.ps1 的 $LocalBin 变了 —— 若确实要改，app.py 的 launcher 必须同步"
         )
-        assert '"$LocalBin\\trade.cmd"' in ps1, (
-            "install.ps1 不再把 trade.cmd 写进 $LocalBin —— 契约断了"
+        assert '"$LocalBin\\agentbase.cmd"' in ps1, (
+            "install.ps1 不再把 agentbase.cmd 写进 $LocalBin —— 契约断了"
         )
 
 

@@ -1,7 +1,7 @@
 """安装脚本的健壮性测试（install.sh / install.ps1）。
 
 这些缺陷都是实测发现的：
-- Step 4 用 `python -m trade.post_install install`，而该包**没有 __main__.py**
+- Step 4 用 `python -m agentbase.post_install install`，而该包**没有 __main__.py**
   → 这一步永远失败（stderr 被 2>/dev/null 吞掉），新装后 skills 数为 0。
 - 克隆被中断会留下**空目录**，脚本用 `[ -d ]` 判定「已安装」→ 之后 git pull
   静默失败、pip 在残缺树里报出误导性错误，且**重试永远不好**。
@@ -38,9 +38,9 @@ class TestSkillsInstallStep:
     """Step 4 必须调用真实存在的入口。"""
 
     def test_no_nonexistent_module_entry(self):
-        """不得再用 `-m trade.post_install install`（该包没有 __main__.py）。"""
+        """不得再用 `-m agentbase.post_install install`（该包没有 __main__.py）。"""
         for name, text in (("install.sh", SH), ("install.ps1", PS1)):
-            assert "-m trade.post_install install" not in _code_lines(text), \
+            assert "-m agentbase.post_install install" not in _code_lines(text), \
                 f"{name} 仍在调用不存在的模块入口"
 
     def test_uses_working_entry(self):
@@ -132,9 +132,9 @@ class TestHermesInstallPolicy:
         """
         baselines = (
             ("install.sh", SH, ("$HERMES_HOME/hermes-agent", '$PIP" install -e "."',
-                                'TRADE_HERMES_REF', '_clone_or_update "hermes-agent"')),
+                                'AGENTBASE_HERMES_REF', '_clone_or_update "hermes-agent"')),
             ("install.ps1", PS1, ("$HermesHome\\hermes-agent", 'install -e "."',
-                                  'TRADE_HERMES_REF', 'Invoke-CloneOrUpdate "hermes-agent"')),
+                                  'AGENTBASE_HERMES_REF', 'Invoke-CloneOrUpdate "hermes-agent"')),
         )
         for name, text, forbidden in baselines:
             section = self._step_section(text, "Step 2/5", until="Step 3/5")
@@ -305,8 +305,8 @@ class TestLauncherDisablesHermesLazyInstalls:
     子进程 ModuleNotFoundError 退出，父进程 raise RelaunchExit(1)——继承 SystemExit，
     Trade 的 except Exception 抓不到，agent 线程静默死亡。
 
-    `trade/bootstrap.py` 已在代码层设了这个开关；启动器里再设一次是双保险，而且
-    **必须写进生成器**：`trade.cmd` 是 install.ps1 生成的产物，手改会被重装抹掉。
+    `agentbase/bootstrap.py` 已在代码层设了这个开关；启动器里再设一次是双保险，而且
+    **必须写进生成器**：`agentbase.cmd` 是 install.ps1 生成的产物，手改会被重装抹掉。
     """
 
     FLAG = "HERMES_DISABLE_LAZY_INSTALLS"
@@ -318,7 +318,7 @@ class TestLauncherDisablesHermesLazyInstalls:
 
     def test_powershell_launcher_sets_flag(self):
         assert self.FLAG in _code_lines(PS1), (
-            "install.ps1 生成的 trade.cmd 未禁用 Hermes 懒加载重启"
+            "install.ps1 生成的 agentbase.cmd 未禁用 Hermes 懒加载重启"
         )
 
     def test_flag_value_is_one(self):
@@ -410,7 +410,7 @@ class TestPowerShellLauncherEncoding:
                 (ln for ln in text.splitlines() if "run_doctor" in ln and "agentbase.doctor" in ln),
                 None,
             )
-            assert line, f"{name} 未见调用 trade.doctor 的自检行"
+            assert line, f"{name} 未见调用 agentbase.doctor 的自检行"
             assert "prepare_hermes_import_paths()" in line, (
                 f"{name} 的自检没有先准备 Hermes 的 import 路径"
             )

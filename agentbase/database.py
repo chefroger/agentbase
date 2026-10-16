@@ -14,21 +14,21 @@ from datetime import datetime
 from pathlib import Path
 
 
-# 数据库路径: ~/.agentbase/data/agentbase.db（macOS/Linux）或 %LOCALAPPDATA%\trade\data\agentbase.db（Windows）
+# 数据库路径: ~/.agentbase/data/agentbase.db（macOS/Linux）或 %LOCALAPPDATA%\agentbase\data\agentbase.db（Windows）
 def _get_db_path() -> Path:
     """解析用户 Trade 数据目录下的 agentbase.db 路径。
 
-    优先级: AGENT_HOME 环境变量 → ~/.agentbase/（macOS/Linux）或 %LOCALAPPDATA%\\trade\\（Windows）。
+    优先级: AGENT_HOME 环境变量 → ~/.agentbase/（macOS/Linux）或 %LOCALAPPDATA%\agentbase\\（Windows）。
     """
-    trade_home = os.environ.get("AGENT_HOME", "").strip()
+    agentbase_home = os.environ.get("AGENT_HOME", "").strip()
     # 如果 AGENT_HOME 环境变量未设置，则使用系统默认路径
-    if not trade_home:
+    if not agentbase_home:
         # Windows: %LOCALAPPDATA%\trade, macOS/Linux: ~/.agentbase
         if os.name == "nt":
-            trade_home = str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "trade")
+            agentbase_home = str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "trade")
         else:
-            trade_home = str(Path.home() / ".agentbase")
-    data_dir = Path(trade_home) / "data"
+            agentbase_home = str(Path.home() / ".agentbase")
+    data_dir = Path(agentbase_home) / "data"
     # 确保 data 目录存在，不存在则创建
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir / "agentbase.db"
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS companies (
 );
 
 -- Trade-level company config (links company to Trade system)
-CREATE TABLE IF NOT EXISTS trade_companies (
+CREATE TABLE IF NOT EXISTS agentbase_companies (
     company_id        INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
     data_dir          TEXT    NOT NULL,   -- absolute path to ~/.agentbase/{slug}/
     agent_identity_md TEXT    DEFAULT '', -- inline agent identity, overrides data_dir file
@@ -211,7 +211,7 @@ def _add_spare_columns(conn: sqlite3.Connection) -> None:
 
     for table, extras in [
         ("companies",        ["extra1", "extra2", "extra3"]),
-        ("trade_companies",  ["extra1", "extra2", "extra3", "license_data"]),
+        ("agentbase_companies",  ["extra1", "extra2", "extra3", "license_data"]),
         ("libraries",       ["extra1", "extra2", "extra3"]),
         ("customers",       ["extra1", "extra2", "extra3"]),
         ("customer_libraries", ["extra1", "extra2", "extra3"]),
@@ -263,7 +263,7 @@ def _migrate_from_v0(conn: sqlite3.Connection) -> bool:
 
     print("  检测到 v0 schema — 正在迁移到多公司 v1 …")
 
-    # 先创建 companies + trade_companies 表
+    # 先创建 companies + agentbase_companies 表
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS companies (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -282,7 +282,7 @@ def _migrate_from_v0(conn: sqlite3.Connection) -> bool:
             extra3       TEXT    DEFAULT '{}'
         );
 
-        CREATE TABLE IF NOT EXISTS trade_companies (
+        CREATE TABLE IF NOT EXISTS agentbase_companies (
             company_id        INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
             data_dir          TEXT    NOT NULL,
             agent_identity_md TEXT    DEFAULT '',
@@ -296,7 +296,7 @@ def _migrate_from_v0(conn: sqlite3.Connection) -> bool:
         INSERT OR IGNORE INTO companies (name, slug, is_active)
         VALUES ('我的公司', 'default', 1);
 
-        INSERT OR IGNORE INTO trade_companies (company_id, data_dir, is_active)
+        INSERT OR IGNORE INTO agentbase_companies (company_id, data_dir, is_active)
         VALUES (1, '', 1);
     """)
 
@@ -330,7 +330,7 @@ def _migrate_from_v0(conn: sqlite3.Connection) -> bool:
 
 
 _EXPECTED_TABLES = frozenset({
-    "companies", "trade_companies", "libraries", "customers",
+    "companies", "agentbase_companies", "libraries", "customers",
     "customer_libraries", "conversations", "orders", "usage_ledger",
 })
 
@@ -357,7 +357,7 @@ def _needs_schema_work(conn: sqlite3.Connection) -> bool:
         if "schema_migrations" not in existing:
             return True
         # 备用列缺失 → ALTER TABLE（清单必须与 _add_spare_columns 保持一致）
-        for table in ("companies", "trade_companies", "libraries", "customers",
+        for table in ("companies", "agentbase_companies", "libraries", "customers",
                       "customer_libraries", "conversations", "usage_ledger"):
             cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             if not {"extra1", "extra2", "extra3"} <= cols:

@@ -388,13 +388,13 @@ function t(key, params) {
 function switchLang(lang) {
     if (lang === currentLang) return;
     currentLang = lang;
-    try { localStorage.setItem('trade_lang', lang); } catch(_) {}
+    try { localStorage.setItem('agentbase_lang', lang); } catch(_) {}
     // 完整刷新 UI
     _applyLanguage();
 }
 
 function initLang() {
-    try { currentLang = localStorage.getItem('trade_lang') || 'zh'; } catch(_) { currentLang = 'zh'; }
+    try { currentLang = localStorage.getItem('agentbase_lang') || 'zh'; } catch(_) { currentLang = 'zh'; }
     var sel = document.getElementById('lang-select');
     if (sel) sel.value = currentLang;
     _applyLanguage();
@@ -777,12 +777,12 @@ async function wizardLaunch() {
     document.head.appendChild(style);
 })();
 function saveState() {
-    if (currentCompanyId) sessionStorage.setItem('trade_cid', currentCompanyId);
-    else sessionStorage.removeItem('trade_cid');
-    sessionStorage.setItem('trade_view', currentView);
-    if (currentChatContext) sessionStorage.setItem('trade_ctx', currentChatContext);
+    if (currentCompanyId) sessionStorage.setItem('agentbase_cid', currentCompanyId);
+    else sessionStorage.removeItem('agentbase_cid');
+    sessionStorage.setItem('agentbase_view', currentView);
+    if (currentChatContext) sessionStorage.setItem('agentbase_ctx', currentChatContext);
 }
-function loadSavedCid() { return parseInt(sessionStorage.getItem('trade_cid') || '0') || null; }
+function loadSavedCid() { return parseInt(sessionStorage.getItem('agentbase_cid') || '0') || null; }
 
 // ═════════════════════ API ═════════════════════
 let _authRecovering = false;
@@ -992,15 +992,15 @@ async function doActivate() {
 }
 
 // ── 重启协调 ──
-// 清理前端运行时缓存，但保留用户上下文（trade_cid 让重启后不必重新选公司）
+// 清理前端运行时缓存，但保留用户上下文（agentbase_cid 让重启后不必重新选公司）
 function _clearRuntimeCaches() {
     try {
         // 清理视图缓存（DOM 引用 + 渲染状态），强制重启后重新拉取
         if (typeof viewCache === 'object') {
             for (const k of Object.keys(viewCache)) delete viewCache[k];
         }
-        // 仅清理与服务端 schema 强耦合的会话状态，保留 trade_cid（公司选择）
-        const preserveKeys = new Set(['trade_cid', '_trade_reload_state']);
+        // 仅清理与服务端 schema 强耦合的会话状态，保留 agentbase_cid（公司选择）
+        const preserveKeys = new Set(['agentbase_cid', '_trade_reload_state']);
         const ssKeys = [];
         for (let i = 0; i < sessionStorage.length; i++) ssKeys.push(sessionStorage.key(i));
         ssKeys.forEach(k => { if (!preserveKeys.has(k)) sessionStorage.removeItem(k); });
@@ -1343,7 +1343,7 @@ function _cronTaskLine(t) {
 // #region sse-outcome
 /**
  * 流结束后的分类与兜底文案。判据是「有没有收到 done」：
- *   - done 是服务端在 finally 里必发的事件（trade/api/chat.py），收到它说明
+ *   - done 是服务端在 finally 里必发的事件（agentbase/api/chat.py），收到它说明
  *     服务端走完了整个流程 —— 此时还没有内容，就是服务端一侧没能给出来。
  *   - 没收到 done 说明连接中途断了 —— 属于网络/客户端侧。
  * 历史 bug：两者（外加 agent 线程静默死亡）都显示同一句「Agent 未返回有效回复」，
@@ -1891,7 +1891,7 @@ async function _collectFilesFromDataTransfer(dt) {
     return files;
 }
 
-// 公司工作目录下的 9 个子目录名 — 与 trade/company.py _WORK_DIR_CATEGORIES 同步
+// 公司工作目录下的 9 个子目录名 — 与 agentbase/company.py _WORK_DIR_CATEGORIES 同步
 const _WORK_SUBDIRS = ['报价单','合同','客户资料','产品规格','发票','物流单据','认证资质','营销素材','海关数据'];
 
 // 上传文件到后端指定子目录
@@ -3000,7 +3000,7 @@ const TASK_TEMPLATES = [
 ];
 
 function getCustomTemplates() {
-    try { return JSON.parse(localStorage.getItem('trade_custom_templates') || '[]'); } catch(e) { return []; }
+    try { return JSON.parse(localStorage.getItem('agentbase_custom_templates') || '[]'); } catch(e) { return []; }
 }
 
 function getAllTemplates() {
@@ -3011,7 +3011,7 @@ function deleteCustomTemplate(id) {
     if (!confirm('删除此自定义模板？')) return;
     let customs = getCustomTemplates();
     customs = customs.filter(t => t.id !== id);
-    localStorage.setItem('trade_custom_templates', JSON.stringify(customs));
+    localStorage.setItem('agentbase_custom_templates', JSON.stringify(customs));
     const ct = currentChatContainer;
     if (ct && currentView === 'tasks') renderTasksViewInto(ct);
 }
@@ -3300,9 +3300,9 @@ function saveCustomTemplate() {
     const id = 'custom-' + Date.now();
     const tpl = {id, name, time, cron, desc, prompt, custom: true};
     let customs = [];
-    try { customs = JSON.parse(localStorage.getItem('trade_custom_templates') || '[]'); } catch(e) {}
+    try { customs = JSON.parse(localStorage.getItem('agentbase_custom_templates') || '[]'); } catch(e) {}
     customs.push(tpl);
-    localStorage.setItem('trade_custom_templates', JSON.stringify(customs));
+    localStorage.setItem('agentbase_custom_templates', JSON.stringify(customs));
     document.getElementById('custom-template-modal').remove();
     toast(`自定义模板「${name}」已添加`);
     // 刷新视图

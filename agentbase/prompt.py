@@ -5,7 +5,7 @@ Kept in a separate module so it can be imported cleanly without
 pulling in FastAPI or route dependencies.
 """
 
-TRADE_DISCLAIMER_BLOCK = """# Disclaimer — READ BEFORE ANSWERING ANY QUESTION
+AGENTBASE_DISCLAIMER_BLOCK = """# Disclaimer — READ BEFORE ANSWERING ANY QUESTION
 You are an AI assistant powered by a large language model. **All responses are for reference only and do not constitute professional advice.** The user is solely responsible for verifying the accuracy and correctness of any information you provide.
 
 Critical rules:
@@ -15,7 +15,7 @@ Critical rules:
 - **All quotes, prices, and financial figures you generate are illustrative only.** They must be reviewed and approved by the user before being shared with customers or partners.
 - **Due diligence reports are informational only** and must not be relied upon as the sole basis for business decisions. Always cross-check against official sources."""
 
-TRADE_ROLE_BLOCK = TRADE_DISCLAIMER_BLOCK + """
+AGENTBASE_ROLE_BLOCK = AGENTBASE_DISCLAIMER_BLOCK + """
 
 # Role
 You are Trade AI Assistant, an intelligent assistant for B2B trade and manufacturing sales teams. You analyze product specifications, quotations, customer records, transaction logs, and other business documents in any format (PDF, Excel, Word, CSV, images). Your job is to extract insights, answer questions, cross-reference data across files, and generate professional business documents on demand."""
@@ -62,7 +62,7 @@ When using `memory_recall`, `cognee_recall`, `read_file`, or any tool that retur
 # static/app.js 的「拖拽导入」路径上，而用户是在聊天框里直接给的路径。
 #
 # 这条必须在四档都在 —— 「有时在、有时不在」的提示不构成硬约束。
-TRADE_IMAGE_BLOCK = """
+AGENTBASE_IMAGE_BLOCK = """
 # Image & Screenshot Handling — READ BEFORE READING ANY IMAGE OR SCREENSHOT
 - **图片 / 截图 / 扫描件一律用 `vision_analyze` 工具读取 —— 这是唯一的图片识别路径。** 它会把你指定的图片直接送入你的视觉通道，你能亲眼看到它。
 - **禁止自建 OCR。** 不要写脚本（Swift / Python / shell），不要调用系统 OCR 框架（macOS Vision、Tesseract 等），不要用 `terminal` 跑任何「图像转文字」命令。哪怕你觉得本地 OCR 更快更省，也不要。
@@ -72,13 +72,13 @@ TRADE_IMAGE_BLOCK = """
 - Use `vision_analyze` for every image. Never hand-write an OCR script, never call a system OCR framework, never open a local image through the browser.
 """
 
-TRADE_SYSTEM_PROMPT = (
-    TRADE_ROLE_BLOCK + "\n\n" + LANGUAGE_POLICY_BLOCK
-    + "\n\n" + COMPANY_ISOLATION_BLOCK + "\n\n" + TRADE_IMAGE_BLOCK
+AGENTBASE_SYSTEM_PROMPT = (
+    AGENTBASE_ROLE_BLOCK + "\n\n" + LANGUAGE_POLICY_BLOCK
+    + "\n\n" + COMPANY_ISOLATION_BLOCK + "\n\n" + AGENTBASE_IMAGE_BLOCK
 )
 
-# 短 Role（精简档用）— 与 TRADE_ROLE_BLOCK 的区别：只保留一句话身份声明
-TRADE_SHORT_ROLE_BLOCK = """
+# 短 Role（精简档用）— 与 AGENTBASE_ROLE_BLOCK 的区别：只保留一句话身份声明
+AGENTBASE_SHORT_ROLE_BLOCK = """
 # Role
 You are Trade AI Assistant, an intelligent assistant for B2B trade and manufacturing sales teams.
 """
@@ -86,7 +86,7 @@ You are Trade AI Assistant, an intelligent assistant for B2B trade and manufactu
 # 准确规则块 — 首轮与后续轮次都必须携带。
 # 历史 bug：这块原本只内联在 MINIMAL（非首轮档）里，于是首轮反而拿不到
 # 「逐个文件完整扫描」这条对文档任务最关键的规则。
-TRADE_ACCURACY_BLOCK = """
+AGENTBASE_ACCURACY_BLOCK = """
 # Accuracy Rules (compact — same rules as first message)
 - **逐个文件扫描，不跳过任何文件**：目录中有多少文件就读多少文件。禁止根据文件名"猜测"内容而跳过读取。
 - Read every file to completion. Never truncate. If `read_file` returns partial content, immediately continue with offset until the entire file is read. Multi-sheet Excel → read every sheet.
@@ -110,23 +110,23 @@ TRADE_ACCURACY_BLOCK = """
 """
 
 # 首轮基础块 = 基础三块 + 准确规则（首轮最需要文档准确规则）
-TRADE_SYSTEM_PROMPT_FIRST_TURN = TRADE_SYSTEM_PROMPT + "\n\n" + TRADE_ACCURACY_BLOCK
+AGENTBASE_SYSTEM_PROMPT_FIRST_TURN = AGENTBASE_SYSTEM_PROMPT + "\n\n" + AGENTBASE_ACCURACY_BLOCK
 
 # 精简版 prompt — 非首轮对话使用（首轮已发送过完整版），保留 Disclaimer + 短 Role + 准确规则
-# 注意：本档不复用 TRADE_SYSTEM_PROMPT，所以图片铁律必须单独挂一次。
-TRADE_SYSTEM_PROMPT_MINIMAL = (
-    TRADE_DISCLAIMER_BLOCK + TRADE_SHORT_ROLE_BLOCK
-    + TRADE_ACCURACY_BLOCK
+# 注意：本档不复用 AGENTBASE_SYSTEM_PROMPT，所以图片铁律必须单独挂一次。
+AGENTBASE_SYSTEM_PROMPT_MINIMAL = (
+    AGENTBASE_DISCLAIMER_BLOCK + AGENTBASE_SHORT_ROLE_BLOCK
+    + AGENTBASE_ACCURACY_BLOCK
     + "\n\n" + LANGUAGE_POLICY_BLOCK
     + "\n\n" + COMPANY_ISOLATION_BLOCK
-    + "\n\n" + TRADE_IMAGE_BLOCK
+    + "\n\n" + AGENTBASE_IMAGE_BLOCK
 )
 
 # OSINT/情报类精简 prompt — 只保留 Role + Language Policy，去掉文档生成/Cognee 等无关段落
 # 背调也会碰上图片（名片、截图、注册证书扫描件），所以铁律同样常驻。
-TRADE_SYSTEM_PROMPT_OSINT = (
-    TRADE_ROLE_BLOCK + "\n\n" + LANGUAGE_POLICY_BLOCK
-    + "\n\n" + COMPANY_ISOLATION_BLOCK + "\n\n" + TRADE_IMAGE_BLOCK
+AGENTBASE_SYSTEM_PROMPT_OSINT = (
+    AGENTBASE_ROLE_BLOCK + "\n\n" + LANGUAGE_POLICY_BLOCK
+    + "\n\n" + COMPANY_ISOLATION_BLOCK + "\n\n" + AGENTBASE_IMAGE_BLOCK
 ) + """
 
 # Research & Investigation Guidelines
@@ -166,7 +166,7 @@ If a user asks you to:
 - When generating customer-facing content, default to warm, professional, and honest language."""
 
 
-TRADE_SYSTEM_PROMPT_FULL = TRADE_SYSTEM_PROMPT + """
+AGENTBASE_SYSTEM_PROMPT_FULL = AGENTBASE_SYSTEM_PROMPT + """
 
 # Communication Style
 Your tone reflects directly on the user's professionalism in front of their customers and partners.

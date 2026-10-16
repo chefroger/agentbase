@@ -42,7 +42,7 @@ _TEMP_SAFE_PROVIDERS = frozenset({
     "ollama", "lmstudio", "minimax", "openrouter", "nous", "groq",
 })
 
-# 分析/提取类任务的默认温度（可用 TRADE_CONSISTENCY_TEMPERATURE 环境变量覆盖）
+# 分析/提取类任务的默认温度（可用 AGENTBASE_CONSISTENCY_TEMPERATURE 环境变量覆盖）
 _DEFAULT_CONSISTENCY_TEMPERATURE = "0.1"
 
 
@@ -64,7 +64,7 @@ def _consistency_request_overrides(skill_name: str | None, provider: str) -> dic
         return None
     try:
         temp = float(os.environ.get(
-            "TRADE_CONSISTENCY_TEMPERATURE", _DEFAULT_CONSISTENCY_TEMPERATURE))
+            "AGENTBASE_CONSISTENCY_TEMPERATURE", _DEFAULT_CONSISTENCY_TEMPERATURE))
     except ValueError:
         temp = 0.1  # 环境变量值非法时回退默认
     return {"temperature": temp}
@@ -240,7 +240,7 @@ DEFAULT_ENABLED_TOOLSETS = (
     "browser", "skills", "memory", "cronjob", "todo",
     "vision",
     # chat-memory 是 trade 自带的 Hermes 插件提供的工具集（见
-    # trade/hermes_chat_memory_plugin/）。**必须列在这里** —— Hermes 只会把
+    # agentbase/hermes_chat_memory_plugin/）。**必须列在这里** —— Hermes 只会把
     # enabled 列表里那些 toolset 的工具放进工具表；插件加载成功但这里没列，
     # 工具就只是躺在注册表里、LLM 完全看不见（2026-10-16 实测踩到：
     # 插件 enabled=True/tools=1，但 agent 工具表里查无此工具）。
@@ -252,13 +252,13 @@ DEFAULT_ENABLED_TOOLSETS = (
 def resolve_enabled_toolsets() -> list[str]:
     """解析本次实际启用的 toolset 列表。
 
-    优先级：`TRADE_ENABLED_TOOLSETS` 环境变量（逗号分隔，空白串按未设置处理）
+    优先级：`AGENTBASE_ENABLED_TOOLSETS` 环境变量（逗号分隔，空白串按未设置处理）
     → 默认组合 `DEFAULT_ENABLED_TOOLSETS`。
 
     Returns:
         toolset 名列表（环境变量覆盖时按用户给定的顺序与内容，不做校验）
     """
-    raw = os.environ.get("TRADE_ENABLED_TOOLSETS", "").strip()
+    raw = os.environ.get("AGENTBASE_ENABLED_TOOLSETS", "").strip()
     if raw:
         # 环境变量存在且非空白时才覆盖；容忍多余空格与空项
         return [t.strip() for t in raw.split(",") if t.strip()]
@@ -313,7 +313,7 @@ def create_agent(
 
     agent_kwargs = {
         "quiet_mode": True,
-        "max_iterations": int(os.environ.get("TRADE_MAX_ITERATIONS", "90")),
+        "max_iterations": int(os.environ.get("AGENTBASE_MAX_ITERATIONS", "90")),
         "provider": kwargs["provider"] or None,
         "base_url": kwargs["base_url"] or None,
         "model": kwargs["model"] or None,
@@ -522,23 +522,23 @@ def build_query(
 
     if matched_name in _OSINT_SKILL_NAMES:
         # OSINT 背调场景：精简档，去掉文档生成/Cognee 等无关段落
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_OSINT
-        code_fallback = TRADE_SYSTEM_PROMPT_OSINT
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_OSINT
+        code_fallback = AGENTBASE_SYSTEM_PROMPT_OSINT
     elif _prompts.needs_full_prompt(
         matched_name=matched_name, library_id=library_id, explicit_paths=explicit_paths
     ):
         # 文档处理类任务：注入完整档（含文档生成指南、文档分析协议等，
         # 约 22674 字符 ≈ 5700 token）—— 只在真正需要时才付这个成本
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_FULL
-        code_fallback = TRADE_SYSTEM_PROMPT_FULL
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FULL
+        code_fallback = AGENTBASE_SYSTEM_PROMPT_FULL
     elif has_history:
         # 非首轮对话：精简档（基础规则与准确规则仍然常驻）
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_MINIMAL
-        code_fallback = TRADE_SYSTEM_PROMPT_MINIMAL
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_MINIMAL
+        code_fallback = AGENTBASE_SYSTEM_PROMPT_MINIMAL
     else:
         # 首轮：完整基础块（基础三块 + 准确规则）
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_FIRST_TURN
-        code_fallback = TRADE_SYSTEM_PROMPT_FIRST_TURN
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
+        code_fallback = AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
     system_prompt = _prompts.resolve_system_prompt(
         company_slug=company_slug,
         db_identity=db_identity,
@@ -576,7 +576,7 @@ def build_query(
                 "**所有数据操作（记忆读取、客户查询、文档搜索）必须限定在上述公司范围内。**"
                 # 紧跟其后**强绑定**"带 company_id 参数的 trade 工具必须传这个数字"——
                 # 不然 LLM 看到 ID 也未必会联想到工具调用。文案来源：
-                # trade/prompts._build_trade_context_block，**共用同一段文案**避免漂移。
+                # agentbase/prompts._build_trade_context_block，**共用同一段文案**避免漂移。
                 + _prompts._build_trade_context_block(co['id'])
             )
 

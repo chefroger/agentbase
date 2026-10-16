@@ -38,7 +38,7 @@ def _get_trade_home() -> Path:
     """解析 Trade 用户数据目录（AGENT_HOME 环境变量 → 平台默认路径）。
 
     macOS/Linux: ~/.agentbase/
-    Windows:     %LOCALAPPDATA%\\trade\\
+    Windows:     %LOCALAPPDATA%\agentbase\\
     """
     val = os.environ.get("AGENT_HOME", "").strip()
     if val:
@@ -70,7 +70,7 @@ def _get_package_skills_dir() -> Path | None:
         if meipass_skills.is_dir():
             return meipass_skills
 
-    # 策略 1: 遍历 sys.path，检查每个路径下是否有 trade/__init__.py
+    # 策略 1: 遍历 sys.path，检查每个路径下是否有 agentbase/__init__.py
     for prefix in list(sys.path):
         p = Path(prefix)
         if not p.is_dir():
@@ -182,7 +182,7 @@ def install_skills(progress_callback=None) -> None:
         SystemExit(1): 找不到 skills 目录或安装失败时
     """
     hermes_home = _get_hermes_home()
-    trade_home = _get_trade_home()
+    agentbase_home = _get_trade_home()
     hermes_skills_dir = hermes_home / "skills"
 
     # 查找本地包中的 skills 源目录
@@ -238,15 +238,15 @@ def install_skills(progress_callback=None) -> None:
 
     if template_dir.is_dir():
         template_msg = (
-            f"[post_install] Trade home: {trade_home}"
+            f"[post_install] Trade home: {agentbase_home}"
         )
         if progress_callback:
             progress_callback(template_msg)
         else:
             print(template_msg)
-        trade_home.mkdir(parents=True, exist_ok=True)
-        _copy_trade_template(template_dir, trade_home)
-        done_msg = f"[post_install] Trade data template installed to: {trade_home}/.agentbase-template"
+        agentbase_home.mkdir(parents=True, exist_ok=True)
+        _copy_trade_template(template_dir, agentbase_home)
+        done_msg = f"[post_install] Trade data template installed to: {agentbase_home}/.agentbase-template"
         if progress_callback:
             progress_callback(done_msg)
         else:
@@ -265,7 +265,7 @@ def update_skills() -> None:
       - install_skills: 从本地 pip 安装包中复制 skills（新安装时用）
       - update_skills:  从 GitHub main 分支下载最新 SKILL.md（更新时用）
 
-    用法: agentbase-skills-update（或 python -m trade.post_install update）
+    用法: agentbase-skills-update（或 python -m agentbase.post_install update）
 
     安全措施：
       - 路径穿越校验（skill 目录名限制 b2b- 前缀 + 小写字母连字符）

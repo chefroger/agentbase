@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# 与 trade/app.py 的默认端口一致
+# 与 agentbase/app.py 的默认端口一致
 DEFAULT_BASE_URL = "http://127.0.0.1:9120"
 # 等待服务就绪的上限（秒）。首次启动要做 skills 同步等，实测约 60s 才绑端口；
 # 给 90s 留余量，超时后如实报错而不是无限等。
@@ -122,7 +122,7 @@ def open_trade(
             # 超时不要假装成功 —— 让用户知道去哪看日志
             return (
                 f"✗ Trade 启动超时（{int(timeout)}s 内未就绪）。请查看日志：\n"
-                "    ~/.agentbase/logs/   （Windows: %LOCALAPPDATA%\\trade\\logs\\）"
+                "    ~/.agentbase/logs/   （Windows: %LOCALAPPDATA%\agentbase\\logs\\）"
             )
 
     # 服务就绪。已打开的 Trade 页面就直接切过去，避免每点一次多一个标签页。

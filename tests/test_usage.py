@@ -40,7 +40,7 @@ def test_unknown_model_zero_cost(conn):
 
 
 def test_price_env_override(conn, monkeypatch):
-    monkeypatch.setenv("TRADE_PRICE_DEEPSEEK_CHAT", "1.0,2.0")
+    monkeypatch.setenv("AGENTBASE_PRICE_DEEPSEEK_CHAT", "1.0,2.0")
     cost = usage.record_usage(conn, model="deepseek-chat", prompt_tokens=1_000_000, completion_tokens=0)
     assert cost == pytest.approx(1.0)
 

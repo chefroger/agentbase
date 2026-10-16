@@ -76,7 +76,7 @@ def test_tfidf_deterministic():
 
 
 def test_get_backend_defaults_to_tfidf_without_st(monkeypatch):
-    monkeypatch.setenv("TRADE_EMBEDDING_BACKEND", "tfidf")
+    monkeypatch.setenv("AGENTBASE_EMBEDDING_BACKEND", "tfidf")
     b = get_backend()
     assert isinstance(b, TfidfBackend)
     # 单例
@@ -84,7 +84,7 @@ def test_get_backend_defaults_to_tfidf_without_st(monkeypatch):
 
 
 def test_get_backend_explicit_tfidf(monkeypatch):
-    monkeypatch.setenv("TRADE_EMBEDDING_BACKEND", "tfidf")
+    monkeypatch.setenv("AGENTBASE_EMBEDDING_BACKEND", "tfidf")
     assert isinstance(get_backend(), TfidfBackend)
 
 

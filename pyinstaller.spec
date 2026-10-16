@@ -115,7 +115,7 @@ app = BUNDLE(
     exe,
     name="Foreign Trade Assistant.app",
     icon=str(ROOT / "static" / "icon.icns") if (ROOT / "static" / "icon.icns").is_file() else None,
-    bundle_identifier="com.foreign-trade.assistant",
+    bundle_identifier="com.foreign-agentbase.assistant",
     info_plist={
         "NSHighResolutionCapable": True,
         "CFBundleShortVersionString": "0.3.0",

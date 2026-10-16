@@ -193,7 +193,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # 创建 venv（所有后续安装都在 venv 内，不碰系统 Python）
 # ─────────────────────────────────────────────────────────────────────────────
-_VENV_REAL="$HOME/.trade/venv"
+_VENV_REAL="$HOME/.agentbase/venv"
 VENV_DIR="$_VENV_REAL"
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 _VENV_OLD=""
@@ -238,7 +238,7 @@ log_step "Step 2/5: 检查 Hermes Agent"
 
 # **不再把 Hermes 克隆/安装进 Trade 的 venv**（旧的固定 tag 方案已废除）。
 # 现在机器上只有**一份** Hermes：用户自己装的那份。Trade 通过 sys.path 指向它，
-# 并让它的 pm 托管环境提供 Hermes 的依赖（见 trade/bootstrap.py 与 COMPATIBILITY.md）。
+# 并让它的 pm 托管环境提供 Hermes 的依赖（见 agentbase/bootstrap.py 与 COMPATIBILITY.md）。
 #
 # 这样做的理由（两条都是实测出来的）：
 #   1. 上游从 v0.21.6 起把核心依赖标成 `python_version >= '3.14'`，Hermes 与它的
@@ -246,7 +246,7 @@ log_step "Step 2/5: 检查 Hermes Agent"
 #   2. 旧方案把 Hermes 装进 Trade 的 venv，会和用户自己那份抢同一个 checkout 目录，
 #      导致「pin 失效 + 把用户的 Hermes 降级」—— 见 COMPATIBILITY.md 的跟进记录。
 #
-# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（trade/hermes_upgrade.py），
+# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（agentbase/hermes_upgrade.py），
 # 所以这里只确认它存在，不在这里改动用户的 Hermes。
 if command -v hermes &>/dev/null; then
     log_ok "已找到 hermes 命令（$(command -v hermes)）"
@@ -267,21 +267,21 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 3/5: 安装 Foreign Trade Assistant"
 
-TRADE_REPO="https://github.com/chefroger/smart-trade-ai.git"
-TRADE_DIR="$HOME/.trade/agentbase"
+AGENTBASE_REPO="https://github.com/chefroger/smart-trade-ai.git"
+AGENTBASE_DIR="$HOME/.agentbase/agentbase"
 
 # 记录回滚点（2026-10-16 加）。重建场景下依赖若装不上，代码必须能退回升级前 ——
 # 否则「新代码 + 旧 venv」照样起不来，等于把「重建失败」升级成「彻底打不开」。
 # 新装用户这里是空的（目录还不存在），_rollback_code 自然什么都不做。
 _TRADE_HEAD_BEFORE=""
-if [ -d "$TRADE_DIR/.git" ] && git -C "$TRADE_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
-    _TRADE_HEAD_BEFORE=$(git -C "$TRADE_DIR" rev-parse HEAD)
+if [ -d "$AGENTBASE_DIR/.git" ] && git -C "$AGENTBASE_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
+    _TRADE_HEAD_BEFORE=$(git -C "$AGENTBASE_DIR" rev-parse HEAD)
 fi
 
 _rollback_code() {
     [ -z "$_TRADE_HEAD_BEFORE" ] && return 0
     log_warn "正在把代码回退到升级前的版本（${_TRADE_HEAD_BEFORE:0:8}）..."
-    git -C "$TRADE_DIR" reset --hard "$_TRADE_HEAD_BEFORE" 2>/dev/null \
+    git -C "$AGENTBASE_DIR" reset --hard "$_TRADE_HEAD_BEFORE" 2>/dev/null \
         && log_ok "代码已回退，旧版本仍可正常使用" \
         || log_err "代码回退失败 —— 请把上面的输出发给技术支持"
     # 丢弃半成品的新环境；旧环境（$_VENV_OLD）始终没被动过
@@ -289,9 +289,9 @@ _rollback_code() {
     return 0
 }
 
-_clone_or_update "agentbase" "$TRADE_REPO" "$TRADE_DIR" || exit 1
+_clone_or_update "agentbase" "$AGENTBASE_REPO" "$AGENTBASE_DIR" || exit 1
 
-cd "$TRADE_DIR"
+cd "$AGENTBASE_DIR"
 # 装依赖（不含 hermes-agent，它在 Step 2 已装进 venv）+ trade 自身
 # 用 if 而非裸命令：`set -e` 会让失败直接退出，跳过代码回滚，机器就卡在
 # 「新代码 + 旧依赖」的半吊子状态。
@@ -352,7 +352,7 @@ log_ok "Foreign Trade Assistant 安装完成"
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 4/5: 安装 B2B skills"
 
-# 必须用真实存在的入口：此前写的是 `python -m trade.post_install install`，
+# 必须用真实存在的入口：此前写的是 `python -m agentbase.post_install install`，
 # 但该包**没有 __main__.py** → 这一步从未生效过（报错被 2>/dev/null 吞掉，
 # 只打印下面那句警告）。实测新装后 ~/.hermes/skills 里 0 个 skill。
 if "$PY" -c "from agentbase.post_install import install_skills; install_skills()"; then
@@ -361,7 +361,7 @@ else
     log_warn "B2B skills 安装可能不完整（首次启动时会自动同步）"
 fi
 
-# chat-memory 插件：trade 自带的工具（让 LLM 能用 trade.conversations 表查历史对话）。
+# chat-memory 插件：trade 自带的工具（让 LLM 能用 agentbase.conversations 表查历史对话）。
 # setup() 也会兜底同步 + 写 config.yaml，这里做一次显式的初始安装，避免用户装完
 # 还没启动 trade 之前就看不到工具（虽然通常不实际发生，但稳）。
 if "$PY" -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"; then
@@ -394,7 +394,7 @@ export HERMES_HOME="\${HERMES_HOME:-$HOME/.hermes}"
 # （那里没有 trade 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 # 前端只会看到「Agent 未返回有效回复」。bootstrap.py 里也设了一处，这里是双保险。
 export HERMES_DISABLE_LAZY_INSTALLS="1"
-exec "$VENV_DIR/bin/python" "$TRADE_DIR/server.py" "\$@"
+exec "$VENV_DIR/bin/python" "$AGENTBASE_DIR/server.py" "\$@"
 LAUNCHER
 chmod +x "$HOME/.local/bin/trade"
 
@@ -428,7 +428,7 @@ fi
 #   2. doctor 自己会 import Hermes，会触发 pm 激活剥离 venv 的 site-packages；
 #      那一步的恢复也在这个函数里，漏了会让后面 holehe/sqlite-vec 误报「未安装」。
 # 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
-# 会在界面里自动升级 Hermes（见 trade/hermes_upgrade.py）。若这里判失败并 exit 1，
+# 会在界面里自动升级 Hermes（见 agentbase/hermes_upgrade.py）。若这里判失败并 exit 1，
 # 用户就永远看不到那个升级界面了。
 if ! "$PY" -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"; then
     log_err "自检发现致命问题，安装不完整。请把上面的输出发给技术支持。"
@@ -459,7 +459,7 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 if [[ "$(uname -s)" == "Darwin" ]]; then
     PLIST_DIR="$HOME/Library/LaunchAgents"
-    PLIST_FILE="$PLIST_DIR/com.trade.assistant.plist"
+    PLIST_FILE="$PLIST_DIR/com.agentbase.assistant.plist"
     mkdir -p "$PLIST_DIR"
 
     if [ ! -f "$PLIST_FILE" ]; then
@@ -469,7 +469,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.trade.assistant</string>
+    <string>com.agentbase.assistant</string>
     <key>ProgramArguments</key>
     <array>
         <string>$HOME/.local/bin/trade</string>
@@ -514,7 +514,7 @@ PLIST
 # ─────────────────────────────────────────────────────────────────────────────
 elif [[ "$(uname -s)" == "Linux" ]]; then
     UNIT_DIR="$HOME/.config/systemd/user"
-    UNIT_FILE="$UNIT_DIR/trade.service"
+    UNIT_FILE="$UNIT_DIR/agentbase.service"
     mkdir -p "$UNIT_DIR"
 
     if [ ! -f "$UNIT_FILE" ]; then
@@ -533,8 +533,8 @@ RestartSec=10
 WantedBy=default.target
 UNIT
         systemctl --user daemon-reload
-        systemctl --user enable trade.service
-        systemctl --user start trade.service
+        systemctl --user enable agentbase.service
+        systemctl --user start agentbase.service
         echo -e "  ${GREEN}✓${NC} Linux 开机自启动已配置（systemd user unit）"
     else
         echo -e "  ${GREEN}✓${NC} Linux 开机自启动已配置"

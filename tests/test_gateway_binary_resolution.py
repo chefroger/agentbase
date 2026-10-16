@@ -8,7 +8,7 @@ Hermes 是装在 Trade 自己的 venv 里的（`~/.agentbase/venv`），而启�
 三个平台的 PATH 里有没有 venv 的 bin 目录：
   - macOS：install.sh 写的 launchd plist **显式设了** PATH，含 `$VENV_DIR/bin` ✓
   - Windows：install.ps1 只把 `%LOCALAPPDATA%\\local\\bin` 加进 PATH（里面只有
-    trade.cmd），venv 的 Scripts 不在其中 ✗
+    agentbase.cmd），venv 的 Scripts 不在其中 ✗
   - Linux：systemd user unit 的 `ExecStart` 没有 Environment，不继承 venv ✗
 
 后果：Windows/Linux 上 Gateway 永远起不来 → **所有定时任务静默失效**，而

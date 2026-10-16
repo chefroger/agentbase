@@ -47,7 +47,7 @@ dependencies = [
   # scanned-page detection degrade to "unknown" and PDFs can never be verified.
   # Pure-wheel, no system libraries.
   "pypdfium2>=4.30.0,<6.0",
-  # NOTE: scanned pages / images are read through the vision path (see trade/tech_drawing.py
+  # NOTE: scanned pages / images are read through the vision path (see agentbase/tech_drawing.py
   # and Hermes vision_analyze). Tesseract was dropped: it needs a separate system install
   # while the recommended DeepSeek Flash model already reads images, and one OCR path keeps
   # results consistent.
@@ -88,7 +88,7 @@ desktop = [
 ]
 semantic = [
   # 语义检索（优化路线 P0-2）：sqlite-vec 是 SQLite 向量扩展，
-  # 纯本地、无服务器。缺失时 trade.vec_search 自动降级为关键词检索，
+  # 纯本地、无服务器。缺失时 agentbase.vec_search 自动降级为关键词检索，
   # 故为 optional 而非 required。安装：pip install -e ".[semantic]"
   "sqlite-vec>=0.1.6",
 ]
@@ -96,7 +96,7 @@ semantic = [
 [project.scripts]
 # 指向**包内**入口：原先写 server:main，而 server.py 在仓库根、不被打包，
 # pip 安装后 `trade` 命令会 ModuleNotFoundError（且 server.py 无守卫，
-# `from server import main` 会连带执行启动流程）。trade.cli 做 setup() + app.main()。
+# `from server import main` 会连带执行启动流程）。agentbase.cli 做 setup() + app.main()。
 trade = "agentbase.cli:run_server"
 # Installs Trade skills into Hermes at package install time.
 # Copies skills/b2b-* to ~/.hermes/skills/b2b/ so Hermes can discover them.
@@ -113,7 +113,7 @@ desktop = "desktop:main"
 [tool.setuptools]
 # desktop 是仓库根的桌面启动器（.spec 也按路径引用它），必须声明为顶层模块，
 # 否则 console script `desktop = desktop:main` 装完即 ModuleNotFoundError。
-# server.py 不需要声明：`python server.py` 按路径运行，脚本入口已改为 trade.cli:run_server。
+# server.py 不需要声明：`python server.py` 按路径运行，脚本入口已改为 agentbase.cli:run_server。
 py-modules = ["desktop"]
 
 [tool.setuptools.packages.find]

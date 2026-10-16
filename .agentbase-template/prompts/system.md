@@ -2,7 +2,7 @@
 
 此文件为系统级提示词模板。安装后复制到 `~/.agentbase/prompts/system.md`。
 
-编辑此文件会覆盖代码中 `trade/prompt.py` 的默认值。
+编辑此文件会覆盖代码中 `agentbase/prompt.py` 的默认值。
 建议通过 Web UI 或直接编辑此文件自定义系统行为。
 
 ---

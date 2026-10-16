@@ -91,14 +91,14 @@ def _find_static_dir() -> Path:
     if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
         return Path(_sys._MEIPASS) / "static"
     # 运行时目录
-    trade_home = _os.environ.get("AGENT_HOME", "").strip()
-    if not trade_home:
+    agentbase_home = _os.environ.get("AGENT_HOME", "").strip()
+    if not agentbase_home:
         if _os.name == "nt":
             _local = _os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-            trade_home = str(Path(_local) / "agentbase")
+            agentbase_home = str(Path(_local) / "agentbase")
         else:
-            trade_home = str(Path.home() / ".agentbase")
-    runtime_static = Path(trade_home) / "agentbase" / "static"
+            agentbase_home = str(Path.home() / ".agentbase")
+    runtime_static = Path(agentbase_home) / "agentbase" / "static"
     if runtime_static.is_dir():
         return runtime_static
     # 开发目录

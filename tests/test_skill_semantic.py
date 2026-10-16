@@ -96,7 +96,7 @@ def test_hybrid_rank_empty():
 
 def test_match_skill_hybrid_confident_keyword(monkeypatch):
     # 关键词高置信时不走语义（router 单例不触发）
-    monkeypatch.setenv("TRADE_HYBRID_KEYWORD_CONFIDENT", "6")
+    monkeypatch.setenv("AGENTBASE_HYBRID_KEYWORD_CONFIDENT", "6")
     class FakeRouter:
         def _score_skills(self, q):
             return [{"skill_name": "b2b-osint", "score": 9}]

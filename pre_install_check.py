@@ -32,7 +32,7 @@ import urllib.request
 # 下限 = v0.21.6：上游从这一版起把 Python 支持上界抬到 3.14（也是 `pm` 托管运行时
 # 的起点）；上一代硬性要求 <3.14，与 Trade 的 3.14 解释器互斥。**已无上限** ——
 # 新版 Hermes 我们都要跟，卡上限只会把自己锁死。
-# 必须与 trade/bootstrap.py 的 _MIN_HERMES_VERSION 保持一致（有测试断言两者相等）。
+# 必须与 agentbase/bootstrap.py 的 _MIN_HERMES_VERSION 保持一致（有测试断言两者相等）。
 MIN_COMPATIBLE_VERSION = "0.21.6"
 
 # 不是真实版本号的占位值：上游 main 在缺少安装印章时会把 __version__ 报成 "0.0.0"
@@ -80,7 +80,7 @@ def _judge_installed_version(
       2. 带后缀的派生版本：如 "0.21.4+5045"、"v0.21.5-490-gabc1234"
       3. 无法解析的字符串：如 "git.abc1234"
 
-    'too_new'（传入 maximum 时）对应 `trade/bootstrap.py` 的**上限**：
+    'too_new'（传入 maximum 时）对应 `agentbase/bootstrap.py` 的**上限**：
     超出窗口的版本启动时会被 `sys.exit(1)` 拒绝。安装器不检查上限的话，
     用户会"安装全绿、一启动即死" —— 而 install.sh 是 `clone --branch main`
     （不锁版本），上游一到上限就会发生。上限是**排他**的（与 bootstrap 一致）。

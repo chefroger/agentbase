@@ -7,8 +7,8 @@
 用户端可用公钥验签但无法生成合法激活码。
 
 CLI:
-  python -m trade.license generate <申请码> <到期日期>    # 作者生成激活码
-  python -m trade.license status                          # 查看许可证状态
+  python -m agentbase.license generate <申请码> <到期日期>    # 作者生成激活码
+  python -m agentbase.license status                          # 查看许可证状态
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _load_private_key():
     """加载 Ed25519 私钥（仅作者生成激活码时需要）。"""
     from cryptography.hazmat.primitives import serialization
 
-    priv_pem = os.environ.get("TRADE_LICENSE_PRIVATE_KEY", "")
+    priv_pem = os.environ.get("AGENTBASE_LICENSE_PRIVATE_KEY", "")
     if not priv_pem:
         _hermes_root = _resolve_hermes_home()
         priv_file = _hermes_root / "license_private_key.pem"
@@ -58,9 +58,9 @@ def _load_private_key():
         return serialization.load_pem_private_key(priv_pem.encode(), password=None)
     return None
 
-# 试用期天数：默认 30 天，可通过环境变量 TRADE_TRIAL_DAYS 覆盖
+# 试用期天数：默认 30 天，可通过环境变量 AGENTBASE_TRIAL_DAYS 覆盖
 try:
-    _TRIAL_DAYS = int(os.environ.get("TRADE_TRIAL_DAYS", "30"))
+    _TRIAL_DAYS = int(os.environ.get("AGENTBASE_TRIAL_DAYS", "30"))
 except (ValueError, TypeError):
     _TRIAL_DAYS = 30
 
@@ -515,7 +515,7 @@ def _encode_activation_code(request_code: str, expires_at: str) -> str:
     if private_key is None:
         raise ValueError(
             "私钥未找到。请将私钥保存为 ~/.hermes/license_private_key.pem "
-            "或设置 TRADE_LICENSE_PRIVATE_KEY 环境变量。"
+            "或设置 AGENTBASE_LICENSE_PRIVATE_KEY 环境变量。"
         )
 
     req_hash = request_code.replace("TRADE-REQ-", "").replace("-", "").upper()

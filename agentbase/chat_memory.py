@@ -365,7 +365,7 @@ def save_with_context(
                 logger.debug("Hermes memory retain skipped: %s", exc)
 
         except ImportError:
-            pass  # trade.memory 模块未安装，跳过记忆保留
+            pass  # agentbase.memory 模块未安装，跳过记忆保留
         except Exception as exc:
             logger.debug("Memory retain skipped: %s", exc)
 

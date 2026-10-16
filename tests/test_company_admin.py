@@ -57,7 +57,7 @@ def env(monkeypatch, tmp_path):
 
     # 必须打在 **workdir 模块**上：crud.create() 是
     # `from agentbase.company.workdir import _setup_work_directory`，在模块上查这个名字；
-    # 打在包级 re-export（trade.company._setup_work_directory）不会生效 ——
+    # 打在包级 re-export（agentbase.company._setup_work_directory）不会生效 ——
     # 那样真实函数会跑，建出的是不含分类子目录的空壳，测试就在错误的现场上断言。
     monkeypatch.setattr(co.workdir, "_setup_work_directory", _setup)
     monkeypatch.setattr(co.workdir, "_get_desktop_path", lambda: desktop)

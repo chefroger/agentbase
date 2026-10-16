@@ -278,7 +278,7 @@ async def app(
 # ── SSE 流式聊天 ──────────────────────────────────────────────────────────
 
 @router.post("/chat/stream")
-async def trade_chat_stream(
+async def chat_stream(
     payload: ChatRequest,
     cid: int = Depends(require_company),
 ):

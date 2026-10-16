@@ -8,7 +8,7 @@ macOS Apple Vision 框架 OCR（会话 20260929_084156_4120c8）。当时的成�
 可用」—— 但那个函数是工具的**能力门控**（`check_fn`），只在工具已经由 toolset 启用之后
 才会被评估；决定工具在不在场的是 `enabled_toolsets`。
 
-实测 `trade.helpers.create_agent()`（生产路径）解析出的工具表只有 20 个，**没有
+实测 `agentbase.helpers.create_agent()`（生产路径）解析出的工具表只有 20 个，**没有
 `vision_analyze`**；把 `"vision"` 加进列表才变成 22 个并出现它。所以模型当时根本没有
 看图工具 —— 自写 OCR 不是抗命，是没有别的路。
 
@@ -62,23 +62,23 @@ class TestDefaultEnabledToolsets:
 
 
 class TestEnvOverride:
-    """TRADE_ENABLED_TOOLSETS 仍然能整体覆盖默认组合。"""
+    """AGENTBASE_ENABLED_TOOLSETS 仍然能整体覆盖默认组合。"""
 
     def test_env_override_replaces_defaults(self, monkeypatch):
-        monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", "web, file")
+        monkeypatch.setenv("AGENTBASE_ENABLED_TOOLSETS", "web, file")
         from agentbase.helpers import resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == ["web", "file"]
 
     def test_env_override_trims_and_drops_empties(self, monkeypatch):
-        monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", " web , file ,, ")
+        monkeypatch.setenv("AGENTBASE_ENABLED_TOOLSETS", " web , file ,, ")
         from agentbase.helpers import resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == ["web", "file"]
 
     def test_unset_env_returns_defaults(self, monkeypatch):
         """未设置环境变量时返回默认组合（含 vision）。"""
-        monkeypatch.delenv("TRADE_ENABLED_TOOLSETS", raising=False)
+        monkeypatch.delenv("AGENTBASE_ENABLED_TOOLSETS", raising=False)
         from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
 
         resolved = resolve_enabled_toolsets()
@@ -88,7 +88,7 @@ class TestEnvOverride:
 
     def test_empty_env_falls_back_to_defaults(self, monkeypatch):
         """环境变量为空白串时按未设置处理。"""
-        monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", "   ")
+        monkeypatch.setenv("AGENTBASE_ENABLED_TOOLSETS", "   ")
         from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == list(DEFAULT_ENABLED_TOOLSETS)

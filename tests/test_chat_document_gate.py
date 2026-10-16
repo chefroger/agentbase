@@ -311,7 +311,7 @@ async def _collect_stream(env, agent_stub, query, evidence):
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}):
         payload = ChatRequest(query=query, library_id=env["library"]["id"])
-        response = await chat.trade_chat_stream(payload, env["cid"])
+        response = await chat.chat_stream(payload, env["cid"])
         async for chunk in response.body_iterator:
             text = chunk.decode() if isinstance(chunk, bytes) else chunk
             for block in text.split("\n\n"):

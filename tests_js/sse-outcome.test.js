@@ -9,7 +9,7 @@
  *   3. 网络中断（客户端没收到 done）
  * 用户拿到的信息既没原因、也没下一步。
  *
- * 现在的判据：`done` 是服务端在 finally 里必发的事件（trade/api/chat.py）。
+ * 现在的判据：`done` 是服务端在 finally 里必发的事件（agentbase/api/chat.py）。
  *   - 收到 done 却没有 response → 服务端走完了流程但没内容（服务端问题）
  *   - 没收到 done          → 连接中途断了（网络问题）
  * 两种情况的文案与建议必须不同。

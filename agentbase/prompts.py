@@ -8,7 +8,7 @@ Unified loader for all user-editable prompt files:
 读取优先级（纵向覆盖）：
   1. ~/.agentbase/companies/{slug}/agent_identity.md   ← 公司级（最高）
   2. ~/.agentbase/prompts/system.md                   ← 全局用户自定义
-  3. 代码 fallback (trade/prompt.py)              ← 最低
+  3. 代码 fallback (agentbase/prompt.py)              ← 最低
 
 mtime 缓存：文件未变更时不重复读磁盘。
 
@@ -22,7 +22,7 @@ import os
 import threading
 from pathlib import Path
 
-from agentbase.prompt import TRADE_SYSTEM_PROMPT_FIRST_TURN as _CODE_FALLBACK
+from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN as _CODE_FALLBACK
 
 # ─────────────────────────────────────────────────────────────────────────────
 # mtime 缓存：{绝对路径: (mtime, 内容)}
@@ -40,13 +40,13 @@ def _get_trade_home() -> Path:
     """返回用户 Trade 数据目录。
 
     优先级：AGENT_HOME 环境变量 → 平台默认路径。
-    macOS/Linux: ~/.agentbase/, Windows: %LOCALAPPDATA%\trade\
+    macOS/Linux: ~/.agentbase/, Windows: %LOCALAPPDATA%\agentbase\
     """
     val = os.environ.get("AGENT_HOME", "").strip()
     # 如果环境变量有值，优先使用环境变量指定的路径
     if val:
         return Path(val)
-    # Windows 平台：使用 %LOCALAPPDATA%\trade\ 作为数据目录
+    # Windows 平台：使用 %LOCALAPPDATA%\agentbase\ 作为数据目录
     if os.name == "nt":
         local_appdata = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
         return Path(local_appdata) / "trade"
@@ -118,7 +118,7 @@ def get_system_prompt(company_slug: str | None = None) -> str:
     优先级：
       1. ~/.agentbase/companies/{slug}/agent_identity.md   ← 公司级
       2. ~/.agentbase/prompts/system.md                    ← 全局
-      3. 代码 fallback (TRADE_SYSTEM_PROMPT)           ← 默认
+      3. 代码 fallback (AGENTBASE_SYSTEM_PROMPT)           ← 默认
 
     用户 vim 直接改文件 → mtime 变化 → 下次请求自动读到新内容。
     """
@@ -224,7 +224,7 @@ def get_brand_safety(company_slug: str | None = None) -> str:
 def _build_trade_context_block(company_id: int | None) -> str:
     """生成"当前 trade 会话上下文"段；company_id 为 None 时返回空串。
 
-    这段**目前不直接被 resolve_system_prompt 使用** —— 实际注入点放在 trade.helpers.build_query
+    这段**目前不直接被 resolve_system_prompt 使用** —— 实际注入点放在 agentbase.helpers.build_query
     里，紧跟在它已有的"## 当前工作公司"段后面（"ID 是 X / 数据操作必须限定在该公司" 后面），
     让 LLM 在看到 ID 数字**紧接着**看到"带 company_id 参数的工具必须用这个数字"，**强绑定**。
 
@@ -232,8 +232,8 @@ def _build_trade_context_block(company_id: int | None) -> str:
     参数（chat_memory 的 conversations 表按 company_id 严格隔离，搜错会读到别人的数据），
     而 LLM 自身没有"当前会话是哪个公司"的可靠来源 —— 没有这段就只能瞎填。
 
-    返回空串时（company_id=None），trade.helpers 会**不追加**这段；这与它的
-    "降级场景（chat_memory_list 不可用）"行为一致（见 trade.hermes_compat.hermes_python_compat）。
+    返回空串时（company_id=None），agentbase.helpers 会**不追加**这段；这与它的
+    "降级场景（chat_memory_list 不可用）"行为一致（见 agentbase.hermes_compat.hermes_python_compat）。
     """
     if company_id is None:
         return ""
@@ -266,10 +266,10 @@ def resolve_system_prompt(
     Args:
         company_slug: 公司 slug（用于定位 identity 文件）
         db_identity:  DB 中 agent_identity_md 字段值（缓存）
-        code_fallback: 基础规则块档位（None 时用默认 TRADE_SYSTEM_PROMPT_FIRST_TURN）。
-                       OSINT 类 skill 传 TRADE_SYSTEM_PROMPT_OSINT，
-                       非首轮传 TRADE_SYSTEM_PROMPT_MINIMAL，
-                       文档类任务传 TRADE_SYSTEM_PROMPT_FULL。
+        code_fallback: 基础规则块档位（None 时用默认 AGENTBASE_SYSTEM_PROMPT_FIRST_TURN）。
+                       OSINT 类 skill 传 AGENTBASE_SYSTEM_PROMPT_OSINT，
+                       非首轮传 AGENTBASE_SYSTEM_PROMPT_MINIMAL，
+                       文档类任务传 AGENTBASE_SYSTEM_PROMPT_FULL。
     """
     base = code_fallback or _CODE_FALLBACK
     custom = _resolve_custom_prompt(company_slug, db_identity)

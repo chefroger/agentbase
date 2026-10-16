@@ -153,10 +153,10 @@ class TestCompanyCRUD:
 
 
 class TestTradeCompany:
-    """测试 trade_companies 配置表。"""
+    """测试 agentbase_companies 配置表。"""
 
     def test_trade_company_created_with_company(self, test_db):
-        """创建公司时自动创建 trade_companies 记录。"""
+        """创建公司时自动创建 agentbase_companies 记录。"""
         from agentbase import company
         c = company.create(name="New Co")
         tc = company.get_trade_company(c["id"])
@@ -408,8 +408,8 @@ class TestOnboarding:
             },
         )
         assert result["company"]["name"] == "My Trade Co"
-        assert result["trade_company"]["agent_identity_md"] is not None
-        assert "LED lights" in result["trade_company"]["agent_identity_md"]
+        assert result["agentbase_company"]["agent_identity_md"] is not None
+        assert "LED lights" in result["agentbase_company"]["agent_identity_md"]
 
         # 引导完成后应返回 True
         assert onboarding.is_onboarding_done() is True

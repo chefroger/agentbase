@@ -179,7 +179,7 @@ def check_vision(*, tool_list_provider=None, vision_prober=None) -> list[CheckRe
             "vision 工具在场", STATUS_OK if has else STATUS_FAIL,
             "vision_analyze 在工具表中" if has else (
                 f"工具表里没有 vision_analyze（共 {len(names)} 个工具）—— "
-                "检查 trade/helpers.py 的 DEFAULT_ENABLED_TOOLSETS 是否含 vision"
+                "检查 agentbase/helpers.py 的 DEFAULT_ENABLED_TOOLSETS 是否含 vision"
             ),
             fatal=not has,
         ))
@@ -421,7 +421,7 @@ def check_post_install() -> list[CheckResult]:
             "未安装：OSINT 报告将缺失 120+ 平台注册检测。如需请按文档安装 holehe",
         ))
 
-    # Hindsight：长期记忆后端。复用 trade.memory 的可用性检测。
+    # Hindsight：长期记忆后端。复用 agentbase.memory 的可用性检测。
     try:
         from agentbase.memory import is_available as _mem_available
         ok = bool(_mem_available())
@@ -537,7 +537,7 @@ def has_fatal_failure(results: list[CheckResult], ignore_names: tuple[str, ...] 
     Args:
         ignore_names: 需要忽略的检查项名。用于「这项失败不该阻断安装、而由运行时
             自己处理」的场景 —— 典型是 Hermes 版本过旧：Trade 启动后会在界面里
-            自动升级 Hermes（见 trade/hermes_upgrade.py），安装脚本若因此判定
+            自动升级 Hermes（见 agentbase/hermes_upgrade.py），安装脚本若因此判定
             「安装失败」，用户就永远见不到那个升级界面。
     """
     return any(

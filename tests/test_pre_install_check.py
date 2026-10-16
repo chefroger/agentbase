@@ -1,6 +1,6 @@
 """安装前检查的版本判定测试。
 
-与运行时门禁（trade/bootstrap.check_hermes_version）同一原则：
+与运行时门禁（agentbase/bootstrap.check_hermes_version）同一原则：
 **识别不到版本 ≠ 版本过旧**，不能因此卡死安装流程。
 
 背景：上游 main 把 hermes_cli.__version__ 改成惰性读安装印章，读不到返回 "0.0.0"；
@@ -150,7 +150,7 @@ class TestOfficialSourceDetection:
 class TestVersionUpperBound:
     """安装检查也要管**上限** —— 只查下限会让用户装完直接启动失败。
 
-    `trade/bootstrap.py` 的窗口是 `0.13.0 <= v < 0.22.0`，超出即 sys.exit(1)。
+    `agentbase/bootstrap.py` 的窗口是 `0.13.0 <= v < 0.22.0`，超出即 sys.exit(1)。
     而 install.sh 用 `git clone --branch main`（不锁版本）：上游 main 一旦到
     0.22.0，新装用户就会"安装全绿、一启动即死"。
     """

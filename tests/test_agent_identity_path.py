@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 @pytest.fixture
-def trade_home(tmp_path, monkeypatch):
+def agentbase_home(tmp_path, monkeypatch):
     """把 prompts 的数据目录指向临时目录。"""
     monkeypatch.setattr("agentbase.prompts._get_trade_home", lambda: tmp_path)
     return tmp_path
@@ -32,15 +32,15 @@ def trade_home(tmp_path, monkeypatch):
 class TestAgentIdentityPath:
     """身份文件路径必须与模板/工作目录布局一致。"""
 
-    def test_path_matches_workdir_layout(self, trade_home):
+    def test_path_matches_workdir_layout(self, agentbase_home):
         """解析出的路径必须落在 {data_dir}/companies/{slug}/agent-identity.md。"""
         from agentbase.prompts import _company_identity_path
 
         assert _company_identity_path("acme") == (
-            trade_home / "acme" / "companies" / "acme" / "agent-identity.md"
+            agentbase_home / "acme" / "companies" / "acme" / "agent-identity.md"
         )
 
-    def test_identity_file_readable_after_template_copy(self, trade_home):
+    def test_identity_file_readable_after_template_copy(self, agentbase_home):
         """模板复制出公司目录后，读取方应能读到模板里的 agent-identity.md。
 
         这是端到端断言：只要路径约定与 _ensure_data_dir 不一致，这里就会读不到内容。
@@ -48,9 +48,9 @@ class TestAgentIdentityPath:
         from agentbase.company.workdir import _ensure_data_dir
         from agentbase.prompts import get_agent_identity_by_slug
 
-        _ensure_data_dir("acme", trade_home)
+        _ensure_data_dir("acme", agentbase_home)
 
-        copied = trade_home / "acme" / "companies" / "acme" / "agent-identity.md"
+        copied = agentbase_home / "acme" / "companies" / "acme" / "agent-identity.md"
         assert copied.is_file(), "模板中的身份文件应被复制到该公司目录下"
 
         content = get_agent_identity_by_slug("acme")
@@ -59,7 +59,7 @@ class TestAgentIdentityPath:
         )
         assert content.strip() == copied.read_text(encoding="utf-8").strip()
 
-    def test_write_then_read_roundtrip(self, trade_home):
+    def test_write_then_read_roundtrip(self, agentbase_home):
         """write_agent_identity 写出的内容必须能被 get_agent_identity_by_slug 读回。"""
         from agentbase.prompts import get_agent_identity_by_slug, write_agent_identity
 
@@ -67,7 +67,7 @@ class TestAgentIdentityPath:
 
         assert get_agent_identity_by_slug("acme").strip() == "# 我是 Acme 的助手\n只讲英语。"
 
-    def test_identity_file_wins_over_db_in_resolution(self, trade_home):
+    def test_identity_file_wins_over_db_in_resolution(self, agentbase_home):
         """文件优先链：文件存在时自定义层取文件内容，且追加在基础规则之后。"""
         from agentbase.prompts import resolve_system_prompt, write_agent_identity
 
@@ -89,28 +89,28 @@ class TestLegacyIdentityPathCompatibility:
     直接弃用会让改动凭空消失 —— 所以保留一次性兼容读取，规范路径优先。
     """
 
-    def test_legacy_file_is_read_when_canonical_missing(self, trade_home):
+    def test_legacy_file_is_read_when_canonical_missing(self, agentbase_home):
         """规范路径没有文件时，回退读历史遗留路径。"""
         from agentbase.prompts import get_agent_identity_by_slug
 
-        legacy = trade_home / "companies" / "acme" / "agent_identity.md"
+        legacy = agentbase_home / "companies" / "acme" / "agent_identity.md"
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text("遗留路径里的身份", encoding="utf-8")
 
         assert get_agent_identity_by_slug("acme").strip() == "遗留路径里的身份"
 
-    def test_canonical_wins_over_legacy(self, trade_home):
+    def test_canonical_wins_over_legacy(self, agentbase_home):
         """两处都存在时以规范路径为准。"""
         from agentbase.prompts import get_agent_identity_by_slug, write_agent_identity
 
         write_agent_identity("acme", "规范路径里的身份")
-        legacy = trade_home / "companies" / "acme" / "agent_identity.md"
+        legacy = agentbase_home / "companies" / "acme" / "agent_identity.md"
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text("遗留路径里的身份", encoding="utf-8")
 
         assert get_agent_identity_by_slug("acme").strip() == "规范路径里的身份"
 
-    def test_no_file_anywhere_returns_empty(self, trade_home):
+    def test_no_file_anywhere_returns_empty(self, agentbase_home):
         """两处都没有时返回空串，由调用方兜底。"""
         from agentbase.prompts import get_agent_identity_by_slug
 

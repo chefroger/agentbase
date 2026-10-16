@@ -8,7 +8,7 @@ Hermes 的 `hermes_bootstrap.py` 把 server.py 重新 exec 到它自带的 store
 
 `RelaunchExit` 继承 **SystemExit**，属 BaseException 而非 Exception，于是：
 
-1. `trade/api/chat.py` 的重试循环里 `except Exception` 抓不到它 → agent 线程死亡
+1. `agentbase/api/chat.py` 的重试循环里 `except Exception` 抓不到它 → agent 线程死亡
    （`Future exception was never retrieved`）；
 2. `_event_stream` 在队列等待超时后只判断 `agent_task.done()` 就 break，
    **从不取 `agent_task.exception()`** → 异常被彻底吞掉；
@@ -75,7 +75,7 @@ def company(monkeypatch, tmp_path):
 
 
 async def _collect_stream(company: dict, exc: BaseException) -> str:
-    """驱动真实的 trade_chat_stream，把 SSE 响应体收成一个字符串。"""
+    """驱动真实的 chat_stream，把 SSE 响应体收成一个字符串。"""
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
 
@@ -83,7 +83,7 @@ async def _collect_stream(company: dict, exc: BaseException) -> str:
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
          patch("agentbase.license.check_license", return_value=(True, "")):
-        resp = await chat.trade_chat_stream(
+        resp = await chat.chat_stream(
             ChatRequest(query="帮我做一下公司网站诊断"), company["id"]
         )
         chunks = []

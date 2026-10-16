@@ -8,8 +8,8 @@ Smart Trade AI — Token / 费用台账（优化路线 P1-6）。
 费率说明：
 - PRICE_PER_1MUSD 是"示例费率"，按 2026 年公开价格填写，调用方可通过
   record_usage(price_override=...) 或环境变量覆盖；
-- 环境变量覆盖格式：TRADE_PRICE_<MODEL>="in,out"，如
-  TRADE_PRICE_DEEPSEEK_CHAT="0.27,1.10"（单位：美元/1M tokens）；
+- 环境变量覆盖格式：AGENTBASE_PRICE_<MODEL>="in,out"，如
+  AGENTBASE_PRICE_DEEPSEEK_CHAT="0.27,1.10"（单位：美元/1M tokens）；
 - 模型名归一化：小写、去空格，便于匹配。
 
 注意：token 数以 SDK 返回的 usage 为准；流式场景下调用方需自行累计。
@@ -35,7 +35,7 @@ PRICE_PER_1MUSD: dict[str, tuple[float, float]] = {
     "claude-3-5-haiku": (0.80, 4.00),
 }
 
-# 兜底建表。正常路径由 trade/database.py 的 SCHEMA_SQL 建 —— 那份是**权威定义**；
+# 兜底建表。正常路径由 agentbase/database.py 的 SCHEMA_SQL 建 —— 那份是**权威定义**；
 # 这里只为「直接调用本模块、库尚未初始化」的场景兜底，两份必须保持一致。
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS usage_ledger (
@@ -64,7 +64,7 @@ def _norm_model(model: str) -> str:
 def get_price(model: str) -> tuple[float, float]:
     """返回 (输入价, 输出价) 美元/1M。环境变量优先。"""
     key = _norm_model(model)
-    env_key = "TRADE_PRICE_" + key.upper().replace("-", "_")
+    env_key = "AGENTBASE_PRICE_" + key.upper().replace("-", "_")
     env_val = os.environ.get(env_key, "").strip()
     if env_val:
         try:

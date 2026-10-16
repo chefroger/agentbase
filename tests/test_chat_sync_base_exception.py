@@ -6,7 +6,7 @@
 它自带的 store python（无 trade 包），子进程 ModuleNotFoundError 退出，父进程
 `raise RelaunchExit(1)` —— 它继承 **SystemExit**（BaseException）。
 
-`/chat/stream` 已补 `except BaseException`（`trade/api/chat.py:450`），但同步
+`/chat/stream` 已补 `except BaseException`（`agentbase/api/chat.py:450`），但同步
 `_call_agent()` 只有 ImportError/RuntimeError/Exception 三个分支，仍然抓不到。
 
 后果比 stream 更重：异常从 executor 线程穿过 `asyncio.wait_for`，uvicorn 的

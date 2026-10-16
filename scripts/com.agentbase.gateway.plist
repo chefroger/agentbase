@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.foreign-trade.gateway</string>
+    <string>com.foreign-agentbase.gateway</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/env</string>

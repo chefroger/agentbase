@@ -46,7 +46,7 @@ def _resolve_explicit_skill(token: str) -> str | None:
 
 _injection_cache_lock = threading.Lock()
 try:
-    _INJECTION_CACHE_MAX = int(os.environ.get("TRADE_SKILL_CACHE_MAX", "128"))
+    _INJECTION_CACHE_MAX = int(os.environ.get("AGENTBASE_SKILL_CACHE_MAX", "128"))
 except (ValueError, TypeError):
     _INJECTION_CACHE_MAX = 128
 _INJECTION_CACHE: OrderedDict[str, tuple[float, str]] = OrderedDict()
@@ -80,7 +80,7 @@ def _get_skill_dir(skill_name: str) -> Path | None:
     # Fallback：查找 package 内置的 skill
     try:
         import agentbase
-        pkg_root = Path(trade.__file__).parent.parent
+        pkg_root = Path(agentbase.__file__).parent.parent
         pkg_skill = pkg_root / "skills" / skill_name
         if (pkg_skill / "SKILL.md").is_file():
             return pkg_skill
@@ -355,7 +355,7 @@ def match_skill(query: str) -> dict | None:
 def match_skill_routed(query: str) -> dict | None:
     """Skill 路由总入口（优化路线 P0-1）。
 
-    TRADE_ROUTER_MODE=hybrid 时走"关键词快路径 + 语义兜底"的混合路由，
+    AGENTBASE_ROUTER_MODE=hybrid 时走"关键词快路径 + 语义兜底"的混合路由，
     否则沿用原关键词路由（默认行为不变）。
 
     返回值与 match_skill 完全一致（skill dict 或 None），调用方
@@ -364,7 +364,7 @@ def match_skill_routed(query: str) -> dict | None:
     """
     import logging
 
-    mode = os.environ.get("TRADE_ROUTER_MODE", "keyword").strip().lower()
+    mode = os.environ.get("AGENTBASE_ROUTER_MODE", "keyword").strip().lower()
     if mode != "hybrid":
         return match_skill(query)
     try:
@@ -474,7 +474,7 @@ def _load_qa_pairs(skill_name: str) -> list[dict]:
     if qa_path is None:
         try:
             import agentbase
-            pkg_root = Path(trade.__file__).parent.parent
+            pkg_root = Path(agentbase.__file__).parent.parent
             src_qa = pkg_root / "skills" / skill_name / "references" / "qa_pairs.md"
             if src_qa.is_file():
                 qa_path = src_qa
@@ -639,7 +639,7 @@ def augment_query(
         from agentbase import company as _co
         tc = _co.get_trade_company(company_id)
         if tc and tc.get("data_dir"):
-            # slug 在 companies 表中，不在 trade_companies 表中
+            # slug 在 companies 表中，不在 agentbase_companies 表中
             slug = _co.slug_from_id(company_id) or "unknown"
             data_dir_hint = (
                 f"\n公司数据目录路径：{tc['data_dir']}\n"

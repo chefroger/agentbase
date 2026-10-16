@@ -23,7 +23,7 @@ def _fresh_db(tmp_path: Path) -> Path:
     """建一个已是最新 schema 的库（spare 列/context 列齐全）。"""
     db = tmp_path / "agentbase.db"
     conn = sqlite3.connect(db)
-    for table in ("companies", "trade_companies", "libraries", "customers",
+    for table in ("companies", "agentbase_companies", "libraries", "customers",
                   "customer_libraries", "conversations", "orders", "usage_ledger"):
         conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, extra1 TEXT, extra2 TEXT, extra3 TEXT)")
     conn.execute("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT)")
@@ -62,7 +62,7 @@ class TestNeedsSchemaWork:
 
         db = tmp_path / "old.db"
         conn = sqlite3.connect(db)
-        for table in ("companies", "trade_companies", "libraries", "customers",
+        for table in ("companies", "agentbase_companies", "libraries", "customers",
                       "customer_libraries", "conversations", "orders"):
             # 老 schema：没有 spare 列
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY)")
@@ -110,18 +110,18 @@ class TestInitDbDoesNotBackUpUnnecessarily:
         """把库建好（首次 init_db 不备份 —— 库文件还不存在）。返回路径三元组。"""
         import agentbase.database as dbmod
 
-        trade_home = tmp_path / ".trade"
-        (trade_home / "data").mkdir(parents=True)
-        db_path = trade_home / "data" / "agentbase.db"
+        agentbase_home = tmp_path / ".trade"
+        (agentbase_home / "data").mkdir(parents=True)
+        db_path = agentbase_home / "data" / "agentbase.db"
         monkeypatch.setattr(dbmod, "_get_db_path", lambda: db_path)
 
         dbmod.init_db()  # 首次：建出真实 schema
-        return dbmod, trade_home, db_path
+        return dbmod, agentbase_home, db_path
 
     def test_no_backup_when_schema_current(self, tmp_path, monkeypatch):
         """核心断言：schema 已最新时 init_db 不产生备份文件。"""
-        dbmod, trade_home, _ = self._init_once(tmp_path, monkeypatch)
-        backup_dir = trade_home / "backups"
+        dbmod, agentbase_home, _ = self._init_once(tmp_path, monkeypatch)
+        backup_dir = agentbase_home / "backups"
         before = list(backup_dir.glob("trade-*.db")) if backup_dir.is_dir() else []
 
         dbmod.init_db()  # 第二次：什么都不需要改
@@ -131,12 +131,12 @@ class TestInitDbDoesNotBackUpUnnecessarily:
 
     def test_repeated_init_does_not_accumulate(self, tmp_path, monkeypatch):
         """连续多次 init_db 不该累积备份 —— 这正是 7 万文件事故的形态。"""
-        dbmod, trade_home, _ = self._init_once(tmp_path, monkeypatch)
+        dbmod, agentbase_home, _ = self._init_once(tmp_path, monkeypatch)
 
         for _ in range(5):
             dbmod.init_db()
 
-        backup_dir = trade_home / "backups"
+        backup_dir = agentbase_home / "backups"
         count = len(list(backup_dir.glob("trade-*.db"))) if backup_dir.is_dir() else 0
         assert count == 0, f"5 次重复启动产生了 {count} 个备份（每次 573KB，永不清理）"
 

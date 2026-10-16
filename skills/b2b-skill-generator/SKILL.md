@@ -96,7 +96,7 @@ injection_prompt: |
 
   ## Phase 4: 注册到系统
 
-  1. 使用 read_file 读取 `~/.agentbase/agentbase/trade/skill_registry.py`
+  1. 使用 read_file 读取 `~/.agentbase/agentbase/agentbase/skill_registry.py`
 
   2. 在 `_SKILLS` 列表的最后一个条目（`chat-memory`）的 `},` 之后，`]` 之前，追加新的 skill 注册条目：
 

@@ -39,7 +39,7 @@ class TestSchemaCreation:
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         ).fetchall()
         table_names = {t[0] for t in tables}
-        expected = {"companies", "trade_companies", "libraries", "customers",
+        expected = {"companies", "agentbase_companies", "libraries", "customers",
                     "customer_libraries", "conversations"}
         assert expected.issubset(table_names), f"Missing tables: {expected - table_names}"
 
@@ -83,7 +83,7 @@ class TestSchemaCreation:
         _add_spare_columns(conn)
         conn.commit()
 
-        for table in ["companies", "trade_companies", "libraries", "customers",
+        for table in ["companies", "agentbase_companies", "libraries", "customers",
                       "customer_libraries", "conversations"]:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             for extra_col in ["extra1", "extra2", "extra3"]:
@@ -240,8 +240,8 @@ class TestV0ToV1Migration:
         assert company[0] == "我的公司"
         assert company[1] == "default"
 
-        # 应有 trade_companies 记录
-        tc = conn.execute("SELECT company_id, is_active FROM trade_companies WHERE company_id=1").fetchone()
+        # 应有 agentbase_companies 记录
+        tc = conn.execute("SELECT company_id, is_active FROM agentbase_companies WHERE company_id=1").fetchone()
         assert tc is not None
         assert tc[1] == 1
 
@@ -256,8 +256,8 @@ class TestWALMode:
         db_path = tmp_path / "test_wal.db"
         # 临时 monkey-patch _get_db_path
         import agentbase.database
-        original = trade.database._get_db_path
-        trade.database._get_db_path = lambda: db_path
+        original = agentbase.database._get_db_path
+        agentbase.database._get_db_path = lambda: db_path
 
         try:
             conn = get_connection()
@@ -265,4 +265,4 @@ class TestWALMode:
             assert journal.upper() == "WAL", f"Expected WAL, got {journal}"
             conn.close()
         finally:
-            trade.database._get_db_path = original
+            agentbase.database._get_db_path = original

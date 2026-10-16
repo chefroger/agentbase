@@ -148,7 +148,7 @@ trade
 
 > 如果 `trade` 命令找不到，说明 PATH 没生效，可以改用：
 > ```powershell
-> cd $env:LOCALAPPDATA\trade\agentbase
+> cd $env:LOCALAPPDATA\agentbase\agentbase
 > python server.py
 > ```
 > 然后浏览器手动打开 http://127.0.0.1:9120/agentbase
@@ -240,8 +240,8 @@ irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/ins
 hermes setup
 
 # 3. 安装 Smart Trade AI
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\agentbase
-cd $env:LOCALAPPDATA\trade\agentbase; pip install -e "."; install-agentbase-skills
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\agentbase\agentbase
+cd $env:LOCALAPPDATA\agentbase\agentbase; pip install -e "."; install-agentbase-skills
 
 python server.py
 # → 浏览器打开 http://127.0.0.1:9120/agentbase
@@ -314,7 +314,7 @@ python server.py
 
 默认仅绑定 `127.0.0.1`。会话凭据（session token）**只下发给本机（回环地址）浏览器**：即使你用 `--host 0.0.0.0` 把端口暴露出去，来自其它设备的访问也只会得到一页说明（HTTP 403），不会拿到 token，因此无法调用 API。
 
-确需从其它设备访问界面时，可在启动前设置环境变量 `TRADE_ALLOW_REMOTE_UI=1` 显式放行 —— **这会降低安全性**：任何能访问该端口的设备都能取得 token 并冒充操作。更稳妥的远程方案仍是 SSH 隧道或反向代理 + 额外认证层，而不是直接改 bind 地址。
+确需从其它设备访问界面时，可在启动前设置环境变量 `AGENTBASE_ALLOW_REMOTE_UI=1` 显式放行 —— **这会降低安全性**：任何能访问该端口的设备都能取得 token 并冒充操作。更稳妥的远程方案仍是 SSH 隧道或反向代理 + 额外认证层，而不是直接改 bind 地址。
 
 > **免责声明**：文档中提及的 Alibaba、LinkedIn、Facebook、Instagram、TikTok、YouTube、WhatsApp 等均为其各自所有者的商标。本工具仅提供对这些平台数据的分析辅助，与上述平台无关联。制裁名单数据来源于 OFAC/UN/EU 公开数据，结果仅供参考，不构成法律意见。详见 [SECURITY.md](SECURITY.md)。
 
@@ -436,7 +436,7 @@ install-agentbase-skills
 3. 逐行复制粘贴以下命令，每行按回车：
 
 ```powershell
-cd $env:LOCALAPPDATA\trade\agentbase
+cd $env:LOCALAPPDATA\agentbase\agentbase
 git pull origin main
 pip install -e "."
 install-agentbase-skills
@@ -485,7 +485,7 @@ python server.py
 2. 逐行执行（确保 VPN 全局模式已开启）：
 
 ```powershell
-cd $env:LOCALAPPDATA\trade\agentbase
+cd $env:LOCALAPPDATA\agentbase\agentbase
 git pull origin main
 pip install -e "."
 install-agentbase-skills

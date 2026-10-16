@@ -3,7 +3,7 @@ Trade AI Assistant — REST API Router。
 
 组装所有子路由模块，对外暴露统一的 router。
 所有路由默认受 session token 保护。
-server.py 通过 ``from agentbase.api import router`` 挂载到 /api/trade。
+server.py 通过 ``from agentbase.api import router`` 挂载到 /api/agentbase。
 """
 
 from __future__ import annotations

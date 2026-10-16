@@ -77,7 +77,7 @@ def _validate_slug(slug: str) -> str:
 
 # ── 模板目录创建 ──────────────────────────────────────────────────────────
 
-def _ensure_data_dir(slug: str, trade_home: Path) -> Path:
+def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
     """创建并返回公司 slug 对应的数据目录（~/.agentbase/{slug}/）。
 
     复制 .agentbase-template 模板骨架，将内部的 'company-slug' 占位目录
@@ -89,12 +89,12 @@ def _ensure_data_dir(slug: str, trade_home: Path) -> Path:
 
     Args:
         slug: 公司 slug 标识
-        trade_home: Trade 数据根目录（~/.agentbase/）
+        agentbase_home: Trade 数据根目录（~/.agentbase/）
 
     Returns:
         创建或已存在的公司数据目录路径
     """
-    target = trade_home / slug
+    target = agentbase_home / slug
 
     # 模板源查找优先级：PyInstaller _MEIPASS > 运行时目录 > 开发目录
     _meipass = getattr(sys, "_MEIPASS", None)
@@ -102,7 +102,7 @@ def _ensure_data_dir(slug: str, trade_home: Path) -> Path:
         template_src = Path(_meipass) / ".agentbase-template"
     else:
         # 运行时目录优先（update_trade 同步后模板在此）
-        _runtime_tmpl = trade_home / ".agentbase-template"
+        _runtime_tmpl = agentbase_home / ".agentbase-template"
         if _runtime_tmpl.is_dir():
             template_src = _runtime_tmpl
         else:
@@ -205,9 +205,9 @@ def _setup_work_directory(
     # 测试环境检测：pytest 在 sys.modules 中 → 写到临时目录而非桌面
     _in_test = "pytest" in sys.modules
     if _in_test:
-        trade_home = os.environ.get("AGENT_HOME", "")
-        if trade_home:
-            base = Path(trade_home) / "work"
+        agentbase_home = os.environ.get("AGENT_HOME", "")
+        if agentbase_home:
+            base = Path(agentbase_home) / "work"
         else:
             import tempfile
             base = Path(tempfile.mkdtemp(prefix="trade-work-"))

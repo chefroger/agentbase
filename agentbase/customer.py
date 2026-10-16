@@ -69,7 +69,7 @@ def create(
         _dup_id = None
         # 去重策略（优化路线 P1-5）：warn=只警告仍写入（默认，保持兼容）；
         # block=命中重复时拒绝写入；suggest=警告并返回候选 id 供上层合并。
-        dedup_mode = os.environ.get("TRADE_DEDUP_MODE", "warn").strip().lower()
+        dedup_mode = os.environ.get("AGENTBASE_DEDUP_MODE", "warn").strip().lower()
         if not _skip_dedup and (email or company_website):
             _email_check = (email or "").strip().lower()
             _site_check = (company_website or "").strip().lower()

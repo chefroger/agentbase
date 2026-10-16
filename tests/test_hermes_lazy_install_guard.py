@@ -5,7 +5,7 @@
 2026-10-08 客户机上「公司网站诊断」时前端只显示「⚠️ Agent 未返回有效回复」。
 真实原因不在 Trade 配置、也不在 API key：
 
-`trade/helpers.py` 的 `from run_agent import AIAgent` 会连带执行 Hermes 的
+`agentbase/helpers.py` 的 `from run_agent import AIAgent` 会连带执行 Hermes 的
 `hermes_bootstrap.py`。该模块判断「当前解释器 ≠ Hermes 的 store 解释器」后，按
 「借用启动」处理，把 `server.py` **重新 exec 到 Hermes 自带的那个 Python**：
 

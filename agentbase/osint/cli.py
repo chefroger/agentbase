@@ -1,4 +1,4 @@
-"""`python -m trade.osint <目标>` / `trade osint <目标>` —— 6 层背调的机器判定入口。
+"""`python -m agentbase.osint <目标>` / `trade osint <目标>` —— 6 层背调的机器判定入口。
 
 ## 为什么需要它（2026-10-14 修）
 
@@ -10,8 +10,8 @@ skill 提示词原先写的是"**调用 domain_whois(域名)**""调用 check_san
 
 把整条管线包成一个**可执行的命令**后，提示词才能给出确定的执行方式：
 
-    python -m trade.osint acme.com            # 人读的报告
-    python -m trade.osint someone@acme.com --json   # 结构化（给程序/模型用）
+    python -m agentbase.osint acme.com            # 人读的报告
+    python -m agentbase.osint someone@acme.com --json   # 结构化（给程序/模型用）
 
 命令在 Trade 自己的 venv 里跑（`python` 即该 venv 的解释器），跨平台一致，
 不依赖 PATH 上有没有 `trade` 这个 console script。
@@ -28,7 +28,7 @@ from agentbase.console import reconfigure_streams
 from agentbase.osint.orchestrator import osint_full_check
 
 _USAGE = (
-    "用法：python -m trade.osint <邮箱|域名|公司名> "
+    "用法：python -m agentbase.osint <邮箱|域名|公司名> "
     "[--json] [--no-sanctions] [--no-tech-stack] [--no-linkedin]"
 )
 

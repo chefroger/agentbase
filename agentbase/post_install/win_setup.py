@@ -78,10 +78,10 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
-def resolve_trade_command(trade_dir: Path, *, executable: str | None = None) -> str:
+def resolve_trade_command(agentbase_dir: Path, *, executable: str | None = None) -> str:
     """返回启动 Trade 的**完整命令行**（不含参数，已做 batch 安全转换）。
 
-    优先用与当前解释器同目录的 `trade.exe`（console script，在 venv 的 Scripts 里）——
+    优先用与当前解释器同目录的 `agentbase.exe`（console script，在 venv 的 Scripts 里）——
     与文档里「用完整路径、不依赖 PATH」的做法一致，开机早期 PATH 未加载完也能跑。
     没有就退回 `"<python>" "<server.py>"`，行为等价、不依赖 console script 是否在 PATH。
 
@@ -97,7 +97,7 @@ def resolve_trade_command(trade_dir: Path, *, executable: str | None = None) -> 
         candidate = exe_dir / name
         if candidate.is_file():
             return f'"{to_batch_path(candidate)}"'
-    return f'"{to_batch_path(exe)}" "{to_batch_path(trade_dir / "server.py")}"'
+    return f'"{to_batch_path(exe)}" "{to_batch_path(agentbase_dir / "server.py")}"'
 
 
 def build_autostart_bat(command: str, log_file: str) -> str:
@@ -201,7 +201,7 @@ def _write_script(path: Path, content: str) -> None:
     path.write_bytes(data)
 
 
-def ensure_launcher_scripts(trade_dir: Path) -> dict:
+def ensure_launcher_scripts(agentbase_dir: Path) -> dict:
     """生成/刷新 bat + vbs 启动器。返回路径字典。"""
     d = launcher_dir()
     autostart_bat = d / "trade-autostart.bat"
@@ -211,7 +211,7 @@ def ensure_launcher_scripts(trade_dir: Path) -> dict:
     autostart_log = to_batch_path(d / "trade-autostart.log")
     open_log = to_batch_path(d / "trade-open.log")
 
-    command = resolve_trade_command(trade_dir)
+    command = resolve_trade_command(agentbase_dir)
 
     _write_script(autostart_bat, build_autostart_bat(command, autostart_log))
     _write_script(autostart_vbs, build_hidden_vbs(autostart_bat))
@@ -342,7 +342,7 @@ def remove_legacy_run_entry() -> str:
     return "✓ 已清理旧的手动注册表自启项（改由计划任务统一管理）"
 
 
-def ensure_windows_setup(trade_dir: Path) -> list[str]:
+def ensure_windows_setup(agentbase_dir: Path) -> list[str]:
     """Windows 一站式配置：启动器脚本 → 计划任务 → 桌面快捷方式。
 
     幂等：重复调用不会重复建东西，也不会覆盖用户改过的正确配置。
@@ -353,7 +353,7 @@ def ensure_windows_setup(trade_dir: Path) -> list[str]:
 
     messages: list[str] = []
     try:
-        scripts = ensure_launcher_scripts(trade_dir)
+        scripts = ensure_launcher_scripts(agentbase_dir)
     except Exception as e:
         return [f"⚠ 生成启动器脚本失败：{e}"]
 
@@ -377,6 +377,6 @@ def ensure_windows_setup(trade_dir: Path) -> list[str]:
     return messages
 
 
-def trade_dir_from_module() -> Path:
+def agentbase_dir_from_module() -> Path:
     """由本模块位置推导仓库根（server.py 所在目录）。"""
     return Path(__file__).resolve().parent.parent.parent

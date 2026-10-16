@@ -8,7 +8,7 @@ UnicodeEncodeError。危险之处在于它**崩在动作之后**：报告打不�
 操作没执行（客户机常被远程操作，输出正是走管道）。
 
 三处用法都踩过同一个坑：`trade company`（删除动作已完成却崩在报告上）、
-`python -m trade.osint`（agent 通过管道收输出）、以及将来的任何 CLI 报告。
+`python -m agentbase.osint`（agent 通过管道收输出）、以及将来的任何 CLI 报告。
 
 只降级 `errors`、不改编码：控制台里中文照常，个别符号变 `?` 而已。
 """

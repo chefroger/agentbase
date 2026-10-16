@@ -248,7 +248,7 @@ def test_search_endpoint_declared_before_dynamic_route():
     """
     import pathlib
 
-    src = pathlib.Path("trade/api/customers.py").read_text(encoding="utf-8")
+    src = pathlib.Path("agentbase/api/customers.py").read_text(encoding="utf-8")
     assert src.index('"/customers/search"') < src.index('"/customers/{customer_id}"')
 
 

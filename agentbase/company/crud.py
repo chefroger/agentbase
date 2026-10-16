@@ -3,7 +3,7 @@ Trade AI Assistant — 公司数据层 CRUD。
 
 管理两张表：
   - companies: 公司基本信息（名称、slug、联系方式、激活状态）
-  - trade_companies: Trade 业务扩展信息（数据目录、Agent 身份、会话状态）
+  - agentbase_companies: Trade 业务扩展信息（数据目录、Agent 身份、会话状态）
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from agentbase.database import get_connection
 
 # Trade 用户数据目录
 # 优先级: AGENT_HOME 环境变量 > Windows %LOCALAPPDATA% > ~/.agentbase/
-_TRADE_HOME_RAW = os.environ.get("AGENT_HOME", "").strip()
-if _TRADE_HOME_RAW:
-    AGENT_HOME = Path(_TRADE_HOME_RAW)  # 显式设置，直接使用
+_AGENT_HOME_RAW = os.environ.get("AGENT_HOME", "").strip()
+if _AGENT_HOME_RAW:
+    AGENT_HOME = Path(_AGENT_HOME_RAW)  # 显式设置，直接使用
 elif os.name == "nt":
     _local_appdata = os.environ.get(
         "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
@@ -68,7 +68,7 @@ def _row_to_company(row) -> dict:
 
 
 def _row_to_tc(row) -> dict:
-    """将 trade_companies 表的数据库行转换为业务字典。
+    """将 agentbase_companies 表的数据库行转换为业务字典。
 
     is_active 转为 Python bool，其余字段原样返回。
     """
@@ -159,7 +159,7 @@ def create(
     *,
     work_dir_name: str = "",
 ) -> dict:
-    """创建新公司，同时创建 trade_companies 记录 + 桌面工作目录 + 文档库。
+    """创建新公司，同时创建 agentbase_companies 记录 + 桌面工作目录 + 文档库。
 
     事务保护：任何步骤失败都会回滚数据库并清理已创建的目录。
 
@@ -222,10 +222,10 @@ def create(
         )
         company_id = cursor.lastrowid
 
-        # 4) 写入 trade_companies 表（工作目录路径存入 extra1 JSON）
+        # 4) 写入 agentbase_companies 表（工作目录路径存入 extra1 JSON）
         _extra1 = _json.dumps({"work_dir": str(work_dir)})
         conn.execute(
-            "INSERT INTO trade_companies (company_id, data_dir, extra1) "
+            "INSERT INTO agentbase_companies (company_id, data_dir, extra1) "
             "VALUES (?, ?, ?)",
             (company_id, data_dir, _extra1),
         )
@@ -250,7 +250,7 @@ def create(
         if company_id is not None:
             try:
                 conn.execute("DELETE FROM libraries WHERE company_id = ?", (company_id,))
-                conn.execute("DELETE FROM trade_companies WHERE company_id = ?", (company_id,))
+                conn.execute("DELETE FROM agentbase_companies WHERE company_id = ?", (company_id,))
                 conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
                 conn.commit()
             except Exception:
@@ -367,7 +367,7 @@ def purge(company_id: int) -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT extra1 FROM trade_companies WHERE company_id = ?",
+            "SELECT extra1 FROM agentbase_companies WHERE company_id = ?",
             (company_id,),
         ).fetchone()
         if row and row["extra1"]:
@@ -388,7 +388,7 @@ def purge(company_id: int) -> bool:
         ).rowcount
         conn.commit()
         if n > 0:
-            # 清理文件系统：trade_companies.data_dir（仅当目录在 AGENT_HOME 下）
+            # 清理文件系统：agentbase_companies.data_dir（仅当目录在 AGENT_HOME 下）
             if data_dir_str:
                 data_path = Path(data_dir_str)
                 if data_path.exists():
@@ -430,18 +430,18 @@ def purge(company_id: int) -> bool:
         conn.close()
 
 
-# ── trade_companies 表 CRUD ────────────────────────────────────────────────────
+# ── agentbase_companies 表 CRUD ────────────────────────────────────────────────────
 
 def get_trade_company(company_id: int) -> dict | None:
-    """返回公司对应的 trade_companies 记录，未找到时返回 None。
+    """返回公司对应的 agentbase_companies 记录，未找到时返回 None。
 
-    trade_companies 表存储 Trade 业务扩展数据：data_dir、agent_identity_md 等。
+    agentbase_companies 表存储 Trade 业务扩展数据：data_dir、agent_identity_md 等。
     """
     conn = get_connection()
     try:
         row = conn.execute(
             "SELECT company_id, data_dir, agent_identity_md, is_active, created_at "
-            "FROM trade_companies WHERE company_id = ?",
+            "FROM agentbase_companies WHERE company_id = ?",
             (company_id,),
         ).fetchone()
         return _row_to_tc(row) if row else None
@@ -456,16 +456,16 @@ def update_trade_company(
     is_active: bool | None = None,
     extra1: str | None = None,
 ) -> dict | None:
-    """更新 trade_companies 字段（部分更新）。
+    """更新 agentbase_companies 字段（部分更新）。
 
     仅更新传入的非 None 字段。extra1 字段存储 JSON（工作目录路径等元数据）。
     """
     conn = get_connection()
     try:
         if not conn.execute(
-            "SELECT 1 FROM trade_companies WHERE company_id = ?", (company_id,)
+            "SELECT 1 FROM agentbase_companies WHERE company_id = ?", (company_id,)
         ).fetchone():
-            return None  # trade_companies 记录不存在
+            return None  # agentbase_companies 记录不存在
 
         fields, vals = [], []
         if data_dir is not None:
@@ -484,7 +484,7 @@ def update_trade_company(
         if fields:
             vals.append(company_id)
             conn.execute(
-                f"UPDATE trade_companies SET {', '.join(fields)} "
+                f"UPDATE agentbase_companies SET {', '.join(fields)} "
                 "WHERE company_id = ?",
                 vals,
             )
@@ -499,12 +499,12 @@ def get_agent_identity(company_id: int) -> str:
     """返回公司的 Agent 身份标识文本。
 
     优先级链（高到低）：
-      1. trade_companies.agent_identity_md 数据库字段（在线编辑 / 首次引导写入）
+      1. agentbase_companies.agent_identity_md 数据库字段（在线编辑 / 首次引导写入）
       2. ~/.agentbase/{slug}/companies/{slug}/agent-identity.md 磁盘文件（用户手动编辑）
-      3. '' 空字符串 → 回退到通用 TRADE_SYSTEM_PROMPT
+      3. '' 空字符串 → 回退到通用 AGENTBASE_SYSTEM_PROMPT
 
     注意：磁盘路径必须与工作目录/模板布局（_ensure_data_dir → {data_dir}/companies/{slug}/）
-    及 trade.prompts._company_identity_path 保持一致，否则文件回退永远命中不了。
+    及 agentbase.prompts._company_identity_path 保持一致，否则文件回退永远命中不了。
 
     Agent 身份文本会被注入到系统提示词中，让 AI 知道自己在为哪家公司服务。
     """

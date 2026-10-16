@@ -16,7 +16,7 @@ Apple Vision 框架 OCR，逐区域裁剪跑多轮。工具统计：
 
 也就是说 `vision_analyze` 当时可选、可用（另经实测：把同一张图直接发给
 deepseek-flash，返回文字与原图逐字一致）。失败原因不在配置，在提示词层 ——
-`trade/prompt.py` 里关于图片 / 截图 / 图像**一条规则都没有**，全项目唯一一句图片
+`agentbase/prompt.py` 里关于图片 / 截图 / 图像**一条规则都没有**，全项目唯一一句图片
 指令是 `static/app.js:1884`，而它只挂在**拖拽导入**路径上。用户这次是在
 聊天框里直接给的路径，那句提示压根没触发。
 
@@ -36,69 +36,69 @@ class TestImageBlockContent:
     """铁律块本身的内容要求。"""
 
     def test_block_exists_and_nonempty(self):
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert TRADE_IMAGE_BLOCK.strip(), "图片铁律块不能为空"
+        assert AGENTBASE_IMAGE_BLOCK.strip(), "图片铁律块不能为空"
 
     def test_block_has_header(self):
         """块必须有可识别的标题行（测试和排查都靠它定位）。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert IMAGE_BLOCK_HEADER in TRADE_IMAGE_BLOCK
+        assert IMAGE_BLOCK_HEADER in AGENTBASE_IMAGE_BLOCK
 
     def test_block_names_the_vision_tool(self):
         """必须点名 `vision_analyze` —— 只说「用视觉工具」模型可能不知道叫什么。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert "vision_analyze" in TRADE_IMAGE_BLOCK
+        assert "vision_analyze" in AGENTBASE_IMAGE_BLOCK
 
     def test_block_forbids_self_written_ocr(self):
         """必须明文禁止自建 OCR（这次就是自写了 Swift 脚本）。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert "OCR" in TRADE_IMAGE_BLOCK or "ocr" in TRADE_IMAGE_BLOCK
+        assert "OCR" in AGENTBASE_IMAGE_BLOCK or "ocr" in AGENTBASE_IMAGE_BLOCK
 
     def test_block_forbids_browser_route_for_local_images(self):
         """必须禁止用浏览器路径去开本地图片（这次空等 browser_exec 420s）。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert "browser_exec" in TRADE_IMAGE_BLOCK
+        assert "browser_exec" in AGENTBASE_IMAGE_BLOCK
 
     def test_block_mentions_read_file_cannot_read_images(self):
         """必须说明 `read_file` 不支持图片，免得模型读完得出「无法读取」的结论。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert "read_file" in TRADE_IMAGE_BLOCK
+        assert "read_file" in AGENTBASE_IMAGE_BLOCK
 
     def test_block_is_compact(self):
         """常驻块要付每请求的成本，必须克制（这条规则值不了几千 token）。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
-        assert len(TRADE_IMAGE_BLOCK) < 900, (
-            f"图片铁律块 {len(TRADE_IMAGE_BLOCK)} 字符，超出常驻预算（<900）"
+        assert len(AGENTBASE_IMAGE_BLOCK) < 900, (
+            f"图片铁律块 {len(AGENTBASE_IMAGE_BLOCK)} 字符，超出常驻预算（<900）"
         )
 
 
 class TestImageBlockAlwaysPresent:
     """四档提示词都必须携带铁律 —— 少一档就等于那条路径上没规则。
 
-    四档分别由 `trade/helpers.py:build_query()` 按场景选出：
+    四档分别由 `agentbase/helpers.py:build_query()` 按场景选出：
     OSINT 背调 / 文档类 FULL / 非首轮 MINIMAL / 首轮 FIRST_TURN。
     """
 
     def _tiers(self):
         from agentbase.prompt import (
-            TRADE_SYSTEM_PROMPT_FIRST_TURN,
-            TRADE_SYSTEM_PROMPT_FULL,
-            TRADE_SYSTEM_PROMPT_MINIMAL,
-            TRADE_SYSTEM_PROMPT_OSINT,
+            AGENTBASE_SYSTEM_PROMPT_FIRST_TURN,
+            AGENTBASE_SYSTEM_PROMPT_FULL,
+            AGENTBASE_SYSTEM_PROMPT_MINIMAL,
+            AGENTBASE_SYSTEM_PROMPT_OSINT,
         )
 
         return {
-            "FIRST_TURN": TRADE_SYSTEM_PROMPT_FIRST_TURN,
-            "MINIMAL": TRADE_SYSTEM_PROMPT_MINIMAL,
-            "OSINT": TRADE_SYSTEM_PROMPT_OSINT,
-            "FULL": TRADE_SYSTEM_PROMPT_FULL,
+            "FIRST_TURN": AGENTBASE_SYSTEM_PROMPT_FIRST_TURN,
+            "MINIMAL": AGENTBASE_SYSTEM_PROMPT_MINIMAL,
+            "OSINT": AGENTBASE_SYSTEM_PROMPT_OSINT,
+            "FULL": AGENTBASE_SYSTEM_PROMPT_FULL,
         }
 
     @pytest.mark.parametrize("tier", ["FIRST_TURN", "MINIMAL", "OSINT", "FULL"])
@@ -111,10 +111,10 @@ class TestImageBlockAlwaysPresent:
 
     def test_all_tiers_share_the_same_block(self):
         """四档共用同一个常量（单一事实来源），避免各写一份而慢慢漂移。"""
-        from agentbase.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import AGENTBASE_IMAGE_BLOCK
 
         for name, text in self._tiers().items():
-            assert TRADE_IMAGE_BLOCK in text, f"{name} 档内嵌的块与 TRADE_IMAGE_BLOCK 不一致"
+            assert AGENTBASE_IMAGE_BLOCK in text, f"{name} 档内嵌的块与 AGENTBASE_IMAGE_BLOCK 不一致"
 
 
 @pytest.fixture

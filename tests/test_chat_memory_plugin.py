@@ -21,7 +21,7 @@ import pytest
 
 
 class _FakeDatetime:
-    """替换 trade.chat_memory._dt.datetime：构造走真 datetime，now() 拿固定值。"""
+    """替换 agentbase.chat_memory._dt.datetime：构造走真 datetime，now() 拿固定值。"""
 
     fixed: datetime = None
 
@@ -35,7 +35,7 @@ class _FakeDatetime:
 
 @pytest.fixture
 def freeze_now(monkeypatch):
-    """把 trade.chat_memory 内部的 datetime 换成 _FakeDatetime，用例传 now= 即可。"""
+    """把 agentbase.chat_memory 内部的 datetime 换成 _FakeDatetime，用例传 now= 即可。"""
     from agentbase import chat_memory
 
     def _install(now: datetime):
@@ -411,7 +411,7 @@ class TestSyncChatMemoryPlugin:
 class TestChatMemoryPluginE2E:
 
     def _load_plugin(self):
-        """直接 import 插件模块（不通过 trade.bootstrap）。
+        """直接 import 插件模块（不通过 agentbase.bootstrap）。
 
         路径必须**从本文件位置推**，不能写死 —— 第一版写死了开发机的绝对路径，
         本地全绿、CI 上 6 个用例全挂在 FileNotFoundError（仓库不在那个路径下）。

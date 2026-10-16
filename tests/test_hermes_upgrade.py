@@ -1,4 +1,4 @@
-"""Hermes 升级编排（trade.hermes_upgrade）与共存端点测试。
+"""Hermes 升级编排（agentbase.hermes_upgrade）与共存端点测试。
 
 这里钉住三件最容易出错、且出错代价最高的事：
   1. **网络不通绝不起升级进程** —— 半途失败会同时弄坏 Hermes 和 Trade；

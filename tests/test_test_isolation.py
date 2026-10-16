@@ -3,7 +3,7 @@
 
 背景：tests/conftest.py 最初只隔离了 AGENT_HOME，`~/.hermes` 没有重定向。
 后果是真实发生过的：某次测试里 install_skills() 被真实执行，把真实的
-~/.hermes/skills 覆盖了一遍；trade/memory.py 也会写 ~/.hermes/memories/MEMORY.md。
+~/.hermes/skills 覆盖了一遍；agentbase/memory.py 也会写 ~/.hermes/memories/MEMORY.md。
 
 这些用例锁住隔离本身：如果将来有人删掉 conftest 里的 HERMES_HOME 设置，
 它们会立刻失败，而不是等下一次污染真实数据才发现。

@@ -10,7 +10,7 @@ import pytest
 
 
 @pytest.fixture
-def trade_home(tmp_path, monkeypatch):
+def agentbase_home(tmp_path, monkeypatch):
     """将 AGENT_HOME 指向临时目录，并清空 mtime 缓存。"""
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     from agentbase import prompts
@@ -38,14 +38,14 @@ class TestResolveSystemPrompt:
         assert custom in result
         assert result.index(base) < result.index(custom), "基础规则必须在自定义文本之前"
 
-    def test_no_custom_returns_base_only(self, trade_home):
+    def test_no_custom_returns_base_only(self, agentbase_home):
         """没有任何自定义内容时，返回的就是默认基础规则块本身。"""
         from agentbase import prompts
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_FIRST_TURN
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
 
-        assert prompts.resolve_system_prompt() == TRADE_SYSTEM_PROMPT_FIRST_TURN
+        assert prompts.resolve_system_prompt() == AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
 
-    def test_custom_base_param_used_as_base(self, trade_home):
+    def test_custom_base_param_used_as_base(self, agentbase_home):
         """code_fallback 指定的是**基础块**（如 OSINT/MINIMAL 档），仍会与自定义组合。"""
         from agentbase import prompts
 
@@ -53,43 +53,43 @@ class TestResolveSystemPrompt:
 
         assert result == "CUSTOM_BASE"
 
-    def test_db_identity_is_appended_to_base(self, trade_home):
+    def test_db_identity_is_appended_to_base(self, agentbase_home):
         """DB 身份必须追加在基础规则之后，而不是替换基础规则。"""
         from agentbase import prompts
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT
 
         result = prompts.resolve_system_prompt(db_identity="DB_IDENTITY")
 
-        self._assert_composed(result, TRADE_SYSTEM_PROMPT, "DB_IDENTITY")
+        self._assert_composed(result, AGENTBASE_SYSTEM_PROMPT, "DB_IDENTITY")
 
-    def test_company_file_appended_and_wins_over_db(self, trade_home):
+    def test_company_file_appended_and_wins_over_db(self, agentbase_home):
         """公司身份文件优先于 DB，且追加在基础规则之后。
 
         通过生产的写入 API 落文件，不手写路径 —— 手写路径会跟着实现一起错，
         于是「文件优先」明明是死的、测试却一直绿（之前正是如此）。
         """
         from agentbase import prompts
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT
 
         prompts.write_agent_identity("acme", "FILE_IDENTITY")
 
         result = prompts.resolve_system_prompt(company_slug="acme", db_identity="DB_IDENTITY")
 
-        self._assert_composed(result, TRADE_SYSTEM_PROMPT, "FILE_IDENTITY")
+        self._assert_composed(result, AGENTBASE_SYSTEM_PROMPT, "FILE_IDENTITY")
         assert "DB_IDENTITY" not in result, "有公司文件时不应再拼 DB 身份"
 
-    def test_global_system_md_appended_to_base(self, trade_home):
+    def test_global_system_md_appended_to_base(self, agentbase_home):
         """全局 system.md 也是自定义层，追加在基础规则之后。"""
         from agentbase import prompts
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT
 
-        sys_path = trade_home / "prompts" / "system.md"
+        sys_path = agentbase_home / "prompts" / "system.md"
         sys_path.parent.mkdir(parents=True, exist_ok=True)
         sys_path.write_text("GLOBAL_SYSTEM", encoding="utf-8")
 
         result = prompts.resolve_system_prompt()
 
-        self._assert_composed(result, TRADE_SYSTEM_PROMPT, "GLOBAL_SYSTEM")
+        self._assert_composed(result, AGENTBASE_SYSTEM_PROMPT, "GLOBAL_SYSTEM")
 
 
 class TestAccuracyRulesAlwaysPresent:
@@ -101,23 +101,23 @@ class TestAccuracyRulesAlwaysPresent:
 
     def test_first_turn_base_contains_accuracy_rules(self):
         """首轮使用的基础块必须含准确规则。"""
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_FIRST_TURN
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
 
-        assert "逐个文件扫描" in TRADE_SYSTEM_PROMPT_FIRST_TURN
-        assert "List Integrity" in TRADE_SYSTEM_PROMPT_FIRST_TURN
+        assert "逐个文件扫描" in AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
+        assert "List Integrity" in AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
 
     def test_minimal_still_contains_accuracy_rules(self):
         """后续轮次的精简档也必须保留准确规则。"""
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_MINIMAL
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_MINIMAL
 
-        assert "逐个文件扫描" in TRADE_SYSTEM_PROMPT_MINIMAL
-        assert "List Integrity" in TRADE_SYSTEM_PROMPT_MINIMAL
+        assert "逐个文件扫描" in AGENTBASE_SYSTEM_PROMPT_MINIMAL
+        assert "List Integrity" in AGENTBASE_SYSTEM_PROMPT_MINIMAL
 
     def test_first_turn_base_is_not_smaller_than_minimal(self):
         """首轮基础块应比后续轮次的精简档更完整（否则档位是反的）。"""
-        from agentbase.prompt import TRADE_SYSTEM_PROMPT_FIRST_TURN, TRADE_SYSTEM_PROMPT_MINIMAL
+        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN, AGENTBASE_SYSTEM_PROMPT_MINIMAL
 
-        assert len(TRADE_SYSTEM_PROMPT_FIRST_TURN) >= len(TRADE_SYSTEM_PROMPT_MINIMAL)
+        assert len(AGENTBASE_SYSTEM_PROMPT_FIRST_TURN) >= len(AGENTBASE_SYSTEM_PROMPT_MINIMAL)
 
 
 class TestNeedsFullPrompt:
@@ -147,19 +147,19 @@ class TestNeedsFullPrompt:
 
 
 class TestBrandSafety:
-    def test_default_when_no_slug(self, trade_home):
+    def test_default_when_no_slug(self, agentbase_home):
         """无公司 slug 时返回内置 BRAND_SAFETY_BLOCK。"""
         from agentbase import prompts
         from agentbase.prompt import BRAND_SAFETY_BLOCK
         assert prompts.get_brand_safety() == BRAND_SAFETY_BLOCK
 
-    def test_default_when_file_missing(self, trade_home):
+    def test_default_when_file_missing(self, agentbase_home):
         """有 slug 但文件不存在时返回内置默认。"""
         from agentbase import prompts
         from agentbase.prompt import BRAND_SAFETY_BLOCK
         assert prompts.get_brand_safety("nonexistent") == BRAND_SAFETY_BLOCK
 
-    def test_custom_file(self, trade_home):
+    def test_custom_file(self, agentbase_home):
         """有 slug 且文件存在时返回文件内容。
 
         路径取生产实现，不手写 —— 手写会跟着实现的路径 bug 一起错，测试照样绿。

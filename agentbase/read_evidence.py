@@ -40,7 +40,7 @@ _WEAK_EVIDENCE_TOOLS = frozenset({
 _COMMAND_ARG_KEYS = ("command", "cmd", "code", "script", "input")
 
 # 从自由文本（用户提问 / shell 命令 / 代码片段）中提取路径候选。
-# trade.helpers._extract_explicit_paths 与本模块共用它，避免两处正则漂移。
+# agentbase.helpers._extract_explicit_paths 与本模块共用它，避免两处正则漂移。
 # 字符类排除引号与括号：否则 shell/代码里的 open('/x/y.pdf') 会让左最匹配
 # 从引号处开始、把 "open('" 一并吞进路径。
 EXPLICIT_PATH_RE = re.compile(

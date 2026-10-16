@@ -37,9 +37,9 @@ class TestBatchPathRewriting:
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\张伟\AppData\Local")
         monkeypatch.delenv("USERPROFILE", raising=False)
 
-        out = ws.to_batch_path(r"C:\Users\张伟\AppData\Local\trade\venv\Scripts\trade.exe")
+        out = ws.to_batch_path(r"C:\Users\张伟\AppData\Local\trade\venv\Scripts\agentbase.exe")
 
-        assert out == r"%LOCALAPPDATA%\trade\venv\Scripts\trade.exe"
+        assert out == r"%LOCALAPPDATA%\agentbase\venv\Scripts\agentbase.exe"
         assert out.isascii(), "仍然含非 ASCII —— cmd 读取时会乱码"
 
     def test_userprofile_prefix_replaced(self, monkeypatch):
@@ -60,13 +60,13 @@ class TestBatchPathRewriting:
 
 class TestGeneratedScripts:
     def test_autostart_has_no_browser_and_logs(self):
-        bat = ws.build_autostart_bat('"%LOCALAPPDATA%\\trade\\venv\\Scripts\\trade.exe"', "%LOCALAPPDATA%\\trade\\a.log")
+        bat = ws.build_autostart_bat('"%LOCALAPPDATA%\agentbase\\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\agentbase\\a.log")
 
         assert "--no-browser" in bat, "开机自启不该打开浏览器"
         assert "> " in bat and "2>&1" in bat, "必须重定向日志 —— 隐藏窗口后就没别的排查手段了"
 
     def test_open_has_open_subcommand(self):
-        bat = ws.build_open_bat('"%LOCALAPPDATA%\\trade\\venv\\Scripts\\trade.exe"', "%LOCALAPPDATA%\\trade\\o.log")
+        bat = ws.build_open_bat('"%LOCALAPPDATA%\agentbase\\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\agentbase\\o.log")
 
         assert " open " in bat, "快捷方式应调用 `trade open`（起服务 + 开浏览器）"
         assert "--no-browser" not in bat, "open 子命令自己负责开浏览器"

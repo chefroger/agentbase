@@ -10,17 +10,17 @@ Smart Trade AI — 混合 Skill 路由：关键词快路径 + 语义兜底（优
 设计要点：
 - 索引构建在 skill 注册表上（name + triggers + input_fmt + output_fmt），
   新增 skill 只需 rebuild()，无需改代码；
-- embedding 后端复用 trade.embeddings（默认零依赖 TF-IDF，可切 st）；
+- embedding 后端复用 agentbase.embeddings（默认零依赖 TF-IDF，可切 st）；
 - 所有阈值走环境变量，可线上调参；
 - 失败时静默回退纯关键词，保证永不拖垮主流程。
 
 环境变量：
-    TRADE_ROUTER_MODE              keyword | hybrid（默认 keyword，保持现状）
-    TRADE_HYBRID_KEYWORD_CONFIDENT 关键词多少分算"高置信"（默认 6，即 2 个词边界命中）
-    TRADE_SEMANTIC_MIN_SCORE       语义最低分（默认 0.15，见下方校准说明）
-    TRADE_HYBRID_W_KEYWORD         融合权重-关键词（默认 0.5）
-    TRADE_HYBRID_W_SEMANTIC        融合权重-语义（默认 0.5）
-    TRADE_SEMANTIC_TOP_K           语义候选数（默认 5）
+    AGENTBASE_ROUTER_MODE              keyword | hybrid（默认 keyword，保持现状）
+    AGENTBASE_HYBRID_KEYWORD_CONFIDENT 关键词多少分算"高置信"（默认 6，即 2 个词边界命中）
+    AGENTBASE_SEMANTIC_MIN_SCORE       语义最低分（默认 0.15，见下方校准说明）
+    AGENTBASE_HYBRID_W_KEYWORD         融合权重-关键词（默认 0.5）
+    AGENTBASE_HYBRID_W_SEMANTIC        融合权重-语义（默认 0.5）
+    AGENTBASE_SEMANTIC_TOP_K           语义候选数（默认 5）
 
 ## 阈值怎么定出来的（2026-10-13，自检索校准）
 
@@ -36,7 +36,7 @@ Smart Trade AI — 混合 Skill 路由：关键词快路径 + 语义兜底（优
 只能证明"不误伤"，证明不了"有帮助"。真正能替关键词兜底的是**改写查询**，
 那需要真实用户 query 评测集 —— 在评测集出来之前：
 
-  - `TRADE_ROUTER_MODE` 默认保持 `keyword`（本模块不会生效）；
+  - `AGENTBASE_ROUTER_MODE` 默认保持 `keyword`（本模块不会生效）；
   - 融合公式保证了只要关键词有任何命中，top1 一定来自关键词（0.5·1.0=0.5
     高于任何"纯语义"得分上限 0.5·sem），所以开启 hybrid 也不会让语义压过
     确定的关键词信号 —— 语义只可能在关键词**完全没命中**时改变结果。
@@ -139,8 +139,8 @@ class SemanticSkillRouter:
         query = (query or "").strip()
         if not query:
             return []
-        top_k = top_k if top_k is not None else _env_int("TRADE_SEMANTIC_TOP_K", 5)
-        min_score = min_score if min_score is not None else _env_float("TRADE_SEMANTIC_MIN_SCORE", 0.15)
+        top_k = top_k if top_k is not None else _env_int("AGENTBASE_SEMANTIC_TOP_K", 5)
+        min_score = min_score if min_score is not None else _env_float("AGENTBASE_SEMANTIC_MIN_SCORE", 0.15)
         try:
             self._ensure_built()
             with self._lock:
@@ -199,8 +199,8 @@ def hybrid_rank(
     融合分 = w_kw * 归一化关键词分 + w_sem * 语义分；只出现在一路的，
     缺失路按 0 计。返回 [{"skill_name","score","source"}] 降序。
     """
-    w_keyword = w_keyword if w_keyword is not None else _env_float("TRADE_HYBRID_W_KEYWORD", 0.5)
-    w_semantic = w_semantic if w_semantic is not None else _env_float("TRADE_HYBRID_W_SEMANTIC", 0.5)
+    w_keyword = w_keyword if w_keyword is not None else _env_float("AGENTBASE_HYBRID_W_KEYWORD", 0.5)
+    w_semantic = w_semantic if w_semantic is not None else _env_float("AGENTBASE_HYBRID_W_SEMANTIC", 0.5)
     max_kw = max([h.get("score", 0) for h in keyword_hits] + [1])
     merged: dict[str, dict] = {}
     for h in keyword_hits:
@@ -254,7 +254,7 @@ def match_skill_hybrid(query: str) -> tuple[dict | None, list[dict]]:
             best["source"] = "explicit"
             return best, []
 
-        confident = _env_int("TRADE_HYBRID_KEYWORD_CONFIDENT", 6)
+        confident = _env_int("AGENTBASE_HYBRID_KEYWORD_CONFIDENT", 6)
         if kw_hits and kw_hits[0].get("score", 0) >= confident:
             best = {"skill_name": kw_hits[0]["skill_name"], "score": 1.0, "source": "keyword"}
             alts = [

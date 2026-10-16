@@ -183,8 +183,8 @@ irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/ins
 hermes setup
 
 # 3. Install Smart Trade AI
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\agentbase
-cd $env:LOCALAPPDATA\trade\agentbase; pip install -e "."; install-agentbase-skills
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\agentbase\agentbase
+cd $env:LOCALAPPDATA\agentbase\agentbase; pip install -e "."; install-agentbase-skills
 
 python server.py
 # → Open http://127.0.0.1:9120/agentbase
@@ -261,7 +261,7 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 
 Bound to `127.0.0.1` by default. The session token is **only issued to loopback (local) browsers**: even if you expose the port with `--host 0.0.0.0`, requests from other devices only receive an explanatory page (HTTP 403) and never the token, so they cannot call the API.
 
-If you really need to reach the UI from another device, set `TRADE_ALLOW_REMOTE_UI=1` before starting — **this lowers security**: any device that can reach the port will be able to obtain the token and act on your behalf. The safer options remain an SSH tunnel or a reverse proxy with an extra authentication layer.
+If you really need to reach the UI from another device, set `AGENTBASE_ALLOW_REMOTE_UI=1` before starting — **this lowers security**: any device that can reach the port will be able to obtain the token and act on your behalf. The safer options remain an SSH tunnel or a reverse proxy with an extra authentication layer.
 
 > **Disclaimer**: Alibaba, LinkedIn, Facebook, Instagram, TikTok, YouTube, WhatsApp and other platform names mentioned in this documentation are trademarks of their respective owners. This tool provides analysis assistance for these platforms and is not affiliated with them. Sanctions data is sourced from OFAC/UN/EU public datasets — results are for reference only and do not constitute legal advice. See [SECURITY.md](SECURITY.md) for details.
 

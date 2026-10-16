@@ -15,7 +15,7 @@
 macOS 开发机看不出（仓库检出是 LF）；CI 的 windows-latest 只跑 pytest，
 不校验 frontmatter 解析结果。而两条 Windows 产生 CRLF 的路径都不需要用户改配置：
   1. `.gitattributes` 没有 `*.md` 的 eol 规则，Git for Windows 默认 core.autocrlf=true
-  2. `trade/post_install/skills.py` 用 `write_text(content)` 写入 —— Windows 上
+  2. `agentbase/post_install/skills.py` 用 `write_text(content)` 写入 —— Windows 上
      `newline=None` 会把 `\\n` 翻译成 `\\r\\n`
 """
 

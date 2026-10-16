@@ -328,7 +328,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python -m trade.tech_drawing <pdf_path>")
+        print("Usage: python -m agentbase.tech_drawing <pdf_path>")
         sys.exit(1)
 
     result = analyze_drawing(sys.argv[1])

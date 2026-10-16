@@ -139,8 +139,8 @@ class TestHermesActivationRestore:
         """激活剥离后必须补回，且补在末尾（让 Hermes 的依赖优先胜出版本冲突）。"""
         import types
 
-        trade_site = bootstrap._trade_site_packages()
-        assert trade_site, "测试环境应能解析出 site-packages 目录"
+        agentbase_site = bootstrap._trade_site_packages()
+        assert agentbase_site, "测试环境应能解析出 site-packages 目录"
 
         original_path = list(sys.path)
         original_pythonpath = os.environ.get("PYTHONPATH", "")
@@ -153,13 +153,13 @@ class TestHermesActivationRestore:
         try:
             bootstrap._activate_hermes_env_and_restore_trade_paths()
 
-            assert trade_site in sys.path, "激活后未把 Trade 的 site-packages 补回 sys.path"
+            assert agentbase_site in sys.path, "激活后未把 Trade 的 site-packages 补回 sys.path"
             # 必须在末尾：一旦两侧版本漂移，让 Hermes 的托管代际优先，避免 Trade 的
             # 老 pin 把 Hermes 需要的版本压下去
-            assert sys.path[-1] == trade_site
+            assert sys.path[-1] == agentbase_site
             # PYTHONPATH 被激活覆盖过，也必须补回 —— 否则 Trade 起的子进程
             # （如走 holehe 的 OSINT Layer 1）找不到 Trade 的依赖
-            assert trade_site in os.environ.get("PYTHONPATH", "")
+            assert agentbase_site in os.environ.get("PYTHONPATH", "")
         finally:
             sys.path[:] = original_path
             sys.modules.pop("hermes_bootstrap", None)
@@ -196,8 +196,8 @@ class TestHermesActivationRestore:
         """
         import types
 
-        trade_site = bootstrap._trade_site_packages()
-        assert trade_site, "测试环境应能解析出 site-packages 目录"
+        agentbase_site = bootstrap._trade_site_packages()
+        assert agentbase_site, "测试环境应能解析出 site-packages 目录"
 
         original_path = list(sys.path)
         original_pythonpath = os.environ.get("PYTHONPATH", "")
@@ -210,11 +210,11 @@ class TestHermesActivationRestore:
         try:
             bootstrap._activate_hermes_env_and_restore_trade_paths()
 
-            assert trade_site in sys.path, (
+            assert agentbase_site in sys.path, (
                 "hermes_bootstrap 已缓存（import 无副作用）时，恢复段被跳过了 —— "
                 "它必须无条件执行"
             )
-            assert sys.path[-1] == trade_site
+            assert sys.path[-1] == agentbase_site
         finally:
             sys.path[:] = original_path
             sys.modules.pop("hermes_bootstrap", None)

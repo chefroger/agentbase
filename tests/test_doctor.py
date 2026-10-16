@@ -25,7 +25,7 @@ from agentbase import doctor
 
 
 @pytest.fixture
-def trade_home(monkeypatch, tmp_path):
+def agentbase_home(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     return tmp_path
 
@@ -228,16 +228,16 @@ class TestReport:
 class TestShouldRunPolicy:
     """首次跑；未过则每次启动重试；配置变了重跑。"""
 
-    def test_runs_when_no_record(self, trade_home):
+    def test_runs_when_no_record(self, agentbase_home):
         assert doctor.should_run_doctor() is True
 
-    def test_skips_when_passed_and_config_unchanged(self, trade_home, monkeypatch):
+    def test_skips_when_passed_and_config_unchanged(self, agentbase_home, monkeypatch):
         monkeypatch.setattr(doctor, "_fingerprint", lambda: "p|m|0.6.8")
         doctor.save_doctor_result([doctor.CheckResult("a", doctor.STATUS_OK, "x")])
 
         assert doctor.should_run_doctor() is False
 
-    def test_retries_when_last_run_failed(self, trade_home, monkeypatch):
+    def test_retries_when_last_run_failed(self, agentbase_home, monkeypatch):
         monkeypatch.setattr(doctor, "_fingerprint", lambda: "p|m|0.6.8")
         doctor.save_doctor_result(
             [doctor.CheckResult("对话回合", doctor.STATUS_FAIL, "空回复", fatal=True)]
@@ -245,21 +245,21 @@ class TestShouldRunPolicy:
 
         assert doctor.should_run_doctor() is True, "未过时必须每次启动重试 —— 客户修好配置重启就恢复"
 
-    def test_retries_when_config_changed(self, trade_home, monkeypatch):
+    def test_retries_when_config_changed(self, agentbase_home, monkeypatch):
         monkeypatch.setattr(doctor, "_fingerprint", lambda: "p|m|0.6.8")
         doctor.save_doctor_result([doctor.CheckResult("a", doctor.STATUS_OK, "x")])
         monkeypatch.setattr(doctor, "_fingerprint", lambda: "other|model|0.6.8")
 
         assert doctor.should_run_doctor() is True
 
-    def test_corrupt_state_file_reruns(self, trade_home):
+    def test_corrupt_state_file_reruns(self, agentbase_home):
         path = doctor._state_file()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("not json", encoding="utf-8")
 
         assert doctor.should_run_doctor() is True
 
-    def test_saved_report_is_readable(self, trade_home, monkeypatch):
+    def test_saved_report_is_readable(self, agentbase_home, monkeypatch):
         monkeypatch.setattr(doctor, "_fingerprint", lambda: "fp")
         doctor.save_doctor_result([doctor.CheckResult("a", doctor.STATUS_OK, "x")])
 
@@ -486,7 +486,7 @@ class TestUpdateInterpreterGuard:
     """
 
     @staticmethod
-    def _stub(monkeypatch, tmp_path, *, prefix, base_prefix, trade_venv_exists):
+    def _stub(monkeypatch, tmp_path, *, prefix, base_prefix, agentbase_venv_exists):
         """把 sys.prefix 与两处 venv 探测路径都钉进临时目录。
 
         必须连 `Path.home()` 一起钉：开发机上**真的有** `~/.agentbase/venv`，
@@ -495,21 +495,21 @@ class TestUpdateInterpreterGuard:
         from agentbase.post_install import update as upd
 
         home = tmp_path / "home"
-        trade_home = tmp_path / "tradehome"
+        agentbase_home = tmp_path / "tradehome"
         home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(upd, "_get_trade_home", lambda: trade_home)
+        monkeypatch.setattr(upd, "_get_trade_home", lambda: agentbase_home)
         monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: home))
-        if trade_venv_exists:
-            venv = trade_home / "venv"
+        if agentbase_venv_exists:
+            venv = agentbase_home / "venv"
             venv.mkdir(parents=True, exist_ok=True)
             (venv / "pyvenv.cfg").write_text("", encoding="utf-8")
         monkeypatch.setattr(sys, "prefix", prefix)
         monkeypatch.setattr(sys, "base_prefix", base_prefix)
-        return upd, trade_home
+        return upd, agentbase_home
 
     def test_refuses_outside_any_venv(self, monkeypatch, tmp_path):
         upd, _ = self._stub(monkeypatch, tmp_path, prefix="/usr", base_prefix="/usr",
-                            trade_venv_exists=False)
+                            agentbase_venv_exists=False)
 
         reason = upd._refuse_reason_for_interpreter()
 
@@ -519,23 +519,23 @@ class TestUpdateInterpreterGuard:
         other = tmp_path / "othervenv"
         other.mkdir()
         upd, _ = self._stub(monkeypatch, tmp_path, prefix=str(other), base_prefix="/usr",
-                            trade_venv_exists=True)
+                            agentbase_venv_exists=True)
 
         reason = upd._refuse_reason_for_interpreter()
 
         assert reason and "不是 Trade 自己" in reason
 
     def test_allows_inside_trade_venv(self, monkeypatch, tmp_path):
-        upd, trade_home = self._stub(monkeypatch, tmp_path,
+        upd, agentbase_home = self._stub(monkeypatch, tmp_path,
                                      prefix=str(tmp_path / "tradehome" / "venv"),
-                                     base_prefix="/usr", trade_venv_exists=True)
+                                     base_prefix="/usr", agentbase_venv_exists=True)
 
         assert upd._refuse_reason_for_interpreter() is None
 
     def test_allows_when_no_trade_venv_exists(self, monkeypatch, tmp_path):
         """开发机上从仓库直接跑（本机没有 trade venv）不能被拦。"""
         upd, _ = self._stub(monkeypatch, tmp_path, prefix=str(tmp_path), base_prefix="/usr",
-                            trade_venv_exists=False)
+                            agentbase_venv_exists=False)
 
         assert upd._refuse_reason_for_interpreter() is None
 

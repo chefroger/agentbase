@@ -19,7 +19,7 @@ Trade AI Assistant — 首次运行引导模块。
             "target_region": "东南亚、欧洲"
         }
     }
-    Returns: { "company": {...}, "trade_company": {...} }
+    Returns: { "company": {...}, "agentbase_company": {...} }
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def create_first_company(
         work_dir_name: 桌面工作目录名称（目录已存在时用户指定的新名字）
 
     返回：
-        {"company": {...}, "trade_company": {...}}
+        {"company": {...}, "agentbase_company": {...}}
 
     异常：
         ValueError: company_name 为空，或公司已存在
@@ -186,14 +186,14 @@ def create_first_company(
         work_dir_name=work_dir_name,
     )
 
-    # Step 2: 将 agent_identity_md 写入 trade_companies（覆盖空值）
-    trade_company = _company_module.update_trade_company(
+    # Step 2: 将 agent_identity_md 写入 agentbase_companies（覆盖空值）
+    agentbase_company = _company_module.update_trade_company(
         company_id=company["id"],
         agent_identity_md=agent_identity,
     )
 
     # Step 3: 将 agent_identity 写入公司目录下的标准文件
-    # 路径由 trade.prompts.write_agent_identity 统一决定（~/.agentbase/{slug}/companies/{slug}/agent-identity.md），
+    # 路径由 agentbase.prompts.write_agent_identity 统一决定（~/.agentbase/{slug}/companies/{slug}/agent-identity.md），
     # 这里不自己拼路径 —— 历史上两边各拼一份、拼出不同结果，导致读取方永远读不到写入的文件
     slug = company.get("slug", "")
     if slug:
@@ -206,5 +206,5 @@ def create_first_company(
 
     return {
         "company": company,
-        "trade_company": trade_company,
+        "agentbase_company": agentbase_company,
     }

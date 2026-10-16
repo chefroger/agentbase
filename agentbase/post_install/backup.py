@@ -57,33 +57,33 @@ def backup_trade(output_dir: str | None = None) -> str:
     filename = f"agentbase-backup-{timestamp}.tar.gz"
     out_path = Path(output_dir) / filename
 
-    trade_home = _get_trade_home()
+    agentbase_home = _get_trade_home()
     hermes_home = _get_hermes_home()
 
     # 收集需要打包的文件路径列表
     sources: list[tuple[Path, str]] = []  # (绝对路径, tar 内的 arcname)
 
     # 1) SQLite 数据库：最关键的备份目标
-    db_path = trade_home / "data" / "agentbase.db"
+    db_path = agentbase_home / "data" / "agentbase.db"
     if db_path.is_file():
-        sources.append((db_path, ".trade/data/agentbase.db"))
+        sources.append((db_path, ".agentbase/data/agentbase.db"))
 
     # 2) 公司数据目录：递归收集所有文件
-    companies_dir = trade_home / "companies"
+    companies_dir = agentbase_home / "companies"
     if companies_dir.is_dir():
         for company_dir in companies_dir.iterdir():
             if company_dir.is_dir():
                 for f in company_dir.rglob("*"):
                     if f.is_file():
-                        rel = str(f.relative_to(trade_home))
+                        rel = str(f.relative_to(agentbase_home))
                         sources.append((f, f".trade/{rel}"))
 
     # 3) 系统提示词（prompts/system.md 等）
-    prompts_dir = trade_home / "prompts"
+    prompts_dir = agentbase_home / "prompts"
     if prompts_dir.is_dir():
         for f in prompts_dir.rglob("*"):
             if f.is_file():
-                sources.append((f, f".trade/{f.relative_to(trade_home)}"))
+                sources.append((f, f".trade/{f.relative_to(agentbase_home)}"))
 
     # 4) Hermes 记忆文件（.md / .json / .txt）
     memories_dir = hermes_home / "memories"
@@ -142,7 +142,7 @@ def restore_trade(backup_file: str = "") -> str:
     if not src.is_file():
         return f"✗ 备份文件不存在: {backup_file}"
 
-    trade_home = _get_trade_home()
+    agentbase_home = _get_trade_home()
 
     # 步骤 1: 解压到临时目录（使用内建 tarfile，跨平台兼容）
     print(f"[restore] 解压 {src.name} ...")
@@ -164,7 +164,7 @@ def restore_trade(backup_file: str = "") -> str:
     # 步骤 2: 定位备份内容的根目录
     #
     # 备份写入的 arcname 带 `.trade/` 前缀（见本文件 backup_trade 的
-    # ".trade/data/agentbase.db"、".trade/{rel}"）。解压后内容在
+    # ".agentbase/data/agentbase.db"、".trade/{rel}"）。解压后内容在
     # `tmp_dir/.trade/...`，而历史上还原代码找的是 `tmp_dir/companies`、
     # `tmp_dir/data/agentbase.db` —— 永远不存在，于是 if exists() 静默跳过、
     # 不报错，最后照样说"已还原"。公司档案/提示词/记忆全丢，只有 DB 被
@@ -202,12 +202,12 @@ def restore_trade(backup_file: str = "") -> str:
     # 步骤 4: 备份当前数据（还原前保护措施）
     # 当前库可能不存在（首次还原到全新安装）—— 此时没有东西可保护，跳过即可。
     backup_ts = _real_datetime.now().strftime("%Y%m%d-%H%M%S")
-    current_db = trade_home / "data" / "agentbase.db"
+    current_db = agentbase_home / "data" / "agentbase.db"
     if current_db.is_file():
         current_db.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(
             current_db,
-            trade_home / "data" / f"trade-before-restore-{backup_ts}.db",
+            agentbase_home / "data" / f"trade-before-restore-{backup_ts}.db",
         )
 
     # 步骤 5: 替换数据库
@@ -223,8 +223,8 @@ def restore_trade(backup_file: str = "") -> str:
 
     # companies/ 与 prompts/ 在 ~/.agentbase 下；memories/ 与 skills/ 在 ~/.hermes 下
     for rel, dst_root, label in (
-        ("companies", trade_home, "companies"),
-        ("prompts", trade_home, "prompts"),
+        ("companies", agentbase_home, "companies"),
+        ("prompts", agentbase_home, "prompts"),
         ("memories", _get_hermes_home(), "memories"),
         ("skills", _get_hermes_home(), "skills"),
     ):
@@ -287,8 +287,8 @@ def _restart_trade_service() -> None:
     sys_name = platform.system()
 
     # ── 策略 1：通过 PID 文件终止旧进程，然后启动新进程 ──
-    trade_home = _get_trade_home()
-    pid_file = trade_home / "data" / "agentbase.pid"
+    agentbase_home = _get_trade_home()
+    pid_file = agentbase_home / "data" / "agentbase.pid"
     old_pid = None
     if pid_file.is_file():
         try:
@@ -351,7 +351,7 @@ def _restart_trade_service() -> None:
         print(f"  ⚠ 自动重启失败: {e}")
 
     # ── 策略 3：launchd (macOS) / systemd (Linux) ──
-    label = "com.trade.assistant"
+    label = "com.agentbase.assistant"
 
     if sys_name == "Darwin":
         _try_launchd_restart(label)
@@ -372,9 +372,9 @@ def _build_restart_command() -> list[str]:
       - python server.py（直接运行脚本）→ 复用同路径
       - 其它（console_scripts 入口等）→ 走包内入口
 
-    **不要用 `-m trade`**：那需要 `trade/__main__.py`，而本仓库没有这个文件
-    （console script 是指向 `trade.cli:run_server` 的）。历史上这里返回
-    `-m trade`，子进程以 `No module named trade.__main__` 秒退，但 Popen 本身
+    **不要用 `-m agentbase`**：那需要 `agentbase/__main__.py`，而本仓库没有这个文件
+    （console script 是指向 `agentbase.cli:run_server` 的）。历史上这里返回
+    `-m agentbase`，子进程以 `No module named agentbase.__main__` 秒退，但 Popen 本身
     成功 → 照样打印「↻ Trade 服务已重新启动」，用户被告知服务已起、实际已下线。
     """
     # 通过 sys.argv 推断启动方式

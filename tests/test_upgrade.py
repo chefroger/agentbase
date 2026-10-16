@@ -34,7 +34,7 @@ def _bypass_interpreter_guard(monkeypatch):
 
 
 class TestCaptureOutput:
-    """测试 trade.api.cron._capture_output。"""
+    """测试 agentbase.api.cron._capture_output。"""
 
     def test_capture_print_output(self):
         """正常函数的 print 输出应被捕获。"""
@@ -113,7 +113,7 @@ class TestCaptureOutput:
 
 
 class TestPerformRestart:
-    """测试 trade.app._perform_restart（核心重启逻辑）。"""
+    """测试 agentbase.app._perform_restart（核心重启逻辑）。"""
 
     @patch("agentbase.app._sp")
     @patch("agentbase.app._kill_gateway")
@@ -332,11 +332,11 @@ class TestUpdateStepSeverity:
                 stack.enter_context(patch("agentbase.post_install.update.update_skills"))
 
             # 显式设定运行目录的存在状态，避免用例之间互相污染（共享同一个 AGENT_HOME）
-            trade_dir = Path(_get_trade_home()) / "agentbase"
+            agentbase_dir = Path(_get_trade_home()) / "agentbase"
             if existing_dir:
-                trade_dir.mkdir(parents=True, exist_ok=True)  # 存在 → 走 git pull
-            elif trade_dir.exists():
-                shutil.rmtree(trade_dir)  # 不存在 → 走 git clone
+                agentbase_dir.mkdir(parents=True, exist_ok=True)  # 存在 → 走 git pull
+            elif agentbase_dir.exists():
+                shutil.rmtree(agentbase_dir)  # 不存在 → 走 git clone
 
             return update_mod.update_trade()
 
@@ -568,7 +568,7 @@ class TestSystemRouter:
 
 
 class TestUpdateTrade:
-    """测试 trade.post_install.update_trade 的 7 步更新流程。
+    """测试 agentbase.post_install.update_trade 的 7 步更新流程。
 
     用 mock 隔离 git/pip/skills/db 等外部副作用，仅验证流程编排逻辑。
     """

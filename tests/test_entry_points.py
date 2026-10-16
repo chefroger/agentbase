@@ -36,7 +36,7 @@ class TestConsoleScriptPackaging:
         for name, target in scripts.items():
             module = target.split(":", 1)[0]
             if "." in module:
-                # 包内模块（如 trade.post_install）→ 源码树里必须存在
+                # 包内模块（如 agentbase.post_install）→ 源码树里必须存在
                 rel = module.replace(".", "/")
                 exists = (ROOT / f"{rel}.py").is_file() or (ROOT / rel / "__init__.py").is_file()
                 assert exists, f"{name} → {module} 在源码树里不存在"

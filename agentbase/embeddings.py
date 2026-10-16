@@ -4,14 +4,14 @@ Smart Trade AI — 本地 Embedding 后端抽象（优化路线 P0-1 / P0-2 共�
 设计目标：
 1. 零依赖默认可用：TfidfBackend 纯标准库实现，字符 n-gram 同时支持
    中英文（无需分词），离线可用，符合项目 local-first 定位。
-2. 可插拔：TRADE_EMBEDDING_BACKEND=st 时使用 sentence-transformers
+2. 可插拔：AGENTBASE_EMBEDDING_BACKEND=st 时使用 sentence-transformers
   （需另装，质量更高）；=tfidf 强制使用默认实现；=auto（默认）
    优先 st、不可用时回退 tfidf。
 3. 线程安全：fit 之后只读；get_backend() 单例加锁。
 
 环境变量：
-    TRADE_EMBEDDING_BACKEND   tfidf | st | auto（默认 auto）
-    TRADE_ST_MODEL            sentence-transformers 模型名
+    AGENTBASE_EMBEDDING_BACKEND   tfidf | st | auto（默认 auto）
+    AGENTBASE_ST_MODEL            sentence-transformers 模型名
                               （默认 paraphrase-multilingual-MiniLM-L12-v2，
                                中英双语）
 """
@@ -178,13 +178,13 @@ class TfidfBackend(EmbeddingBackend):
 class SentenceTransformersBackend(EmbeddingBackend):
     """sentence-transformers 后端（可选依赖，质量更高）。
 
-    模型通过 TRADE_ST_MODEL 指定，默认 paraphrase-multilingual-MiniLM-L12-v2。
+    模型通过 AGENTBASE_ST_MODEL 指定，默认 paraphrase-multilingual-MiniLM-L12-v2。
     首次 embed 时懒加载模型；未安装时抛 ImportError 由上层回退。
     """
 
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or os.environ.get(
-            "TRADE_ST_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
+            "AGENTBASE_ST_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
         )
         self._model = None
         self._dim = 0
@@ -206,7 +206,7 @@ class SentenceTransformersBackend(EmbeddingBackend):
             except ImportError as e:
                 raise ImportError(
                     "sentence-transformers 未安装：pip install sentence-transformers "
-                    "，或设置 TRADE_EMBEDDING_BACKEND=tfidf 使用零依赖后端。"
+                    "，或设置 AGENTBASE_EMBEDDING_BACKEND=tfidf 使用零依赖后端。"
                 ) from e
             logger.info("Loading sentence-transformers model: %s", self.model_name)
             self._model = SentenceTransformer(self.model_name)
@@ -231,11 +231,11 @@ _backend_lock = threading.Lock()
 def get_backend(kind: str | None = None, *, scope: str = "default") -> EmbeddingBackend:
     """返回某用途（scope）的后端实例：scope 内单例，scope 间互不影响。
 
-    kind: "tfidf" | "st" | "auto" | None（读 TRADE_EMBEDDING_BACKEND，默认 tfidf）。
+    kind: "tfidf" | "st" | "auto" | None（读 AGENTBASE_EMBEDDING_BACKEND，默认 tfidf）。
     auto 优先 sentence-transformers，不可用则回退 tfidf（并记日志）；
     注意 auto/st 首次加载模型可能触发下载（数百 MB），离线/弱网环境别用。
     """
-    kind = (kind or os.environ.get("TRADE_EMBEDDING_BACKEND", "tfidf")).strip().lower()
+    kind = (kind or os.environ.get("AGENTBASE_EMBEDDING_BACKEND", "tfidf")).strip().lower()
     with _backend_lock:
         existing = _backends.get(scope)
         if existing is not None:

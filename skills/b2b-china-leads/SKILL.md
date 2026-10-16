@@ -123,7 +123,7 @@ injection_prompt: |
 
 <!-- 维护提示：本技能有三处表述必须同步 —— ① 本文件 frontmatter 的 injection_prompt
      （路由命中时注入，日常实际生效的是它）；② 本文件正文（skill_view 加载时读，含
-     Phase 流程细节）；③ trade/skill_registry.py 里 b2b-china-leads 的 augment_prompt
+     Phase 流程细节）；③ agentbase/skill_registry.py 里 b2b-china-leads 的 augment_prompt
      （SKILL.md 的 injection_prompt 缺失时兜底）。改任何一处流程/数字，三处一起改。 -->
 
 # b2b-china-leads — 国内企业线索挖掘（免费渠道版）

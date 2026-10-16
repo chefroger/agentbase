@@ -2,7 +2,7 @@
 Trade AI Assistant — OSINT Intelligence Module.
 
 Comprehensive B2B due-diligence toolkit covering 6 layers:
-  Layer 1 : holehe email registration (in trade/email_intel.py)
+  Layer 1 : holehe email registration (in agentbase/email_intel.py)
   Layer 2 : WHOIS domain lookup
   Layer 3 : corporate email verification (vs personal email)
   Layer 4 : sanctions list screening (OFAC / UN / EU)

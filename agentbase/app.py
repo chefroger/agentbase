@@ -178,26 +178,26 @@ def _ensure_gateway_running() -> None:
 
 def _get_trade_data_dir() -> Path:
     """返回 Trade 数据目录（跨平台），与 database._get_db_path 逻辑一致。"""
-    trade_home = os.environ.get("AGENT_HOME", "").strip()
-    if not trade_home:
+    agentbase_home = os.environ.get("AGENT_HOME", "").strip()
+    if not agentbase_home:
         if os.name == "nt":
             _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-            trade_home = str(Path(_local) / "agentbase")
+            agentbase_home = str(Path(_local) / "agentbase")
         else:
-            trade_home = str(Path.home() / ".agentbase")
-    return Path(trade_home) / "data"
+            agentbase_home = str(Path.home() / ".agentbase")
+    return Path(agentbase_home) / "data"
 
 
 def _get_trade_home_path() -> Path:
     """返回 Trade 根目录（不带 /data 后缀），与 _get_trade_data_dir 逻辑一致。"""
-    trade_home = os.environ.get("AGENT_HOME", "").strip()
-    if not trade_home:
+    agentbase_home = os.environ.get("AGENT_HOME", "").strip()
+    if not agentbase_home:
         if os.name == "nt":
             _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-            trade_home = str(Path(_local) / "agentbase")
+            agentbase_home = str(Path(_local) / "agentbase")
         else:
-            trade_home = str(Path.home() / ".agentbase")
-    return Path(trade_home)
+            agentbase_home = str(Path.home() / ".agentbase")
+    return Path(agentbase_home)
 
 
 def _client_is_loopback(request) -> bool:
@@ -208,7 +208,7 @@ def _client_is_loopback(request) -> bool:
 
 def _remote_ui_allowed() -> bool:
     """是否显式允许向非本机客户端下发 token（局域网使用场景，默认关闭）。"""
-    return os.environ.get("TRADE_ALLOW_REMOTE_UI", "").strip().lower() in ("1", "true", "yes")
+    return os.environ.get("AGENTBASE_ALLOW_REMOTE_UI", "").strip().lower() in ("1", "true", "yes")
 
 
 def _client_may_receive_token(request) -> bool:
@@ -217,7 +217,7 @@ def _client_may_receive_token(request) -> bool:
     session token 是唯一凭据，而 /trade 页面无需鉴权即可获取 ——
     若绑定 --host 0.0.0.0 时照常下发，局域网内任意主机 fetch 该页即可拿到
     token 并接管全部 API（包括 /system/update 这类系统端点）。
-    默认只给本机回环客户端；确需局域网访问时用 TRADE_ALLOW_REMOTE_UI=1 显式开启。
+    默认只给本机回环客户端；确需局域网访问时用 AGENTBASE_ALLOW_REMOTE_UI=1 显式开启。
     """
     return _remote_ui_allowed() or _client_is_loopback(request)
 
@@ -365,8 +365,8 @@ def _perform_restart() -> None:
         except Exception:
             pass
 
-    trade_data = _get_trade_data_dir()
-    pid_file = trade_data / "agentbase.pid"
+    agentbase_data = _get_trade_data_dir()
+    pid_file = agentbase_data / "agentbase.pid"
     old_pid = os.getpid()  # 直接用自己的 PID，不从文件读（更可靠）
 
     # 记录启动命令，交给 shell 子进程执行
@@ -444,9 +444,9 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
       4. 无论成败都启动 Trade —— 失败了也要用旧环境把服务拉回来，
          否则用户面对的是一台彻底打不开的机器，比升级前还糟
     """
-    trade_dir = _trade_runtime_dir()
-    trade_home = _get_trade_home_path()
-    log_dir = trade_home / "logs"
+    agentbase_dir = _trade_runtime_dir()
+    agentbase_home = _get_trade_home_path()
+    log_dir = agentbase_home / "logs"
     log_file = log_dir / "rebuild-venv.log"
 
     try:
@@ -457,7 +457,7 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
     old_pid = os.getpid()
 
     if os.name == "nt":
-        # Windows：安装脚本是 PowerShell，启动器是 install.ps1 生成的 trade.cmd。
+        # Windows：安装脚本是 PowerShell，启动器是 install.ps1 生成的 agentbase.cmd。
         #
         # ⚠️ 这个路径必须与 install.ps1 的 `$LocalBin = "$env:LOCALAPPDATA\local\bin"`
         # 严格一致。2026-10-16 评审抓到过一次写错的后果：原来少了 `local\bin` 一层，
@@ -465,7 +465,7 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
         # 「正在重建」直到 15 分钟超时 —— 比不重建还糟，因为用户以为在正常推进。
         # 回归测试：tests/test_venv_rebuild.py::TestWindowsLauncherPath。
         _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        ps1 = trade_dir / "scripts" / "install.ps1"
+        ps1 = agentbase_dir / "scripts" / "install.ps1"
         launcher = Path(_local) / "local" / "bin" / "agentbase.cmd"
         if not ps1.is_file():
             return None
@@ -482,7 +482,7 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
         return (["cmd", "/c", script], str(log_file))
 
     # POSIX：安装脚本是 install.sh，启动器是 ~/.local/bin/trade
-    sh = trade_dir / "scripts" / "install.sh"
+    sh = agentbase_dir / "scripts" / "install.sh"
     launcher = Path.home() / ".local" / "bin" / "trade"
     if not sh.is_file():
         return None
@@ -780,14 +780,14 @@ def create_app() -> FastAPI:
 
     # 挂载 license 路由（无需 session token）
     from agentbase.api.license import router as license_router
-    app.include_router(license_router, prefix="/api/trade")
+    app.include_router(license_router, prefix="/api/agentbase")
 
     # 挂载 system 路由（需要 session token）
-    app.include_router(_create_system_router(), prefix="/api/trade")
+    app.include_router(_create_system_router(), prefix="/api/agentbase")
 
     # 挂载 Trade API 路由
-    from agentbase.api import router as trade_router
-    app.include_router(trade_router, prefix="/api/trade")
+    from agentbase.api import router as api_router
+    app.include_router(api_router, prefix="/api/agentbase")
 
     # Health check
     @app.get("/api/status", include_in_schema=False)
@@ -869,7 +869,7 @@ def serve_trade_chat(app: FastAPI) -> None:
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     @app.get("/trade", response_class=HTMLResponse, include_in_schema=False)
-    async def trade_chat_ui(request: Request):
+    async def agentbase_chat_ui(request: Request):
         """Serve the B2B chat interface with session token injected.
 
         非本机来源不下发 token（见 _client_may_receive_token）：token 是唯一凭据，
@@ -890,7 +890,7 @@ def serve_trade_chat(app: FastAPI) -> None:
                     '以免局域网内其它主机取得凭据后接管全部接口。</p>'
                     '<p>请在这台机器上访问 <code>http://127.0.0.1:{port}/trade</code>。</p>'
                     '<p style="color:#666;font-size:0.9rem;">确需局域网访问时，'
-                    '可在启动前设置环境变量 <code>TRADE_ALLOW_REMOTE_UI=1</code>（会降低安全性）。</p>'
+                    '可在启动前设置环境变量 <code>AGENTBASE_ALLOW_REMOTE_UI=1</code>（会降低安全性）。</p>'
                     '</body></html>'
                 ).replace("{port}", str(getattr(request.url, "port", "") or "")),
                 status_code=403,

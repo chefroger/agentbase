@@ -1,7 +1,7 @@
 """chat-memory 插件的工具实现。
 
-为何需要把 search_history 薄封装一次，而不是让 LLM 直接调 trade.chat_memory：
-- 该模块期望在**trade 进程内**被 import（从 trade.chat_memory 路径）—— 在 Hermes 进程里
+为何需要把 search_history 薄封装一次，而不是让 LLM 直接调 agentbase.chat_memory：
+- 该模块期望在**trade 进程内**被 import（从 agentbase.chat_memory 路径）—— 在 Hermes 进程里
   import 是 Hermes 自己的 trade 安装副本（如果有），未必一致。
 - 通过插件 __init__.py 把 trade 注入到 Hermes 进程的 sys.path 后再 import；这里是**接缝**。
 """
@@ -24,7 +24,7 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
     return {"name": name, "description": description, "parameters": params}
 
 
-# 枚举值与 trade.chat_memory.search_history 的 _BOUNDARY_COMPUTERS 一一对应。
+# 枚举值与 agentbase.chat_memory.search_history 的 _BOUNDARY_COMPUTERS 一一对应。
 # 增删时**两边同步**（测试钉住）。
 _TIME_RANGES_DESCRIPTION = """\
 时间范围枚举：

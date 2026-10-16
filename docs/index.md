@@ -172,9 +172,9 @@ trade
 hermes gateway install
 ```
 
-这会安装一个 macOS 后台服务（`com.foreign-trade.gateway`，端口 8642），开机后自动启动 **Hermes Gateway**。注意：它只负责 Gateway，**不包含 Trade 本体**。
+这会安装一个 macOS 后台服务（`com.foreign-agentbase.gateway`，端口 8642），开机后自动启动 **Hermes Gateway**。注意：它只负责 Gateway，**不包含 Trade 本体**。
 
-Trade 服务本身的开机自启由安装脚本 `scripts/install.sh` 单独配置（写入 `~/Library/LaunchAgents/com.trade.assistant.plist`，开机静默启动 `trade`）。
+Trade 服务本身的开机自启由安装脚本 `scripts/install.sh` 单独配置（写入 `~/Library/LaunchAgents/com.agentbase.assistant.plist`，开机静默启动 `trade`）。
 
 > 以后的使用方式（仅对经 `install.sh` 安装的用户成立）：开机后等约 30 秒，Trade 与 Gateway 均已自启，直接浏览器访问 **http://127.0.0.1:9120/agentbase** 即可；若未配置 Trade 自启，仍需先手动运行 `trade` 再访问。
 
@@ -361,7 +361,7 @@ hermes gateway install
 
 **这一步正常情况下不需要你做。** 首次运行 `trade` 时，程序会自动完成：
 
-1. 在 `%LOCALAPPDATA%\trade\` 生成隐藏窗口启动器（`trade-autostart.bat` + `.vbs`）
+1. 在 `%LOCALAPPDATA%\agentbase\` 生成隐藏窗口启动器（`trade-autostart.bat` + `.vbs`）
 2. 注册登录自启的计划任务 `SmartTradeAI`（**不弹终端窗口**）
 3. 在桌面创建 **Trade** 快捷方式（双击 = 启动服务并打开界面）
 4. 清理旧版遗留的、会弹终端窗口的自启方式
@@ -370,9 +370,9 @@ hermes gateway install
 就把那个窗口切到前台**（不会重复开标签页）；没开才新开。浏览器不向外部程序暴露「聚焦已有
 标签页」的能力，所以这是按窗口标题找回的。
 
-启动日志在 `%LOCALAPPDATA%\trade\trade-autostart.log`（隐藏窗口后看不到控制台，出问题看这个文件）。
+启动日志在 `%LOCALAPPDATA%\agentbase\trade-autostart.log`（隐藏窗口后看不到控制台，出问题看这个文件）。
 
-> 想跳过这套自动配置（例如你有自己的启动方式）：设环境变量 `TRADE_SKIP_AUTOSTART_SETUP=1`。
+> 想跳过这套自动配置（例如你有自己的启动方式）：设环境变量 `AGENTBASE_SKIP_AUTOSTART_SETUP=1`。
 >
 > 从旧版本升级上来的机器若曾用手动方案配过，程序会自动把注册表里的旧自启项清掉并改用计划任务，**不会双重启动**。
 
@@ -406,13 +406,13 @@ WshShell.Run "cmd /c ""$bat""", 0, False
 **10.2 注册登录自启（计划任务，隐藏窗口）**
 
 ```powershell
-schtasks /create /tn SmartTradeAI /sc onlogon /rl limited /f /tr "wscript.exe \"$env:LOCALAPPDATA\trade\trade-autostart.vbs\""
+schtasks /create /tn SmartTradeAI /sc onlogon /rl limited /f /tr "wscript.exe \"$env:LOCALAPPDATA\agentbase\trade-autostart.vbs\""
 ```
 
 **10.3 创建桌面快捷方式**
 
 > **桌面上只应有一个 `Trade.lnk` 快捷方式，不要放 .vbs / .bat 文件** —— 启动器脚本都在
-> `%LOCALAPPDATA%\trade\` 下，快捷方式只是指向它们。直接把 .vbs 拖到桌面会多出一个可执行
+> `%LOCALAPPDATA%\agentbase\` 下，快捷方式只是指向它们。直接把 .vbs 拖到桌面会多出一个可执行
 > 文件，既容易被误删，也可能被杀软拦截。
 
 ```powershell
@@ -422,16 +422,16 @@ $sc = $ws.CreateShortcut($lnk)
 $sc.TargetPath = "wscript.exe"
 # 注意指向 trade-open.vbs（打开界面），不是 trade-autostart.vbs（那个只启动服务、
 # 不开浏览器）—— 早期文档写错了这一处，照抄会得到"启动了但页面不弹"的快捷方式
-$sc.Arguments = "\"$env:LOCALAPPDATA\trade\trade-open.vbs\""
+$sc.Arguments = "\"$env:LOCALAPPDATA\agentbase\trade-open.vbs\""
 $sc.Description = "打开 Trade 外贸 AI 助手"
 $sc.Save()
 ```
 
 **10.4 验证**
 
-执行 `wscript.exe "$env:LOCALAPPDATA\trade\trade-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9120/agentbase**。能看到界面、且**没有弹出终端窗口**即为正确。
+执行 `wscript.exe "$env:LOCALAPPDATA\agentbase\trade-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9120/agentbase**。能看到界面、且**没有弹出终端窗口**即为正确。
 
-> 打不开就看 `%LOCALAPPDATA%\trade\trade-autostart.log`。最常见的是 `ModuleNotFoundError`，说明 trade 没装好。
+> 打不开就看 `%LOCALAPPDATA%\agentbase\trade-autostart.log`。最常见的是 `ModuleNotFoundError`，说明 trade 没装好。
 
 **10.5 取消开机自启**
 
@@ -515,11 +515,11 @@ sentence-transformers 属可选项，装了更好、不装自动降级）。
 | 上面的升级提示「升级失败」 | 多半是网络中途断了。确认科学上网正常后点「重试升级」；反复失败就把界面上的日志复制发给技术支持 |
 | 第五步安装 Hermes 卡住不动 | 科学上网没开好。确认 VPN 是全局模式，关掉 PowerShell 重开再试 |
 | `hermes` 输入后提示「不是内部或外部命令」 | 关掉 PowerShell 重新打开一个新的 |
-| `trade` 输入后提示「不是内部或外部命令」 | 改成输入 `cd $env:LOCALAPPDATA\trade\agentbase` 然后 `python server.py` |
+| `trade` 输入后提示「不是内部或外部命令」 | 改成输入 `cd $env:LOCALAPPDATA\agentbase\agentbase` 然后 `python server.py` |
 | 任何功能不对劲 | 先跑 `agentbase doctor` —— 它会端到端验活并指出是哪一项坏了（见「自检」一节） |
 | Hermes 对话没反应 | API Key 没配置对。重新运行 `hermes setup` 检查 |
 | 浏览器打开显示「无法访问此网站」 | 程序没在运行。打开一个新的 PowerShell，输入 `trade` 启动 |
-| 开机后访问 127.0.0.1:9120/agentbase 打不开 | Trade 自启还没跑完，等 30 秒再试。若仍不行，打开 `%LOCALAPPDATA%\trade\trade-autostart.log` 看错误日志；或按 `Win+R` 输入 `taskmgr` 回车，看进程里有没有 `python.exe`，没有就手动运行第十步的 VBS 脚本 |
+| 开机后访问 127.0.0.1:9120/agentbase 打不开 | Trade 自启还没跑完，等 30 秒再试。若仍不行，打开 `%LOCALAPPDATA%\agentbase\trade-autostart.log` 看错误日志；或按 `Win+R` 输入 `taskmgr` 回车，看进程里有没有 `python.exe`，没有就手动运行第十步的 VBS 脚本 |
 | 定时任务（每日简报等）不执行 | 第九步的 Hermes Gateway 没装好或没运行。重新执行 `hermes gateway install`，再到 `services.msc` 确认服务状态 |
 | 收不到桌面 Trade 图标 | 首次运行 `trade` 时自动创建；被删了的话重启一次 Trade 会重新生成，仍没有就按第十步手动创建 |
 | 登录后弹出黑色终端窗口 | 自启任务还是旧版（直接跑 python.exe）。重启一次 Trade 会自动换成隐藏窗口版本；没换掉就按第十步手动重建计划任务 |

@@ -122,7 +122,7 @@ _MIN_HERMES_VERSION_314 = "0.21.6"
 def _checkout_pyproject() -> Path | None:
     """不导入 Hermes，直接定位 checkout 的 pyproject.toml；找不到返回 None。
 
-    复用 `trade.bootstrap._resolve_hermes_checkout()`（纯路径判定，含 `hermes_cli/` 目录
+    复用 `agentbase.bootstrap._resolve_hermes_checkout()`（纯路径判定，含 `hermes_cli/` 目录
     才算数）。延迟导入避免模块级循环：bootstrap 也在函数内延迟导入本模块。
     """
     try:
