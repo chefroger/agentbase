@@ -40,15 +40,15 @@ class _SlowAgent:
 
 @pytest.fixture
 def company(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
 
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
 
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -62,15 +62,15 @@ def company(monkeypatch, tmp_path):
 
 
 async def _collect(company: dict) -> str:
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     # 让 deadline 立刻过期（负数 = 已超时）
     with patch.object(chat, "_STREAM_DEADLINE_SECONDS", -1.0), \
          patch.object(chat, "create_agent", return_value=_SlowAgent()), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
-         patch("trade.license.check_license", return_value=(True, "")):
+         patch("agentbase.license.check_license", return_value=(True, "")):
         resp = await chat.trade_chat_stream(
             ChatRequest(query="做个网站诊断"), company["id"]
         )

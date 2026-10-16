@@ -46,7 +46,7 @@ class TestSkillsInstallStep:
     def test_uses_working_entry(self):
         """必须出现可用的入口：console script 或 install_skills 调用。"""
         for name, text in (("install.sh", SH), ("install.ps1", PS1)):
-            assert ("install-trade-skills" in text) or ("install_skills" in text), \
+            assert ("install-agentbase-skills" in text) or ("install_skills" in text), \
                 f"{name} 找不到可用的 skills 安装入口"
 
 
@@ -56,7 +56,7 @@ class TestSkillsEntryActuallyWorks:
     def test_install_skills_writes_into_hermes_home(self, monkeypatch, tmp_path):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
 
-        from trade.post_install import install_skills
+        from agentbase.post_install import install_skills
 
         install_skills()
 
@@ -373,7 +373,7 @@ class TestPowerShellChecksPipExitCodes:
 
 
 class TestPowerShellLauncherEncoding:
-    """trade.cmd 用 ASCII 落盘会把中文用户名路径写成 '?'。
+    """agentbase.cmd 用 ASCII 落盘会把中文用户名路径写成 '?'。
 
     `-Encoding ASCII` 把每个非 ASCII 字符替换为 `?` 且**不报错**。中文 Windows
     用户名（C:\\Users\\张伟\\...）是本产品的主力用户群，写坏后 `trade` 命令报
@@ -385,7 +385,7 @@ class TestPowerShellLauncherEncoding:
         body = _code_lines(PS1)
 
         assert "-Encoding ASCII" not in body, (
-            "trade.cmd 仍用 ASCII 编码 —— 中文用户名路径会被写成 '?'"
+            "agentbase.cmd 仍用 ASCII 编码 —— 中文用户名路径会被写成 '?'"
         )
 
     def test_launcher_uses_unicode_capable_encoding(self):
@@ -407,7 +407,7 @@ class TestPowerShellLauncherEncoding:
         """
         for name, text in (("install.sh", SH), ("install.ps1", PS1)):
             line = next(
-                (ln for ln in text.splitlines() if "run_doctor" in ln and "trade.doctor" in ln),
+                (ln for ln in text.splitlines() if "run_doctor" in ln and "agentbase.doctor" in ln),
                 None,
             )
             assert line, f"{name} 未见调用 trade.doctor 的自检行"
@@ -415,7 +415,7 @@ class TestPowerShellLauncherEncoding:
                 f"{name} 的自检没有先准备 Hermes 的 import 路径"
             )
             # 顺序必须真的对：先准备路径，再 import doctor
-            assert line.index("prepare_hermes_import_paths()") < line.index("trade.doctor"), (
+            assert line.index("prepare_hermes_import_paths()") < line.index("agentbase.doctor"), (
                 f"{name} 的自检把 import doctor 排在了路径准备之前"
             )
 
@@ -507,13 +507,13 @@ class TestVenvRebuildIsAtomic:
         assert "Invoke-RollbackCode" in body, "install.ps1 未实现代码回滚"
 
     def test_ps1_swap_happens_after_import_probe(self):
-        """ps1 的切换点还要更靠后 —— 排在 `import trade.app` 探针之后。
+        """ps1 的切换点还要更靠后 —— 排在 `import agentbase.app` 探针之后。
 
         sh 版没有这个探针，ps1 版有（第 240 行附近），所以它的失败面可以更小：
-        新环境连 `import trade.app` 都过不了就绝不切换。
+        新环境连 `import agentbase.app` 都过不了就绝不切换。
         """
         body = _code_lines(PS1)
-        probe_at = body.index('import trade.app')
+        probe_at = body.index('import agentbase.app')
         swap_at = body.index("if ($VenvOld)", probe_at)
         assert swap_at > probe_at, "install.ps1 在 import 探针之前就切换运行环境了"
 

@@ -23,7 +23,7 @@ jobs:
             setup-cmd: |
               pip install -e ".[desktop]"
               pip install pyinstaller>=6.0
-            spec-path: tradewin-mac.spec
+            spec-path: desktop-mac.spec
             artifact-glob: dist/TradeWin-*.zip
             asset-suffix: "-macOS.zip"
             post-build: |

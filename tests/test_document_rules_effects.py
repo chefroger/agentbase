@@ -3,7 +3,7 @@
 
 为什么需要这个文件：这一轮改动同时触及「提示词里的规则」和「机械门禁」两层，
 而两层是否真的生效，读代码不足以判断（本项目已多次出现「文档写着、代码也在、
-运行时不生效」）。这里用脚本化的假 Agent 驱动真实的 trade_chat()，
+运行时不生效」）。这里用脚本化的假 Agent 驱动真实的 app()，
 把各种读取剧本各跑一遍，断言**实际结果**。
 
 运行条件刻意设为「客户机形态」：Hermes 不提供结构化读取快照
@@ -65,13 +65,13 @@ class ScriptedAgent:
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """临时库 + 公司；库内含 1 个文本文件与 1 个 xlsx（都需完整读取）。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -88,15 +88,15 @@ def env(monkeypatch, tmp_path):
     (lib_dir / "合同.txt").write_text("甲\n乙\n丙\n", encoding="utf-8")
     (lib_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
 
-    import trade.library as lib
+    import agentbase.library as lib
     library = lib.create("规则库", str(lib_dir), company_id=company["id"])
     return {"cid": company["id"], "library": library, "dir": lib_dir}
 
 
 async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, library_id=True):
-    """跑一次真实 trade_chat()，返回响应体。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    """跑一次真实 app()，返回响应体。"""
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     saved = saved if saved is not None else []
     scripted = ScriptedAgent(script)
@@ -113,13 +113,13 @@ async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, library_id=T
     with patch.object(chat, "create_agent", side_effect=_create_agent), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=None), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", side_effect=_save):
         payload = ChatRequest(
             query=query,
             library_id=(env["library"]["id"] if library_id else None),
         )
-        return await chat.trade_chat(payload, env["cid"])
+        return await chat.app(payload, env["cid"])
 
 
 # ── 通过路径 ────────────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ async def test_changed_file_during_analysis_blocks(env):
     # 在第 2 个工具调用前改文件：用回调顺序无法插桩，改用「先改文件再跑」+
     # 让清单在校验时看到不同指纹 —— 这里直接走真实路径：先跑一次读，
     # 再在 evaluate 前改文件不可行，故用 monkeypatch 模拟指纹变化。
-    import trade.document_task as dt
+    import agentbase.document_task as dt
     original = dt.DocumentTask._fingerprint_changed
     calls = {"n": 0}
 
@@ -284,7 +284,7 @@ class TestPromptRulesReachModel:
 
     def _build(self, env, query, *, library_id=None, calls=1):
         """连续调用 build_query（第 2 次起走「非首轮」档），返回最后一次结果。"""
-        import trade.helpers as helpers
+        import agentbase.helpers as helpers
 
         result = None
         for _ in range(calls):

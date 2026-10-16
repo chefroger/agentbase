@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def cron_env(monkeypatch, tmp_path):
     """把 cron 的 jobs.json / output 目录指到临时位置。"""
-    import trade.api.cron as cron
+    import agentbase.api.cron as cron
 
     hermes = tmp_path / "hermes"
     (hermes / "cron" / "output").mkdir(parents=True)

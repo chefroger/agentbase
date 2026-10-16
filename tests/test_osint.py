@@ -7,7 +7,7 @@ OSINT 模块测试 — 各层检测功能 + orchestrator 编排。
 换成桩（WHOIS socket / DNS MX / 制裁下载 / 官网抓取），断言打的是**解析与判定
 逻辑**，不再是"真实端点今天通不通"。此前这套测试会真下载 OFAC 名单
 （实测单用例 108s）、真连 WHOIS 服务器，套件耗时在 2~7 分钟之间随网络抖动，
-墙内跑还可能大面积 skip。需要"真实端点还活着"的验证由 `trade doctor` 承担
+墙内跑还可能大面积 skip。需要"真实端点还活着"的验证由 `agentbase doctor` 承担
 （它本来就做端到端验活）。
 """
 
@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.osint import (
+from agentbase.osint import (
     check_sanctions,
     compute_risk_score,
     detect_tech_stack,
@@ -81,11 +81,11 @@ def _osint_stays_offline(monkeypatch):
 
     被拦的都是**传输**；各层的解析/判定/评分逻辑仍然是真代码。
     """
-    import trade.osint.email_verify as _email
-    import trade.osint.orchestrator as _orch
-    import trade.osint.sanctions.loader as _loader
-    import trade.osint.whois as _whois
-    from trade import email_intel as _intel
+    import agentbase.osint.email_verify as _email
+    import agentbase.osint.orchestrator as _orch
+    import agentbase.osint.sanctions.loader as _loader
+    import agentbase.osint.whois as _whois
+    from agentbase import email_intel as _intel
 
     monkeypatch.setattr(_whois, "_query_whois_server", lambda domain, server, port=43, timeout=10: _FAKE_WHOIS_COM)
     monkeypatch.setattr(_email, "_query_mx_records", lambda domain: (["mx1.example.com"], True, None))
@@ -464,7 +464,7 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_email_full_check(self):
         """对邮箱执行完整尽职调查。"""
-        from trade.osint import osint_full_check
+        from agentbase.osint import osint_full_check
         result = await osint_full_check(
             "test@example.com",
             include_sanctions=True,
@@ -481,7 +481,7 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_domain_full_check(self):
         """对域名执行完整尽职调查。"""
-        from trade.osint import osint_full_check
+        from agentbase.osint import osint_full_check
         result = await osint_full_check(
             "example.com",
             include_sanctions=False,
@@ -494,7 +494,7 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_company_name_full_check(self):
         """对公司名执行完整尽职调查。"""
-        from trade.osint import osint_full_check
+        from agentbase.osint import osint_full_check
         result = await osint_full_check(
             "Microsoft Corporation",
             include_sanctions=True,
@@ -507,7 +507,7 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_risk_score_computed(self):
         """orchestrator 应计算综合风险评分。"""
-        from trade.osint import osint_full_check
+        from agentbase.osint import osint_full_check
         result = await osint_full_check(
             "test@example.com",
             include_sanctions=True,
@@ -528,22 +528,22 @@ class TestTargetDetection:
 
     def test_email_detection(self):
         """含 @ 的应识别为 email。"""
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
         assert _detect_target_type("john@example.com") == "email"
 
     def test_url_detection(self):
         """含 https:// 的应识别为 url。"""
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
         assert _detect_target_type("https://example.com") == "url"
 
     def test_domain_detection(self):
         """example.com 应识别为 domain。"""
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
         assert _detect_target_type("example.com") == "domain"
 
     def test_company_detection(self):
         """纯公司名应识别为 company。"""
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
         assert _detect_target_type("Microsoft Corp") == "company"
 
 
@@ -555,64 +555,64 @@ class TestSSRFProtection:
 
     def test_private_ip_blocked(self):
         """127.0.0.1 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("127.0.0.1") is True
 
     def test_private_ip_192(self):
         """192.168.x.x 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("192.168.1.1") is True
 
     def test_private_ip_10(self):
         """10.x.x.x 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("10.0.0.1") is True
 
     def test_private_ip_172(self):
         """172.16.x.x 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("172.16.0.1") is True
 
     def test_link_local_blocked(self):
         """169.254.x.x 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("169.254.1.1") is True
 
     def test_multicast_blocked(self):
         """224.x.x.x 应被拦截。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("224.0.0.1") is True
 
     def test_public_ip_allowed(self):
         """8.8.8.8 公网 IP 应放行。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("8.8.8.8") is False
 
     def test_public_domain_allowed(self):
         """example.com 公网域名应放行。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("example.com") is False
 
     def test_ofac_url_allowed(self):
         """制裁名单 URL（ofac.treasury.gov）应放行。"""
-        from trade.osint.constants import _is_private_host
+        from agentbase.osint.constants import _is_private_host
         assert _is_private_host("ofac.treasury.gov") is False
 
     def test_http_get_blocks_private(self):
         """http_get 访问内网地址应返回 None。"""
-        from trade.osint.constants import http_get
+        from agentbase.osint.constants import http_get
         result = http_get("http://127.0.0.1/", timeout=3)
         assert result is None
 
     def test_http_get_blocks_localhost(self):
         """http_get 访问 localhost 应返回 None。"""
-        from trade.osint.constants import http_get
+        from agentbase.osint.constants import http_get
         result = http_get("http://localhost/", timeout=3)
         assert result is None
 
     def test_tech_stack_reuses_shared_ssrf(self):
         """tech_stack 模块应复用 constants._is_private_host 而非重复实现。"""
-        import trade.osint.tech_stack as ts
+        import agentbase.osint.tech_stack as ts
         # 不应有自己的 _BLOCKED_RANGES（说明复用了 constants 的共享实现）
         assert not hasattr(ts, "_BLOCKED_RANGES"), \
             "tech_stack should use _is_private_host from constants, not its own _BLOCKED_RANGES"
@@ -629,18 +629,18 @@ class TestEntityNameResolution:
     """
 
     def test_title_main_part_is_used(self):
-        from trade.osint.orchestrator import _resolve_entity_name
+        from agentbase.osint.orchestrator import _resolve_entity_name
 
         html = "<html><head><title>ACME Corp | Official Site</title></head></html>"
         assert _resolve_entity_name("acme.com", fetcher=lambda url, timeout=15: html) == "ACME Corp"
 
     def test_too_short_title_is_rejected(self):
-        from trade.osint.orchestrator import _resolve_entity_name
+        from agentbase.osint.orchestrator import _resolve_entity_name
 
         assert _resolve_entity_name("x.com", fetcher=lambda url, timeout=15: "<title>ab</title>") is None
 
     def test_empty_response_or_no_domain_yields_none(self):
-        from trade.osint.orchestrator import _resolve_entity_name
+        from agentbase.osint.orchestrator import _resolve_entity_name
 
         empty = lambda url, timeout=15: ""  # noqa: E731 — 测试内联桩，保持简短
         assert _resolve_entity_name("acme.com", fetcher=empty) is None
@@ -653,7 +653,7 @@ class TestEntityNameResolution:
 
     def test_fetcher_exception_is_swallowed(self):
         """取页面失败不能让整份报告崩 —— 回退 None。"""
-        from trade.osint.orchestrator import _resolve_entity_name
+        from agentbase.osint.orchestrator import _resolve_entity_name
 
         def _boom(url, timeout=15):
             raise OSError("网络炸了")
@@ -665,12 +665,12 @@ class TestIDNTargetDetection:
     """IDN（中文域名等）必须识别为 domain 而不是公司名（优化路线 P0-4）。"""
 
     def test_chinese_idn_is_domain(self):
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
 
         assert _detect_target_type("例子.中国") == "domain"
 
     def test_ascii_behaviour_unchanged(self):
-        from trade.osint.orchestrator import _detect_target_type
+        from agentbase.osint.orchestrator import _detect_target_type
 
         assert _detect_target_type("example.com") == "domain"
         assert _detect_target_type("北京科技有限公司") == "company"

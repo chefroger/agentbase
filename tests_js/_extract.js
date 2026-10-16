@@ -1,5 +1,5 @@
 /**
- * 从 static/trade_chat.js 里按 `#region <name>` / `#endregion <name>` 标记抽出一段源码。
+ * 从 static/app.js 里按 `#region <name>` / `#endregion <name>` 标记抽出一段源码。
  *
  * 为什么用标记而不是大括号配对：源码里有正则字面量（如 /[&<>"']/g），任何基于引号
  * 状态机的配对都会把正则里的引号误判成字符串起点。标记法简单且不会误判。
@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert');
 
-const JS_PATH = path.join(__dirname, '..', 'static', 'trade_chat.js');
+const JS_PATH = path.join(__dirname, '..', 'static', 'app.js');
 const SRC = fs.readFileSync(JS_PATH, 'utf8');
 
 /**
@@ -21,8 +21,8 @@ function extractRegion(name, src = SRC) {
     const end = `// #endregion ${name}`;
     const start = src.indexOf(begin);
     const stop = src.indexOf(end);
-    assert.ok(start !== -1, `static/trade_chat.js 里必须存在标记 ${begin}`);
-    assert.ok(stop > start, `static/trade_chat.js 里必须存在标记 ${end}`);
+    assert.ok(start !== -1, `static/app.js 里必须存在标记 ${begin}`);
+    assert.ok(stop > start, `static/app.js 里必须存在标记 ${end}`);
     return src.slice(start, stop);
 }
 

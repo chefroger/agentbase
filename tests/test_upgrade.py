@@ -25,7 +25,7 @@ def _bypass_interpreter_guard(monkeypatch):
     真实守卫会把整个流程拦掉 —— 那是守卫在正常工作，不是被测代码有问题。
     守卫自身的逻辑与接线由 tests/test_doctor.py::TestUpdateInterpreterGuard 覆盖。
     """
-    from trade.post_install import update as upd
+    from agentbase.post_install import update as upd
 
     monkeypatch.setattr(upd, "_refuse_reason_for_interpreter", lambda: None)
 
@@ -38,7 +38,7 @@ class TestCaptureOutput:
 
     def test_capture_print_output(self):
         """正常函数的 print 输出应被捕获。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         def hello():
             print("hello world")
@@ -49,7 +49,7 @@ class TestCaptureOutput:
 
     def test_capture_return_string_as_file(self):
         """返回字符串的函数（如 backup_trade）应设 file 字段。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         def backup():
             print("backing up...")
@@ -61,7 +61,7 @@ class TestCaptureOutput:
 
     def test_capture_exception(self):
         """函数抛 Exception 时应返回 ok=False。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         def boom():
             raise RuntimeError("something broke")
@@ -72,7 +72,7 @@ class TestCaptureOutput:
 
     def test_capture_system_exit(self):
         """sys.exit() 被 _capture_output 拦截，返回 ok=False 而非穿透。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         def exit_func():
             sys.exit(1)
@@ -83,7 +83,7 @@ class TestCaptureOutput:
 
     def test_capture_system_exit_message(self):
         """sys.exit("message") 的消息应包含在 error 中。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         def exit_with_msg():
             sys.exit("git pull failed")
@@ -94,7 +94,7 @@ class TestCaptureOutput:
 
     def test_stdout_restored_after_capture(self):
         """_capture_output 执行后 sys.stdout 应恢复原值。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         original = sys.stdout
         _capture_output(lambda: print("test"))
@@ -102,7 +102,7 @@ class TestCaptureOutput:
 
     def test_stdout_restored_after_exception(self):
         """函数抛异常时 sys.stdout 也应恢复。"""
-        from trade.api.cron import _capture_output
+        from agentbase.api.cron import _capture_output
 
         original = sys.stdout
         _capture_output(lambda: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -115,18 +115,18 @@ class TestCaptureOutput:
 class TestPerformRestart:
     """测试 trade.app._perform_restart（核心重启逻辑）。"""
 
-    @patch("trade.app._sp")
-    @patch("trade.app._kill_gateway")
-    @patch("trade.app._get_trade_data_dir")
+    @patch("agentbase.app._sp")
+    @patch("agentbase.app._kill_gateway")
+    @patch("agentbase.app._get_trade_data_dir")
     def test_new_process_started_before_kill(self, mock_data_dir, mock_kill_gw, mock_sp):
         """新进程应先于旧进程被杀之前启动（先 Popen 再 kill）。"""
         import tempfile
 
-        from trade.app import _perform_restart
+        from agentbase.app import _perform_restart
 
         # 准备临时 PID 文件
         tmp_dir = Path(tempfile.mkdtemp())
-        pid_file = tmp_dir / "trade.pid"
+        pid_file = tmp_dir / "agentbase.pid"
         pid_file.write_text(str(99999))  # 不存在的 PID，不会真的杀
         mock_data_dir.return_value = tmp_dir
 
@@ -135,7 +135,7 @@ class TestPerformRestart:
         mock_sp.Popen = MagicMock()
 
         # mock os.name 和 os.kill（让 PID 校验通过）
-        with patch("trade.app.os") as mock_os:
+        with patch("agentbase.app.os") as mock_os:
             mock_os.name = "posix"
             mock_os.kill = MagicMock(side_effect=OSError("no such process"))
             mock_os.getpid = MagicMock(return_value=12345)
@@ -145,14 +145,14 @@ class TestPerformRestart:
         # Popen 应被调用（新进程启动）
         assert mock_sp.Popen.called
 
-    @patch("trade.app._sp")
-    @patch("trade.app._kill_gateway")
-    @patch("trade.app._get_trade_data_dir")
+    @patch("agentbase.app._sp")
+    @patch("agentbase.app._kill_gateway")
+    @patch("agentbase.app._get_trade_data_dir")
     def test_windows_creationflags(self, mock_data_dir, mock_kill_gw, mock_sp):
         """Windows 上应使用 creationflags 而非 start_new_session。"""
         import tempfile
 
-        from trade.app import _perform_restart
+        from agentbase.app import _perform_restart
 
         tmp_dir = Path(tempfile.mkdtemp())
         mock_data_dir.return_value = tmp_dir
@@ -160,7 +160,7 @@ class TestPerformRestart:
         mock_sp.DEVNULL = -1
         mock_sp.Popen = MagicMock()
 
-        with patch("trade.app.os") as mock_os:
+        with patch("agentbase.app.os") as mock_os:
             mock_os.name = "nt"
             mock_os.getpid = MagicMock(return_value=12345)
 
@@ -171,9 +171,9 @@ class TestPerformRestart:
         assert popen_kwargs.get("creationflags") == 0x00000200
         assert "start_new_session" not in popen_kwargs
 
-    @patch("trade.app._sp")
-    @patch("trade.app._kill_gateway")
-    @patch("trade.app._get_trade_data_dir")
+    @patch("agentbase.app._sp")
+    @patch("agentbase.app._kill_gateway")
+    @patch("agentbase.app._get_trade_data_dir")
     def test_windows_script_quotes_python_path_for_cmd(self, mock_data_dir, mock_kill_gw, mock_sp):
         """Windows 重启脚本必须用 cmd 认得的双引号包裹解释器路径。
 
@@ -183,7 +183,7 @@ class TestPerformRestart:
         import subprocess as real_sp
         import tempfile
 
-        from trade.app import _perform_restart
+        from agentbase.app import _perform_restart
 
         tmp_dir = Path(tempfile.mkdtemp())
         mock_data_dir.return_value = tmp_dir
@@ -193,7 +193,7 @@ class TestPerformRestart:
         # 让被测代码能拿到真实的 list2cmdline 实现
         mock_sp.list2cmdline = real_sp.list2cmdline
 
-        with patch("trade.app.os") as mock_os:
+        with patch("agentbase.app.os") as mock_os:
             mock_os.name = "nt"
             mock_os.getpid = MagicMock(return_value=12345)
             # 解释器路径故意带空格，逼出引号处理。
@@ -207,14 +207,14 @@ class TestPerformRestart:
         assert '"C:\\Program Files\\Python313\\python.exe"' in script, f"解释器路径未被双引号包裹：{script}"
         assert "taskkill /PID 12345 /F" in script, f"脚本未先杀旧进程：{script}"
 
-    @patch("trade.app._sp")
-    @patch("trade.app._kill_gateway")
-    @patch("trade.app._get_trade_data_dir")
+    @patch("agentbase.app._sp")
+    @patch("agentbase.app._kill_gateway")
+    @patch("agentbase.app._get_trade_data_dir")
     def test_unix_start_new_session(self, mock_data_dir, mock_kill_gw, mock_sp):
         """Unix 上应使用 start_new_session。"""
         import tempfile
 
-        from trade.app import _perform_restart
+        from agentbase.app import _perform_restart
 
         tmp_dir = Path(tempfile.mkdtemp())
         mock_data_dir.return_value = tmp_dir
@@ -222,7 +222,7 @@ class TestPerformRestart:
         mock_sp.DEVNULL = -1
         mock_sp.Popen = MagicMock()
 
-        with patch("trade.app.os") as mock_os:
+        with patch("agentbase.app.os") as mock_os:
             mock_os.name = "posix"
             mock_os.getpid = MagicMock(return_value=12345)
 
@@ -298,21 +298,21 @@ class TestUpdateStepSeverity:
         """在全部外部依赖被 mock 的前提下跑一次 update_trade()。"""
         from contextlib import ExitStack
 
-        from trade.post_install import update as update_mod
-        from trade.post_install.skills import _get_trade_home
+        from agentbase.post_install import update as update_mod
+        from agentbase.post_install.skills import _get_trade_home
 
         with ExitStack() as stack:
-            mock_sub = stack.enter_context(patch("trade.post_install.update.subprocess"))
+            mock_sub = stack.enter_context(patch("agentbase.post_install.update.subprocess"))
             mock_sub.run.side_effect = self._fake_run(pull_rc=pull_rc, pip_rc=pip_rc, stash_rc=stash_rc)
             mock_sub.DEVNULL = -1
             # 供目录定位用例断言实际执行的命令（cwd / clone 目标）
             self.last_subprocess = mock_sub
             # 模板同步/开机自启有真实副作用（写 launchd plist 等），必须 mock
-            stack.enter_context(patch("trade.post_install.update._sync_trade_template"))
-            stack.enter_context(patch("trade.post_install.update._ensure_auto_start"))
-            stack.enter_context(patch("trade.bootstrap.check_native_architecture", return_value=True))
+            stack.enter_context(patch("agentbase.post_install.update._sync_trade_template"))
+            stack.enter_context(patch("agentbase.post_install.update._ensure_auto_start"))
+            stack.enter_context(patch("agentbase.bootstrap.check_native_architecture", return_value=True))
 
-            mock_init = stack.enter_context(patch("trade.database.init_db"))
+            mock_init = stack.enter_context(patch("agentbase.database.init_db"))
             if db_ok:
                 mock_init.return_value = "/tmp/fake.db"
             else:
@@ -325,14 +325,14 @@ class TestUpdateStepSeverity:
             # skills 步骤必须始终 mock：真实 install_skills 会写 ~/.hermes/skills，
             # update_skills 还会访问 GitHub —— 测试绝不能碰真实用户数据或网络
             if skills_exc is not None:
-                stack.enter_context(patch("trade.post_install.update.install_skills", side_effect=skills_exc))
-                stack.enter_context(patch("trade.post_install.update.update_skills", side_effect=skills_exc))
+                stack.enter_context(patch("agentbase.post_install.update.install_skills", side_effect=skills_exc))
+                stack.enter_context(patch("agentbase.post_install.update.update_skills", side_effect=skills_exc))
             else:
-                stack.enter_context(patch("trade.post_install.update.install_skills"))
-                stack.enter_context(patch("trade.post_install.update.update_skills"))
+                stack.enter_context(patch("agentbase.post_install.update.install_skills"))
+                stack.enter_context(patch("agentbase.post_install.update.update_skills"))
 
-            # 显式设定运行目录的存在状态，避免用例之间互相污染（共享同一个 TRADE_HOME）
-            trade_dir = Path(_get_trade_home()) / "foreign-trade-assistant"
+            # 显式设定运行目录的存在状态，避免用例之间互相污染（共享同一个 AGENT_HOME）
+            trade_dir = Path(_get_trade_home()) / "agentbase"
             if existing_dir:
                 trade_dir.mkdir(parents=True, exist_ok=True)  # 存在 → 走 git pull
             elif trade_dir.exists():
@@ -378,7 +378,7 @@ class TestUpdateStepSeverity:
         用事故现场的真实路径（/tmp/trade-test-ypipz09g）钉住。
         """
         clone = ["git", "clone", "https://github.com/x/y.git",
-                 "/tmp/trade-test-ypipz09g/foreign-trade-assistant"]
+                 "/tmp/trade-test-ypipz09g/agentbase"]
         assert _classify_subprocess_cmd(clone) == "git-other"
         assert _classify_subprocess_cmd(["git", "-C", "/tmp/gitlab-proj", "pull", "--ff-only"]) == "git-pull"
         assert _classify_subprocess_cmd(["git", "-C", "/p", "stash"]) == "git-stash"
@@ -412,7 +412,7 @@ class TestVersionCache:
 
     def test_cache_structure(self):
         """缓存应为 dict 含 value 和 ts 键。"""
-        from trade.app import _LATEST_VERSION_TTL, _latest_version_cache
+        from agentbase.app import _LATEST_VERSION_TTL, _latest_version_cache
 
         assert "value" in _latest_version_cache
         assert "ts" in _latest_version_cache
@@ -420,7 +420,7 @@ class TestVersionCache:
 
     def test_cache_invalidation(self):
         """设置 ts=0 应使缓存失效。"""
-        from trade.app import _latest_version_cache
+        from agentbase.app import _latest_version_cache
 
         _latest_version_cache["value"] = "0.6.2"
         _latest_version_cache["ts"] = 100.0
@@ -485,14 +485,14 @@ class TestUpdateTradeDir:
     """测试 update_trade 使用运行目录而非桌面目录。"""
 
     def test_git_clone_target_is_runtime_dir(self):
-        """升级操作必须落在 ~/.trade/foreign-trade-assistant/，不能碰开发源码目录。"""
-        from trade.post_install.skills import _get_trade_home
+        """升级操作必须落在 ~/.agentbase/agentbase/，不能碰开发源码目录。"""
+        from agentbase.post_install.skills import _get_trade_home
 
         updater = TestUpdateStepSeverity()
         updater._run_update(existing_dir=False)  # 目录不存在 → 走 git clone 分支
 
         clone_cmd = updater.last_subprocess.run.call_args_list[0][0][0]
-        expected_dir = _get_trade_home() / "foreign-trade-assistant"
+        expected_dir = _get_trade_home() / "agentbase"
         assert clone_cmd[:3] == [
             "git", "clone", "https://github.com/chefroger/smart-trade-ai.git",
         ], clone_cmd
@@ -500,24 +500,24 @@ class TestUpdateTradeDir:
 
     def test_git_pull_runs_inside_runtime_dir(self):
         """目录已存在时，git pull 的 cwd 必须是运行目录。"""
-        from trade.post_install.skills import _get_trade_home
+        from agentbase.post_install.skills import _get_trade_home
 
         updater = TestUpdateStepSeverity()
         updater._run_update(existing_dir=True)
 
         first_call = updater.last_subprocess.run.call_args_list[0]
         assert first_call[0][0][:3] == ["git", "pull", "--ff-only"], first_call
-        assert first_call[1]["cwd"] == str(_get_trade_home() / "foreign-trade-assistant"), first_call[1]
+        assert first_call[1]["cwd"] == str(_get_trade_home() / "agentbase"), first_call[1]
 
     def test_guess_running_project_dir_removed(self):
         """_guess_running_project_dir 应已被删除。"""
-        import trade.post_install as pi
+        import agentbase.post_install as pi
         assert not hasattr(pi, "_guess_running_project_dir"), \
             "_guess_running_project_dir should have been removed"
 
     def test_force_sync_from_source_removed(self):
         """_force_sync_from_source 应已被删除。"""
-        import trade.post_install as pi
+        import agentbase.post_install as pi
         assert not hasattr(pi, "_force_sync_from_source"), \
             "_force_sync_from_source should have been removed"
 
@@ -533,20 +533,20 @@ class TestSystemRouter:
         from fastapi import APIRouter
 
         # mock session token 以通过依赖注入
-        with patch("trade.api.deps.set_session_token", lambda t: None):
-            with patch("trade.api.deps._SESSION_TOKEN", "test-token"):
-                from trade.app import _create_system_router
+        with patch("agentbase.api.deps.set_session_token", lambda t: None):
+            with patch("agentbase.api.deps._SESSION_TOKEN", "test-token"):
+                from agentbase.app import _create_system_router
                 # 需要 mock _capture_output 和 _perform_restart 避免真实调用
-                with patch("trade.api.cron._capture_output", return_value={"ok": True}):
+                with patch("agentbase.api.cron._capture_output", return_value={"ok": True}):
                     router = _create_system_router()
                 assert isinstance(router, APIRouter)
 
     def test_system_router_has_update_endpoint(self):
         """路由应包含 /system/update 端点。"""
-        with patch("trade.api.deps.set_session_token", lambda t: None):
-            with patch("trade.api.deps._SESSION_TOKEN", "test-token"):
-                with patch("trade.api.cron._capture_output", return_value={"ok": True}):
-                    from trade.app import _create_system_router
+        with patch("agentbase.api.deps.set_session_token", lambda t: None):
+            with patch("agentbase.api.deps._SESSION_TOKEN", "test-token"):
+                with patch("agentbase.api.cron._capture_output", return_value={"ok": True}):
+                    from agentbase.app import _create_system_router
                     router = _create_system_router()
 
         paths = [r.path for r in router.routes if hasattr(r, "path")]
@@ -554,10 +554,10 @@ class TestSystemRouter:
 
     def test_system_router_has_restart_endpoint(self):
         """路由应包含 /system/restart 端点。"""
-        with patch("trade.api.deps.set_session_token", lambda t: None):
-            with patch("trade.api.deps._SESSION_TOKEN", "test-token"):
-                with patch("trade.api.cron._capture_output", return_value={"ok": True}):
-                    from trade.app import _create_system_router
+        with patch("agentbase.api.deps.set_session_token", lambda t: None):
+            with patch("agentbase.api.deps._SESSION_TOKEN", "test-token"):
+                with patch("agentbase.api.cron._capture_output", return_value={"ok": True}):
+                    from agentbase.app import _create_system_router
                     router = _create_system_router()
 
         paths = [r.path for r in router.routes if hasattr(r, "path")]
@@ -583,12 +583,12 @@ class TestUpdateTrade:
 
     def test_update_trade_success(self, tmp_path, monkeypatch):
         """全部步骤成功时，update_trade 应正常返回（无 sys.exit）。"""
-        from trade.post_install import update as update_module
+        from agentbase.post_install import update as update_module
 
         # 准备假的 trade 运行目录
-        fake_trade_dir = tmp_path / "foreign-trade-assistant"
+        fake_trade_dir = tmp_path / "agentbase"
         fake_trade_dir.mkdir()
-        (fake_trade_dir / ".trade-template").mkdir()
+        (fake_trade_dir / ".agentbase-template").mkdir()
 
         # mock _get_trade_home 返回 tmp_path，使 update_trade 找到 fake_trade_dir
         monkeypatch.setattr(
@@ -615,8 +615,8 @@ class TestUpdateTrade:
 
         # mock init_db
         def fake_init_db():
-            return tmp_path / "trade.db"
-        import trade.database as db_module
+            return tmp_path / "agentbase.db"
+        import agentbase.database as db_module
         monkeypatch.setattr(db_module, "init_db", fake_init_db)
 
         # 不应抛 SystemExit
@@ -636,11 +636,11 @@ class TestUpdateTrade:
         Hermes 的 setup.py 明确拒绝通过 pip 构建，pyproject 里一旦再声明它，
         不带 --no-deps 的 pip install 就会整次失败——升级会卡在旧版本。
         """
-        from trade.post_install import update as update_module
+        from agentbase.post_install import update as update_module
 
-        fake_trade_dir = tmp_path / "foreign-trade-assistant"
+        fake_trade_dir = tmp_path / "agentbase"
         fake_trade_dir.mkdir()
-        (fake_trade_dir / ".trade-template").mkdir()
+        (fake_trade_dir / ".agentbase-template").mkdir()
         (fake_trade_dir / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
 
         monkeypatch.setattr(update_module, "_get_trade_home", lambda: tmp_path)
@@ -656,8 +656,8 @@ class TestUpdateTrade:
         monkeypatch.setattr(update_module, "_sync_trade_template", lambda s, d: None)
         monkeypatch.setattr(update_module, "_ensure_auto_start", lambda d: None)
 
-        import trade.database as db_module
-        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "trade.db")
+        import agentbase.database as db_module
+        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "agentbase.db")
 
         update_module.update_trade()
 
@@ -674,9 +674,9 @@ class TestUpdateTrade:
 
     def test_update_trade_pip_install_failure(self, tmp_path, monkeypatch):
         """pip install 失败时，update_trade 应继续执行后续步骤但不退出。"""
-        from trade.post_install import update as update_module
+        from agentbase.post_install import update as update_module
 
-        fake_trade_dir = tmp_path / "foreign-trade-assistant"
+        fake_trade_dir = tmp_path / "agentbase"
         fake_trade_dir.mkdir()
 
         monkeypatch.setattr(
@@ -697,17 +697,17 @@ class TestUpdateTrade:
         monkeypatch.setattr(update_module, "_sync_trade_template", lambda s, d: None)
         monkeypatch.setattr(update_module, "_ensure_auto_start", lambda d: None)
 
-        import trade.database as db_module
-        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "trade.db")
+        import agentbase.database as db_module
+        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "agentbase.db")
 
         # 不应抛异常（失败仅设置 ok=False）
         update_module.update_trade()
 
     def test_update_trade_git_pull_stash_failure(self, tmp_path, monkeypatch):
         """git pull 失败 + git stash 也失败时，update_trade 应继续后续步骤。"""
-        from trade.post_install import update as update_module
+        from agentbase.post_install import update as update_module
 
-        fake_trade_dir = tmp_path / "foreign-trade-assistant"
+        fake_trade_dir = tmp_path / "agentbase"
         fake_trade_dir.mkdir()
 
         monkeypatch.setattr(
@@ -732,8 +732,8 @@ class TestUpdateTrade:
         monkeypatch.setattr(update_module, "_sync_trade_template", lambda s, d: None)
         monkeypatch.setattr(update_module, "_ensure_auto_start", lambda d: None)
 
-        import trade.database as db_module
-        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "trade.db")
+        import agentbase.database as db_module
+        monkeypatch.setattr(db_module, "init_db", lambda: tmp_path / "agentbase.db")
 
         # 不应抛异常
         update_module.update_trade()
@@ -742,7 +742,7 @@ class TestUpdateTrade:
         """运行目录不存在且 git clone 失败时，返回 ok=False + errors 含提示。"""
         import subprocess as _sp
 
-        from trade.post_install import update as update_module
+        from agentbase.post_install import update as update_module
 
         monkeypatch.setattr(
             update_module, "_get_trade_home", lambda: tmp_path
@@ -780,7 +780,7 @@ class TestVersionMarker:
         """_running_code_version 读取与运行代码配套的 pyproject.toml。"""
         import tomllib
 
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         pyproject = Path(app_mod.__file__).resolve().parent.parent / "pyproject.toml"
         # 显式 utf-8：pyproject.toml 含中文注释，Windows 默认 cp1252 会读失败
@@ -790,7 +790,7 @@ class TestVersionMarker:
 
     def test_write_version_marker_records_running_version(self):
         """启动时写入的标记必须等于当前运行的代码版本。"""
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         app_mod._write_version_marker()
 
@@ -800,7 +800,7 @@ class TestVersionMarker:
 
     def test_reported_version_prefers_marker_and_never_rewrites(self):
         """上报版本以 version.txt 为准，且不得被磁盘上的 pyproject 反写。"""
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         marker = app_mod._get_trade_data_dir() / "version.txt"
         marker.parent.mkdir(parents=True, exist_ok=True)
@@ -815,7 +815,7 @@ class TestVersionMarker:
 
     def test_reported_version_falls_back_readonly(self):
         """version.txt 缺失时只读回退到 pyproject，且不得写盘。"""
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         marker = app_mod._get_trade_data_dir() / "version.txt"
         marker.unlink(missing_ok=True)
@@ -841,7 +841,7 @@ class TestTextEncodingIsExplicit:
         """pyproject.toml 的读 + version.txt 的读写都必须显式 utf-8。"""
         import pathlib
 
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(

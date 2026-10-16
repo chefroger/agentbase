@@ -30,7 +30,7 @@ class TestDefaultEnabledToolsets:
         （tools/vision_tools.py 的 registry.register），而 Trade 是**显式**传
         enabled_toolsets 的，不会继承 config.yaml 里的 toolsets。
         """
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS
 
         assert "vision" in DEFAULT_ENABLED_TOOLSETS, (
             "默认 toolset 组合缺少 vision —— agent 将拿不到 vision_analyze，"
@@ -44,19 +44,19 @@ class TestDefaultEnabledToolsets:
     )
     def test_core_toolsets_retained(self, toolset):
         """原有的核心 toolset 一个都不能丢（这条改动只应做加法）。"""
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS
 
         assert toolset in DEFAULT_ENABLED_TOOLSETS
 
     def test_no_duplicates(self):
         """列表不应有重复项（重复会让 Hermes 侧的解析做无谓功）。"""
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS
 
         assert len(DEFAULT_ENABLED_TOOLSETS) == len(set(DEFAULT_ENABLED_TOOLSETS))
 
     def test_is_immutable_constant(self):
         """用不可变类型，避免被调用方就地改坏（原先是函数内的字面量）。"""
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS
 
         assert not isinstance(DEFAULT_ENABLED_TOOLSETS, list)
 
@@ -66,20 +66,20 @@ class TestEnvOverride:
 
     def test_env_override_replaces_defaults(self, monkeypatch):
         monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", "web, file")
-        from trade.helpers import resolve_enabled_toolsets
+        from agentbase.helpers import resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == ["web", "file"]
 
     def test_env_override_trims_and_drops_empties(self, monkeypatch):
         monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", " web , file ,, ")
-        from trade.helpers import resolve_enabled_toolsets
+        from agentbase.helpers import resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == ["web", "file"]
 
     def test_unset_env_returns_defaults(self, monkeypatch):
         """未设置环境变量时返回默认组合（含 vision）。"""
         monkeypatch.delenv("TRADE_ENABLED_TOOLSETS", raising=False)
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
 
         resolved = resolve_enabled_toolsets()
 
@@ -89,6 +89,6 @@ class TestEnvOverride:
     def test_empty_env_falls_back_to_defaults(self, monkeypatch):
         """环境变量为空白串时按未设置处理。"""
         monkeypatch.setenv("TRADE_ENABLED_TOOLSETS", "   ")
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS, resolve_enabled_toolsets
 
         assert resolve_enabled_toolsets() == list(DEFAULT_ENABLED_TOOLSETS)

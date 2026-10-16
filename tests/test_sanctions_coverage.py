@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def fresh_sanctions(monkeypatch):
     """重置 sanctions 模块的缓存与元数据，并把文件缓存指到临时目录。"""
-    from trade.osint.sanctions import loader
+    from agentbase.osint.sanctions import loader
 
     monkeypatch.setattr(loader, "_sanctions_cache", {}, raising=False)
     monkeypatch.setattr(loader, "_sanctions_meta", {}, raising=False)
@@ -46,7 +46,7 @@ class TestDegradedIsVisible:
     """数据源降级必须体现在返回值里。"""
 
     def test_fallback_reports_degraded(self, fresh_sanctions):
-        from trade.osint.sanctions import check_sanctions
+        from agentbase.osint.sanctions import check_sanctions
 
         result = check_sanctions("Some Random Trading LLC")
 
@@ -55,7 +55,7 @@ class TestDegradedIsVisible:
 
     def test_fallback_does_not_claim_clean(self, fresh_sanctions):
         """核心断言：数据源不可用时，不得输出「未发现匹配」这种结论。"""
-        from trade.osint.sanctions import check_sanctions
+        from agentbase.osint.sanctions import check_sanctions
 
         result = check_sanctions("Some Random Trading LLC")
 
@@ -65,7 +65,7 @@ class TestDegradedIsVisible:
         assert "数据源" in result["suggestion"] or "不可用" in result["suggestion"]
 
     def test_coverage_reports_entry_counts(self, fresh_sanctions):
-        from trade.osint.sanctions import check_sanctions
+        from agentbase.osint.sanctions import check_sanctions
 
         result = check_sanctions("Some Random Trading LLC")
         cov = result["coverage"]
@@ -84,7 +84,7 @@ class TestHealthySourceStillWorks:
         fresh_sanctions._mark_loaded("OFAC", big_list, "network")
         fresh_sanctions._mark_loaded("UN", big_list, "network")
 
-        from trade.osint.sanctions import check_sanctions
+        from agentbase.osint.sanctions import check_sanctions
 
         result = check_sanctions("Some Random Trading LLC")
 
@@ -94,13 +94,13 @@ class TestHealthySourceStillWorks:
 
     def test_hit_still_reports_high_risk_when_degraded(self, fresh_sanctions):
         """降级也不能掩盖真命中 —— fallback 里的真实实体要照常报高风险。"""
-        from trade.osint.sanctions import loader
+        from agentbase.osint.sanctions import loader
 
         # 用 fallback 数据里真实存在的名字
         fallback = loader._get_fallback_ofac_entries()
         target = fallback[0]["name"]
 
-        from trade.osint.sanctions import check_sanctions
+        from agentbase.osint.sanctions import check_sanctions
 
         result = check_sanctions(target)
 
@@ -112,7 +112,7 @@ class TestScoringRespectsCoverage:
     """报告的建议列表也必须看 coverage —— 否则用户读到的仍是绿色结论。"""
 
     def _recs(self, sanctions_layer: dict) -> list[str]:
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         return generate_recommendations({"layers": {"sanctions": sanctions_layer}})
 

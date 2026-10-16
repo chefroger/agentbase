@@ -258,9 +258,9 @@ for i, slide in enumerate(prs_verify.slides, 1):
 ### Phase 6: Save and Report
 
 Save to the appropriate location:
-- Quotations: `~/.trade/companies/{slug}/clients/{client}/quotes/`
-- Proposals: `~/.trade/companies/{slug}/clients/{client}/proposals/`
-- Contracts: `~/.trade/companies/{slug}/clients/{client}/contracts/`
+- Quotations: `~/.agentbase/companies/{slug}/clients/{client}/quotes/`
+- Proposals: `~/.agentbase/companies/{slug}/clients/{client}/proposals/`
+- Contracts: `~/.agentbase/companies/{slug}/clients/{client}/contracts/`
 
 Report to user:
 ```

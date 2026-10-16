@@ -34,15 +34,15 @@ PROTOCOL_MARKER = "Strategic Intelligence Architect"
 
 @pytest.fixture
 def company(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
 
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
 
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -59,7 +59,7 @@ OSINT_QUERY = "帮我做一下客户背景调查（OSINT），目标是 example.
 
 
 def _hint(company, last_skill):
-    import trade.helpers as helpers
+    import agentbase.helpers as helpers
 
     _prompt, hint = helpers.build_query(
         company["id"], None, OSINT_QUERY, last_skill_name=last_skill

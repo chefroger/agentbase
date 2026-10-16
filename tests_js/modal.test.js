@@ -2,7 +2,7 @@
  * 弹窗清理逻辑的行为测试 —— 零依赖（Node 内置 node:test）。
  *
  * 回归的 bug：保存/删除订单时用 document.querySelector('.modal-backdrop') 清理弹窗。
- * querySelector 返回的是**文档序第一个**匹配元素，而 trade_chat.html 里第一个
+ * querySelector 返回的是**文档序第一个**匹配元素，而 app.html 里第一个
  * .modal-backdrop 是 #company-modal（静态骨架），动态 backdrop 是 appendChild 到
  * body 末尾排在后面 —— 于是公司设置弹窗被删掉、订单弹窗反而留在屏幕上，
  * 之后 showAddCompanyModal() 拿 $('company-modal') 直接 TypeError。
@@ -78,12 +78,12 @@ test('_closeOrderModal 在弹窗不存在时静默返回，不抛错', () => {
     assert.doesNotThrow(() => _closeOrderModal());
 });
 
-test('静态弹窗白名单覆盖 trade_chat.html 里全部骨架弹窗', () => {
+test('静态弹窗白名单覆盖 app.html 里全部骨架弹窗', () => {
     // 直接从 HTML 里扫出写死的 .modal-backdrop id，不抄一遍白名单（否则两边一起错还测不出来）
-    const html = fs.readFileSync(path.join(__dirname, '..', 'static', 'trade_chat.html'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.html'), 'utf8');
     const idsInHtml = [...html.matchAll(/class="modal-backdrop[^"]*"\s+id="([^"]+)"/g)].map((m) => m[1]);
 
-    assert.ok(idsInHtml.length > 0, '应当能从 trade_chat.html 扫出骨架弹窗 id');
+    assert.ok(idsInHtml.length > 0, '应当能从 app.html 扫出骨架弹窗 id');
     const { _STATIC_MODAL_IDS } = loadModalUtils(makeFakeDom([]));
     for (const id of idsInHtml) {
         assert.ok(_STATIC_MODAL_IDS.has(id),

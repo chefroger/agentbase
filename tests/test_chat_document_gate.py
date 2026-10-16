@@ -14,13 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """准备临时数据库、公司和文档库。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -39,7 +39,7 @@ def env(monkeypatch, tmp_path):
     (lib_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
     (lib_dir / ".DS_Store").write_bytes(b"\x00\x01")
 
-    import trade.library as lib
+    import agentbase.library as lib
     library = lib.create("报价库", str(lib_dir), company_id=company["id"])
     return {"cid": company["id"], "library": library, "dir": lib_dir}
 
@@ -55,8 +55,8 @@ def agent_stub():
 
 async def _call_chat(env, agent_stub, query, evidence, saved):
     """调用同步聊天端点，返回结果或抛出的 HTTPException。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     def _save(**kwargs):
         saved.append(kwargs)
@@ -65,10 +65,10 @@ async def _call_chat(env, agent_stub, query, evidence, saved):
     with patch.object(chat, "create_agent", return_value=agent_stub), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=evidence), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", side_effect=_save):
         payload = ChatRequest(query=query, library_id=env["library"]["id"])
-        return await chat.trade_chat(payload, env["cid"])
+        return await chat.app(payload, env["cid"])
 
 
 STRICT_QUERY = "请完整读取这个目录的所有文件"
@@ -172,8 +172,8 @@ def _agent_reporting_reads(reads, captured):
 @pytest.mark.asyncio
 async def test_gate_falls_back_to_callbacks_without_hermes_api(env):
     """公开版 Hermes 没有读取快照接口时，用工具回调自收集的证据做门禁。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     captured = {}
     saved = []
@@ -190,11 +190,11 @@ async def test_gate_falls_back_to_callbacks_without_hermes_api(env):
     with patch.object(chat, "create_agent", side_effect=_create), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=None), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
         payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
-        result = await chat.trade_chat(payload, env["cid"])
+        result = await chat.app(payload, env["cid"])
 
     assert result["response"] == "分析完成"
     assert set(saved[0]["files_read"] and [f["file"] for f in saved[0]["files_read"]]) == {
@@ -204,8 +204,8 @@ async def test_gate_falls_back_to_callbacks_without_hermes_api(env):
 @pytest.mark.asyncio
 async def test_callback_gate_blocks_skipped_file(env):
     """回调路径同样能发现 agent 漏读：只读了其中一个文件就判不通过。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     captured = {}
     saved = []
@@ -216,11 +216,11 @@ async def test_callback_gate_blocks_skipped_file(env):
                                                 _agent_reporting_reads(reads, captured))[1]), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=None), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
         payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
-        result = await chat.trade_chat(payload, env["cid"])
+        result = await chat.app(payload, env["cid"])
 
     assert "报价.xlsx" in result["response"]
     assert result["analysis_incomplete"] is True
@@ -229,8 +229,8 @@ async def test_callback_gate_blocks_skipped_file(env):
 @pytest.mark.asyncio
 async def test_hermes_snapshot_wins_over_callbacks(env):
     """Hermes 快照可用时优先用它（信息更全，含扫描页等结构化字段）。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     captured = {}
     saved = []
@@ -249,11 +249,11 @@ async def test_hermes_snapshot_wins_over_callbacks(env):
                                                 _agent_reporting_reads(reads, captured))[1]), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=snapshot), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
         payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
-        result = await chat.trade_chat(payload, env["cid"])
+        result = await chat.app(payload, env["cid"])
 
     assert result["response"] == "分析完成"
     assert "analysis_incomplete" not in result
@@ -272,7 +272,7 @@ async def test_normal_chat_skips_gate(env, agent_stub):
 @pytest.mark.asyncio
 async def test_gate_releases_hermes_task_record(env, agent_stub):
     """门禁结束后必须释放 Hermes 侧读取记录，避免长驻进程内累积。"""
-    import trade.api.chat as chat
+    import agentbase.api.chat as chat
 
     released = []
     evidence = {
@@ -286,11 +286,11 @@ async def test_gate_releases_hermes_task_record(env, agent_stub):
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=evidence), \
          patch.object(chat, "release_read_coverage", side_effect=released.append), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}):
-        from trade.api.models import ChatRequest
+        from agentbase.api.models import ChatRequest
         payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
-        await chat.trade_chat(payload, env["cid"])
+        await chat.app(payload, env["cid"])
 
     assert released and released[0].startswith("trade-doc-")
 
@@ -300,15 +300,15 @@ async def _collect_stream(env, agent_stub, query, evidence):
 
     mock 必须覆盖整个消费过程：生成器在 StreamingResponse 返回之后才真正执行。
     """
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     events = []
     with patch.object(chat, "create_agent", return_value=agent_stub), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat, "snapshot_read_coverage", return_value=evidence), \
          patch.object(chat, "release_read_coverage"), \
-         patch("trade.license.check_license", return_value=(True, "")), \
+         patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}):
         payload = ChatRequest(query=query, library_id=env["library"]["id"])
         response = await chat.trade_chat_stream(payload, env["cid"])

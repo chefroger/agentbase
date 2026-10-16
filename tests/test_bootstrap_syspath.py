@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import bootstrap
+from agentbase import bootstrap
 
 
 def _make_checkout(root: Path) -> Path:

@@ -8,8 +8,8 @@ Start:
 引导逻辑在 trade.bootstrap 中，app factory 在 trade.app 中。
 """
 
-from trade.app import main
-from trade.bootstrap import setup
+from agentbase.app import main
+from agentbase.bootstrap import setup
 
 
 def run() -> None:

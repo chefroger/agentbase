@@ -13,7 +13,7 @@
 
 那个解释器里没有 trade 包，子进程死在：
 
-    server.py line 11: from trade.app import main
+    server.py line 11: from agentbase.app import main
     ModuleNotFoundError: No module named 'trade'   → 退出码 1
 
 父进程随即 `raise RelaunchExit(1)`。而 `RelaunchExit` 继承 **SystemExit**（属
@@ -25,7 +25,7 @@ agent 线程直接死亡（`Future exception was never retrieved`），前端既
 
 单纯 `import run_agent` 不报错 —— relaunch 到 store python 后能成功，只是白跑一遍。
 **只有重新执行 `server.py`（需要 trade 包）才炸。** 于是 `/api/status`、
-`/api/trade/models/providers`、面板能打开全部通过，看起来一切正常，一聊天就废。
+`/api/agentbase/models/providers`、面板能打开全部通过，看起来一切正常，一聊天就废。
 
 这也正是 `COMPATIBILITY.md` 自己写明的盲区：「签名不变但行为变了」——
 `hermes_bootstrap` 是较新上游 main 引入的（安装印章 0.21.5+9141），
@@ -40,7 +40,7 @@ H 上游为此提供了正式的 sealed-venv 模式开关（`tools/lazy_deps.py`
 
 ## 2026-10-14 补：只设在 load_env_and_set_yolo 里不够
 
-本机升级到 Hermes main（v0.21.6+ 的 pm 托管运行时）后实测：`trade doctor`
+本机升级到 Hermes main（v0.21.6+ 的 pm 托管运行时）后实测：`agentbase doctor`
 每次 ~2 秒即崩 —— `hermes_bootstrap.py` 的 `prepare_launch()` 判定「当前解释器
 ≠ 托管解释器」，用 runpy 把当前命令重拉到托管环境；重拉环境里没有 trade 包。
 而 doctor/osint/company 子命令与版本检查都发生在 `load_env_and_set_yolo()`
@@ -60,7 +60,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import bootstrap
+from agentbase import bootstrap
 
 FLAG = "HERMES_DISABLE_LAZY_INSTALLS"
 

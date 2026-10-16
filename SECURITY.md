@@ -24,7 +24,7 @@ the product unusable.
 9. **SQL 全参数化**: 所有查询使用 `?` 占位符，无 f-string 拼接。
 10. **路径穿越防护**: slug/root_path/文件名均校验 `..`、`/`、NUL。
 11. **API Key safety**: Store in `~/.hermes/.env` with `chmod 600`.
-12. **Regular backups**: Back up `~/.trade/` and desktop work directories.
+12. **Regular backups**: Back up `~/.agentbase/` and desktop work directories.
 13. **Least privilege**: Run as a regular user, never as root.
 
 ### If you find a vulnerability
@@ -79,7 +79,7 @@ We do not currently run a bug bounty program.
 
 ### 数据合规
 
-- 所有用户数据存储在本地（`~/.trade/`），不上传任何云端服务器
+- 所有用户数据存储在本地（`~/.agentbase/`），不上传任何云端服务器
 - LLM API 调用仅发送用户提问内容，不传输客户身份信息
 - 建议定期备份后从 `~/.hermes/.env` 移除不再使用的 API Key
 

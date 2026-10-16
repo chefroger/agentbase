@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from trade.document_task import (
+from agentbase.document_task import (
     DocumentTask,
     format_incomplete_report,
     should_enforce_document_gate,
@@ -358,7 +358,7 @@ def test_partial_read_still_blocks(tmp_path):
 
 def test_unverifiable_reason_has_human_label():
     """披露原因必须有中文说明，否则用户看到的是机器码。"""
-    from trade.document_task import _REASON_LABELS
+    from agentbase.document_task import _REASON_LABELS
 
     assert "coverage_unverifiable" in _REASON_LABELS
 

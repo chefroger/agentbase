@@ -78,14 +78,14 @@ if (-not $PythonCmd) {
 # ─────────────────────────────────────────────────────────────────────────────
 # 创建 venv
 # ─────────────────────────────────────────────────────────────────────────────
-$TradeHome = if ($env:TRADE_HOME) { $env:TRADE_HOME } else { "$env:LOCALAPPDATA\trade" }
+$TradeHome = if ($env:AGENT_HOME) { $env:AGENT_HOME } else { "$env:LOCALAPPDATA\trade" }
 $VenvReal = "$TradeHome\venv"
 $VenvDir  = $VenvReal
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 $VenvOld  = $null
 
 # 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 trade 时，代码与依赖
-# 都换了、venv 的解释器还是旧的（`trade update` 只更新代码与依赖，不重建 venv），
+# 都换了、venv 的解释器还是旧的（`agentbase update` 只更新代码与依赖，不重建 venv），
 # 于是 Hermes 的 pm 激活会把 cp314 的包塞进旧解释器 → 聊天只报「AI Agent 模块未加载」。
 # **重建不会丢任何用户数据**：数据在 $TradeHome 下（数据库、公司目录），不在 venv 里。
 if ((Test-Path "$VenvDir\Scripts\python.exe") -and -not (& $IsPython314 "$VenvDir\Scripts\python.exe")) {
@@ -201,13 +201,13 @@ if ($hermesCmd) {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 3: 安装 foreign-trade-assistant
+# Step 3: 安装 agentbase
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Step 3/5: 安装 Foreign Trade Assistant" -ForegroundColor White
 
 $TradeRepo = "https://github.com/chefroger/smart-trade-ai.git"
-$TradeDir = "$TradeHome\foreign-trade-assistant"
+$TradeDir = "$TradeHome\agentbase"
 
 # 记录回滚点（2026-10-16 加，与 install.sh 同步）。重建场景下依赖若装不上，代码必须能
 # 退回升级前 —— 否则「新代码 + 旧 venv」照样起不来，等于把「重建失败」升级成「彻底打不开」。
@@ -231,7 +231,7 @@ function Invoke-RollbackCode {
     if ($VenvOld -and (Test-Path $VenvDir)) { Remove-Item -Recurse -Force $VenvDir }
 }
 
-if (-not (Invoke-CloneOrUpdate "foreign-trade-assistant" $TradeRepo $TradeDir)) { exit 1 }
+if (-not (Invoke-CloneOrUpdate "agentbase" $TradeRepo $TradeDir)) { exit 1 }
 
 Push-Location $TradeDir
 # 装依赖 + trade 自身。
@@ -272,7 +272,7 @@ Pop-Location
 
 # 真实探针：确认装完确实能导入（与 Step 2 的 `import hermes_cli` 对齐）。
 # 只看 pip 退出码还不够 —— editable 安装可能"成功"但路径不对。
-& $PyCmd -c "import trade.app"
+& $PyCmd -c "import agentbase.app"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ✗ Foreign Trade Assistant 装好了但无法导入，安装不完整。" -ForegroundColor Red
     Invoke-RollbackCode
@@ -323,7 +323,7 @@ Write-Host "Step 4/5: 安装 B2B skills" -ForegroundColor White
 # 必须用真实存在的入口：此前写的是 `python -m trade.post_install install`，而该包
 # **没有 __main__.py** → 从未生效过；再加上原生命令失败不抛异常，旧代码会在失败时
 # 照样打印「✓ 完成」（虚假成功）。实测新装后 skills 数为 0。
-& $PyCmd -c "from trade.post_install import install_skills; install_skills()"
+& $PyCmd -c "from agentbase.post_install import install_skills; install_skills()"
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  ✓ B2B skills 安装完成" -ForegroundColor Green
 } else {
@@ -332,7 +332,7 @@ if ($LASTEXITCODE -eq 0) {
 
 # chat-memory 插件：trade 自带的工具（让 LLM 能查 conversations 表的历史对话）。
 # setup() 会兜底同步 + 写 config.yaml；这里做一次显式的初始安装，幂等。
-& $PyCmd -c "from trade.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"
+& $PyCmd -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  ✓ chat-memory 插件已部署到 ~/.hermes\plugins\chat-memory" -ForegroundColor Green
 } else {
@@ -350,8 +350,8 @@ New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$TradeHome\companies" -Force | Out-Null
 
 try {
-    & $PyCmd -c "from trade.database import init_db; init_db()" 2>$null
-    Write-Host "  ✓ 数据库初始化完成 ($DataDir\trade.db)" -ForegroundColor Green
+    & $PyCmd -c "from agentbase.database import init_db; init_db()" 2>$null
+    Write-Host "  ✓ 数据库初始化完成 ($DataDir\agentbase.db)" -ForegroundColor Green
 } catch {
     Write-Host "  → 数据库将在首次启动时自动初始化" -ForegroundColor Cyan
 }
@@ -386,7 +386,7 @@ if ($currentPath -notlike "*$LocalBin*") {
 # 以前这里用 Register-ScheduledTask 直接跑 python.exe，是控制台程序 → 登录必弹
 # 终端窗口；而且只在这一处配，走「让 Hermes 装 Trade」流程的用户根本拿不到。
 # ─────────────────────────────────────────────────────────────────────────────
-& $PyCmd -c "from trade.post_install.win_setup import ensure_windows_setup, trade_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(trade_dir_from_module())]"
+& $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, trade_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(trade_dir_from_module())]"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 Trade 使用，可稍后重试）" -ForegroundColor Yellow
 }
@@ -406,7 +406,7 @@ if ($LASTEXITCODE -ne 0) {
 # 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
 # 会在界面里自动升级 Hermes（见 trade/hermes_upgrade.py）。若这里判失败并退出，
 # 用户就永远看不到那个升级界面了。
-& $PyCmd -c "import sys; from trade.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from trade.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"
+& $PyCmd -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ✗ 自检发现致命问题，安装不完整。请把上面的输出发给技术支持。" -ForegroundColor Red
     exit 1
@@ -420,7 +420,7 @@ Write-Host "    新终端: trade"
 Write-Host "    或: $PyCmd $TradeDir\server.py"
 Write-Host "    Trade 将在每次开机后自动启动（后台静默运行）"
 Write-Host ""
-Write-Host "  启动后打开: http://127.0.0.1:9119/trade"
+Write-Host "  启动后打开: http://127.0.0.1:9120/agentbase"
 Write-Host ""
 Write-Host "  数据位置:"
 Write-Host "    用户数据: $TradeHome\"

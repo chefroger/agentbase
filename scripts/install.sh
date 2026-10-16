@@ -199,9 +199,9 @@ VENV_DIR="$_VENV_REAL"
 _VENV_OLD=""
 
 # 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 trade 时，代码与依赖
-# 都换了、venv 的解释器还是旧的（`trade update` 只更新代码与依赖，不重建 venv），
+# 都换了、venv 的解释器还是旧的（`agentbase update` 只更新代码与依赖，不重建 venv），
 # 于是 Hermes 的 pm 激活会把 cp314 的包塞进旧解释器 → 聊天只报「AI Agent 模块未加载」。
-# **重建不会丢任何用户数据**：数据在 $TRADE_HOME 下（数据库、公司目录），不在 venv 里。
+# **重建不会丢任何用户数据**：数据在 $AGENT_HOME 下（数据库、公司目录），不在 venv 里。
 if [ -f "$VENV_DIR/bin/python" ] && ! _is_py314 "$VENV_DIR/bin/python"; then
     # 用 % 格式化而不是 f-string：这里跑的是**即将被替换的老解释器**，可能是 3.11
     # （f-string 在 3.12 之前不允许内层用同类引号），写 f-string 会 SyntaxError，
@@ -210,7 +210,7 @@ if [ -f "$VENV_DIR/bin/python" ] && ! _is_py314 "$VENV_DIR/bin/python"; then
     log_warn "已有的运行环境是 Python ${_old_ver}，需要 3.14 —— 正在重建（不会动你的数据）..."
     # 换掉之前留一份已装包清单：venv 里可能有用户手动 pip install 的东西，
     # 这份清单是事后唯一的追查线索。失败不影响安装（best-effort）。
-    _dump_dir="${TRADE_HOME:-$HOME/.trade}"
+    _dump_dir="${AGENT_HOME:-$HOME/.trade}"
     mkdir -p "$_dump_dir" 2>/dev/null
     "$VENV_DIR/bin/pip" freeze > "$_dump_dir/venv-packages-before-rebuild.txt" 2>/dev/null \
         && log_info "已把重建前的包清单留档：$_dump_dir/venv-packages-before-rebuild.txt"
@@ -263,12 +263,12 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 3: 安装 foreign-trade-assistant + 全部依赖
+# Step 3: 安装 agentbase + 全部依赖
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 3/5: 安装 Foreign Trade Assistant"
 
 TRADE_REPO="https://github.com/chefroger/smart-trade-ai.git"
-TRADE_DIR="$HOME/.trade/foreign-trade-assistant"
+TRADE_DIR="$HOME/.trade/agentbase"
 
 # 记录回滚点（2026-10-16 加）。重建场景下依赖若装不上，代码必须能退回升级前 ——
 # 否则「新代码 + 旧 venv」照样起不来，等于把「重建失败」升级成「彻底打不开」。
@@ -289,7 +289,7 @@ _rollback_code() {
     return 0
 }
 
-_clone_or_update "foreign-trade-assistant" "$TRADE_REPO" "$TRADE_DIR" || exit 1
+_clone_or_update "agentbase" "$TRADE_REPO" "$TRADE_DIR" || exit 1
 
 cd "$TRADE_DIR"
 # 装依赖（不含 hermes-agent，它在 Step 2 已装进 venv）+ trade 自身
@@ -355,7 +355,7 @@ log_step "Step 4/5: 安装 B2B skills"
 # 必须用真实存在的入口：此前写的是 `python -m trade.post_install install`，
 # 但该包**没有 __main__.py** → 这一步从未生效过（报错被 2>/dev/null 吞掉，
 # 只打印下面那句警告）。实测新装后 ~/.hermes/skills 里 0 个 skill。
-if "$PY" -c "from trade.post_install import install_skills; install_skills()"; then
+if "$PY" -c "from agentbase.post_install import install_skills; install_skills()"; then
     log_ok "B2B skills 安装完成"
 else
     log_warn "B2B skills 安装可能不完整（首次启动时会自动同步）"
@@ -364,7 +364,7 @@ fi
 # chat-memory 插件：trade 自带的工具（让 LLM 能用 trade.conversations 表查历史对话）。
 # setup() 也会兜底同步 + 写 config.yaml，这里做一次显式的初始安装，避免用户装完
 # 还没启动 trade 之前就看不到工具（虽然通常不实际发生，但稳）。
-if "$PY" -c "from trade.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"; then
+if "$PY" -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"; then
     log_ok "chat-memory 插件已部署到 ~/.hermes/plugins/chat-memory"
 else
     log_warn "chat-memory 插件部署失败（首次启动时会自动重试）"
@@ -375,12 +375,12 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 5/5: 初始化数据目录"
 
-TRADE_HOME="${TRADE_HOME:-$HOME/.trade}"
-mkdir -p "$TRADE_HOME/data"
-mkdir -p "$TRADE_HOME/companies"
+AGENT_HOME="${AGENT_HOME:-$HOME/.trade}"
+mkdir -p "$AGENT_HOME/data"
+mkdir -p "$AGENT_HOME/companies"
 
-"$PY" -c "from trade.database import init_db; init_db()" 2>/dev/null && \
-    log_ok "数据库初始化完成 ($TRADE_HOME/data/trade.db)" || \
+"$PY" -c "from agentbase.database import init_db; init_db()" 2>/dev/null && \
+    log_ok "数据库初始化完成 ($AGENT_HOME/data/agentbase.db)" || \
     log_info "数据库将在首次启动时自动初始化"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ fi
 # 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
 # 会在界面里自动升级 Hermes（见 trade/hermes_upgrade.py）。若这里判失败并 exit 1，
 # 用户就永远看不到那个升级界面了。
-if ! "$PY" -c "import sys; from trade.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from trade.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"; then
+if ! "$PY" -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"; then
     log_err "自检发现致命问题，安装不完整。请把上面的输出发给技术支持。"
     exit 1
 fi
@@ -445,10 +445,10 @@ echo -e "  启动方式:"
 echo -e "    新终端: ${BOLD}trade${NC}"
 echo -e "    当前终端: ${BOLD}$HOME/.local/bin/trade${NC}"
 echo ""
-echo -e "  启动后打开: ${CYAN}http://127.0.0.1:9119/trade${NC}"
+echo -e "  启动后打开: ${CYAN}http://127.0.0.1:9120/agentbase${NC}"
 echo ""
 echo -e "  数据位置:"
-echo -e "    用户数据: ${CYAN}$TRADE_HOME/${NC}"
+echo -e "    用户数据: ${CYAN}$AGENT_HOME/${NC}"
 echo -e "    Hermes 配置: ${CYAN}$HERMES_HOME/${NC}"
 echo ""
 echo -e "  帮助: ${CYAN}trade --help${NC}"
@@ -480,15 +480,15 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$TRADE_HOME/logs/launchd-stdout.log</string>
+    <string>$AGENT_HOME/logs/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>$TRADE_HOME/logs/launchd-stderr.log</string>
+    <string>$AGENT_HOME/logs/launchd-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HERMES_HOME</key>
         <string>$HERMES_HOME</string>
-        <key>TRADE_HOME</key>
-        <string>$TRADE_HOME</string>
+        <key>AGENT_HOME</key>
+        <string>$AGENT_HOME</string>
         <key>PATH</key>
         <string>$VENV_DIR/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
     </dict>
@@ -496,7 +496,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 </plist>
 PLIST
         # 确保日志目录存在
-        mkdir -p "$TRADE_HOME/logs"
+        mkdir -p "$AGENT_HOME/logs"
         # 加载到当前会话（用户级，无需 sudo）
         launchctl bootstrap gui/$(id -u) "$PLIST_FILE" 2>/dev/null || \
         launchctl load "$PLIST_FILE" 2>/dev/null || true
@@ -504,7 +504,7 @@ PLIST
         echo -e "    管理命令:"
         echo -e "      停止:  ${CYAN}launchctl unload $PLIST_FILE${NC}"
         echo -e "      重启:  ${CYAN}launchctl unload $PLIST_FILE && launchctl load $PLIST_FILE${NC}"
-        echo -e "      查看日志: ${CYAN}tail -f $TRADE_HOME/logs/launchd-stdout.log${NC}"
+        echo -e "      查看日志: ${CYAN}tail -f $AGENT_HOME/logs/launchd-stdout.log${NC}"
     else
         echo -e "  ${GREEN}✓${NC} macOS 开机自启动已配置"
     fi

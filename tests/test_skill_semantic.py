@@ -1,4 +1,4 @@
-"""trade.skill_semantic 模块测试（用假 skill 注册表，不依赖真实项目）。"""
+"""agentbase.skill_semantic 模块测试（用假 skill 注册表，不依赖真实项目）。"""
 import os
 import sys
 
@@ -6,8 +6,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trade import skill_semantic  # noqa: E402
-from trade.embeddings import TfidfBackend  # noqa: E402
+from agentbase import skill_semantic  # noqa: E402
+from agentbase.embeddings import TfidfBackend  # noqa: E402
 
 FAKE_SKILLS = [
     {
@@ -103,12 +103,12 @@ def test_match_skill_hybrid_confident_keyword(monkeypatch):
 
     import types
 
-    fake_mod = types.ModuleType("trade.skill_router")
+    fake_mod = types.ModuleType("agentbase.skill_router")
     fake_mod._score_skills = FakeRouter()._score_skills
-    monkeypatch.setitem(sys.modules, "trade.skill_router", fake_mod)
-    # 注意：skill_semantic 内部是 from trade import skill_router，
+    monkeypatch.setitem(sys.modules, "agentbase.skill_router", fake_mod)
+    # 注意：skill_semantic 内部是 from agentbase import skill_router，
     # 这里通过 sys.modules 注入假模块
-    import trade
+    import agentbase
 
     monkeypatch.setattr(trade, "skill_router", fake_mod, raising=False)
     best, alts = skill_semantic.match_skill_hybrid("背景调查 背调 查公司")
@@ -120,13 +120,13 @@ def test_match_skill_hybrid_never_raises(monkeypatch):
     # skill_router 抛错也要回退，不能抛到调用方
     import types
 
-    fake_mod = types.ModuleType("trade.skill_router")
+    fake_mod = types.ModuleType("agentbase.skill_router")
 
     def boom(q):
         raise RuntimeError("boom")
 
     fake_mod._score_skills = boom
-    import trade
+    import agentbase
 
     monkeypatch.setattr(trade, "skill_router", fake_mod, raising=False)
     best, alts = skill_semantic.match_skill_hybrid("anything")
@@ -146,7 +146,7 @@ def test_search_without_explicit_rebuild_does_not_deadlock():
     """
     import threading
 
-    from trade.skill_semantic import SemanticSkillRouter, reset_semantic_router
+    from agentbase.skill_semantic import SemanticSkillRouter, reset_semantic_router
 
     reset_semantic_router()
     router = SemanticSkillRouter(
@@ -170,7 +170,7 @@ def test_search_after_concurrent_first_calls_is_safe():
     """并发首调也不能死锁/崩（_ensure_built 的双检在锁内）。"""
     import threading
 
-    from trade.skill_semantic import SemanticSkillRouter, reset_semantic_router
+    from agentbase.skill_semantic import SemanticSkillRouter, reset_semantic_router
 
     reset_semantic_router()
     router = SemanticSkillRouter(skills=[{"name": "b2b-osint", "triggers": ["背调"]}])

@@ -172,7 +172,7 @@ class TestVersionUpperBound:
 
     def test_min_constant_matches_bootstrap(self):
         """下限必须与 bootstrap 一致（两处漂移会让检查形同虚设）。"""
-        from trade.bootstrap import _MIN_HERMES_VERSION
+        from agentbase.bootstrap import _MIN_HERMES_VERSION
 
         assert pic.MIN_COMPATIBLE_VERSION == _MIN_HERMES_VERSION
 

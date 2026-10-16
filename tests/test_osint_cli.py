@@ -22,7 +22,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.osint import cli  # noqa: E402
+from agentbase.osint import cli  # noqa: E402
 
 
 def _sample_report() -> dict:
@@ -146,11 +146,11 @@ class TestConsoleSafety:
 class TestDispatch:
     def test_osint_subcommand_dispatched(self, monkeypatch):
         """`trade osint <目标>` 要被 bootstrap 认出来并退出，不起服务。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         monkeypatch.setattr(sys, "argv", ["trade", "osint", "acme.com"])
         ran = {}
-        monkeypatch.setattr("trade.osint.cli.main", lambda argv: ran.setdefault("argv", argv) or 0)
+        monkeypatch.setattr("agentbase.osint.cli.main", lambda argv: ran.setdefault("argv", argv) or 0)
 
         with pytest.raises(SystemExit):
             bootstrap.dispatch_subcommands()

@@ -12,9 +12,9 @@ import pytest
 def compat_module(monkeypatch):
     """加载兼容层并隔离 Hermes 模块。"""
     for name in list(sys.modules):
-        if name == "trade.hermes_compat":
+        if name == "agentbase.hermes_compat":
             del sys.modules[name]
-    import trade.hermes_compat as compat
+    import agentbase.hermes_compat as compat
     return compat
 
 
@@ -250,7 +250,7 @@ class TestHermesVersionGate:
 
     def test_too_old_is_rejected_with_actionable_steps(self, monkeypatch, capsys):
         """过旧时返回 False，并把三条可照做的升级步骤打到终端。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         self._stub_state(monkeypatch, bootstrap, "too_old")
 
@@ -261,7 +261,7 @@ class TestHermesVersionGate:
 
     def test_unknown_warns_and_continues(self, monkeypatch, capsys):
         """拿不到版本（如 main 上无安装印章）→ 打印警告但继续启动。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         self._stub_state(monkeypatch, bootstrap, "unknown")
 
@@ -270,7 +270,7 @@ class TestHermesVersionGate:
 
     def test_ok_is_accepted(self, monkeypatch, capsys):
         """可共存时正常通过。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         self._stub_state(monkeypatch, bootstrap, "ok")
 
@@ -300,7 +300,7 @@ class TestUpgradeSteps:
 class TestDegradedStartup:
     """Hermes 过旧时必须**降级起服务**，而不是退出。
 
-    这是整个方案的地基：桌面端（tradewin）先起服务线程再开窗口，一旦在起服务前退出，
+    这是整个方案的地基：桌面端（desktop）先起服务线程再开窗口，一旦在起服务前退出，
     用户只会看到一个空白窗口。所以这里钉住两件事：跳过会 import Hermes 的步骤、
     且启动后台升级。
     """
@@ -341,11 +341,11 @@ class TestDegradedStartup:
     def test_paths_are_prepared_before_subcommand_dispatch(self, monkeypatch):
         """路径准备必须早于子命令分发。
 
-        2026-10-15 干净机器实测：`trade doctor` 自己会 import Hermes。若分发排在路径
+        2026-10-15 干净机器实测：`agentbase doctor` 自己会 import Hermes。若分发排在路径
         准备之前，doctor 就成了「第一个 import Hermes 的人」—— pm 激活剥离 venv 的
         site-packages 后没人恢复，doctor 后面几项依赖检查全部误报「未安装」。
         """
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         self._stub_setup(monkeypatch, bootstrap, usable=True, calls=calls)
@@ -357,7 +357,7 @@ class TestDegradedStartup:
         assert calls[0] == "guard"
 
     def test_too_old_skips_hermes_steps_and_starts_upgrade(self, monkeypatch, capsys):
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         self._stub_setup(monkeypatch, bootstrap, usable=False, calls=calls)
@@ -373,7 +373,7 @@ class TestDegradedStartup:
 
     def test_optional_step_failure_does_not_block_startup(self, monkeypatch, capsys):
         """任一可选项抛异常都绝不能挡住起服务 —— 否则用户见不到升级界面。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         self._stub_setup(monkeypatch, bootstrap, usable=False, calls=calls)
@@ -391,7 +391,7 @@ class TestDegradedStartup:
 
     def test_usable_path_still_runs_hermes_steps(self, monkeypatch):
         """正常路径不受影响：该跑的 Hermes 步骤一个不少，且顺序符合文档。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         self._stub_setup(monkeypatch, bootstrap, usable=True, calls=calls)
@@ -413,7 +413,7 @@ class TestPrepareHermesImportPaths:
     """
 
     def test_usable_triggers_activation_and_restore(self, monkeypatch):
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         monkeypatch.setattr(bootstrap, "_disable_hermes_lazy_installs", lambda: calls.append("guard"))
@@ -429,7 +429,7 @@ class TestPrepareHermesImportPaths:
 
     def test_unusable_never_imports_hermes(self, monkeypatch):
         """过旧时**绝不能**触发激活 —— 那会 import Hermes 并崩在缺依赖上。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         calls: list[str] = []
         monkeypatch.setattr(bootstrap, "_disable_hermes_lazy_installs", lambda: None)

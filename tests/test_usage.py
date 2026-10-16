@@ -1,4 +1,4 @@
-"""trade.usage 模块测试（sqlite :memory:，无外部依赖）。"""
+"""agentbase.usage 模块测试（sqlite :memory:，无外部依赖）。"""
 import os
 import sqlite3
 import sys
@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trade import usage  # noqa: E402
+from agentbase import usage  # noqa: E402
 
 
 @pytest.fixture()

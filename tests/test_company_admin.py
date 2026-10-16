@@ -6,7 +6,7 @@
 界面上的「删除」只做**软删除**：公司从列表消失，但
 
   - 桌面上的公司文件夹还在（正是用户说的"后续很难处理"）
-  - `~/.trade/{slug}/` 还在
+  - `~/.agentbase/{slug}/` 还在
   - 数据库行还在（is_active=0）
 
 `crud.purge()` 能物理删干净，但**全项目没有任何入口调用它**。
@@ -15,7 +15,7 @@
 ## 安全约定（本文件钉住的）
 
   - 不带 `--yes` 只打印计划、退出码 1，绝不动手（远程 shell 里交互确认不可靠）
-  - 只删 TRADE_HOME 下与桌面下的目录，别处一律跳过并如实告知
+  - 只删 AGENT_HOME 下与桌面下的目录，别处一律跳过并如实告知
   - `purge-dir` 只处理带 Trade 目录指纹的文件夹，不做通用删除工具
 """
 
@@ -29,24 +29,24 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import company_admin
+from agentbase import company_admin
 
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """临时库 + 临时「桌面」，建一家公司并真的落出目录结构。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path / "trade"))
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path / "trade"))
     desktop = tmp_path / "Desktop"
     desktop.mkdir()
 
-    import trade.database as _db
+    import agentbase.database as _db
 
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
 
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = desktop / (suggested_name or name)
@@ -56,7 +56,7 @@ def env(monkeypatch, tmp_path):
         return wd, True
 
     # 必须打在 **workdir 模块**上：crud.create() 是
-    # `from trade.company.workdir import _setup_work_directory`，在模块上查这个名字；
+    # `from agentbase.company.workdir import _setup_work_directory`，在模块上查这个名字；
     # 打在包级 re-export（trade.company._setup_work_directory）不会生效 ——
     # 那样真实函数会跑，建出的是不含分类子目录的空壳，测试就在错误的现场上断言。
     monkeypatch.setattr(co.workdir, "_setup_work_directory", _setup)
@@ -76,7 +76,7 @@ class TestList:
 
     def test_lists_soft_deleted_companies_too(self, env):
         """软删除的必须也列出来 —— 否则用户以为已经删干净了。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         crud.delete(env["company"]["id"])
 
@@ -103,7 +103,7 @@ class TestPurgeRequiresConfirmation:
         assert code == 1
         assert "--yes" in text, "要告诉用户怎么真正执行"
         # 数据库与目录都必须原封不动
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(env["company"]["id"]) is not None
         assert (env["desktop"] / "错误公司").is_dir()
@@ -126,19 +126,19 @@ class TestPurgeRequiresConfirmation:
 
 class TestPurgeExecutes:
     def test_purges_db_and_both_dirs(self, env):
-        """--yes 之后：数据库行、数据目录（~/.trade/{slug}/）、桌面目录都要真没了。"""
+        """--yes 之后：数据库行、数据目录（~/.agentbase/{slug}/）、桌面目录都要真没了。"""
         cid = env["company"]["id"]
-        # 数据目录是 TRADE_HOME/{slug}。TRADE_HOME 是 crud 模块**导入时**定下的常量
+        # 数据目录是 AGENT_HOME/{slug}。AGENT_HOME 是 crud 模块**导入时**定下的常量
         # （conftest 设的临时目录），不是夹具里 monkeypatch 的那个 env —— 必须从
         # 常量取值，否则会去错地方找。
-        from trade.company.crud import TRADE_HOME
+        from agentbase.company.crud import AGENT_HOME
 
-        data_dir = TRADE_HOME / "wrong-co"
+        data_dir = AGENT_HOME / "wrong-co"
         assert data_dir.is_dir(), f"前置条件：数据目录应先存在（{data_dir}）"
         text, code = company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
 
         assert code == 0, text
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(cid) is None, "数据库行没删掉"
         assert not (env["desktop"] / "错误公司").exists(), "桌面文件夹没删掉 —— 这正是用户抱怨的残留"
@@ -150,7 +150,7 @@ class TestPurgeExecutes:
         text, code = company_admin.purge_company(str(cid), yes=True, password=company_admin._PURGE_PASSWORD)
 
         assert code == 0
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(cid) is None
 
@@ -170,7 +170,7 @@ class TestPurgeExecutes:
 class TestDirGuard:
     def test_refuses_dir_outside_protected_roots(self, env, tmp_path):
         """工作目录若在保护区外（用户搬走了），不能删，且要如实告知。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         outside = tmp_path / "elsewhere" / "错误公司"
         (outside / "合同").mkdir(parents=True)
@@ -190,7 +190,7 @@ class TestOrphanWorkDirs:
 
     def test_detects_orphan_folder(self, env):
         orphan = env["desktop"] / "孤儿公司"
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
 
         found = company_admin.find_orphan_work_dirs()
@@ -211,7 +211,7 @@ class TestOrphanWorkDirs:
 
     def test_list_surfaces_orphans(self, env):
         orphan = env["desktop"] / "孤儿公司"
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
 
         out = company_admin.list_companies()
@@ -223,7 +223,7 @@ class TestOrphanWorkDirs:
 class TestPurgeDir:
     def _make_orphan(self, env, name="孤儿公司"):
         orphan = env["desktop"] / name
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
         return orphan
 
@@ -256,7 +256,7 @@ class TestPurgeDir:
 
     def test_refuses_dir_outside_desktop(self, env, tmp_path):
         outside = tmp_path / "other" / "像公司的目录"
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (outside / cat).mkdir(parents=True)
 
         text, code = company_admin.purge_dir(str(outside), yes=True, password=company_admin._PURGE_PASSWORD)
@@ -268,12 +268,12 @@ class TestPurgeDir:
 class TestDispatch:
     def test_company_subcommand_dispatched(self, monkeypatch, env):
         """`trade company list` 要被 bootstrap 认出来并退出，不起服务。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         monkeypatch.setattr(sys, "argv", ["trade", "company", "list"])
         ran = {}
         monkeypatch.setattr(
-            "trade.company_admin.main", lambda argv: ran.setdefault("argv", argv) or 0
+            "agentbase.company_admin.main", lambda argv: ran.setdefault("argv", argv) or 0
         )
 
         with pytest.raises(SystemExit):
@@ -282,7 +282,7 @@ class TestDispatch:
         assert ran.get("argv") == ["list"]
 
     def test_unknown_subcommand_does_not_dispatch(self, monkeypatch):
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         monkeypatch.setattr(sys, "argv", ["trade", "--no-browser"])
 
@@ -304,13 +304,13 @@ class TestOrphanMustNotFlagLiveCompanies:
 
     def _make_trade_dir(self, parent, name):
         d = parent / name
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         return d
 
     def test_folder_matching_live_company_name_is_not_orphan(self, env, monkeypatch):
         """公司 A 有桌面文件夹、但 extra1 为空（老数据）→ 不是孤儿。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         # 模拟老数据：清掉 work_dir 记录（公司本身仍在用）
         crud.update_trade_company(env["company"]["id"], extra1="{}")
@@ -327,7 +327,7 @@ class TestOrphanMustNotFlagLiveCompanies:
         )
 
     def test_folder_matching_slug_is_not_orphan(self, env):
-        from trade.company import crud
+        from agentbase.company import crud
 
         crud.update_trade_company(env["company"]["id"], extra1="{}")
         import shutil
@@ -370,7 +370,7 @@ class TestPurgeFindsUnrecordedWorkDir:
     """
 
     def test_preview_includes_name_matched_dir(self, env):
-        from trade.company import crud
+        from agentbase.company import crud
 
         # 模拟老数据：清掉 work_dir 记录，文件夹仍在
         crud.update_trade_company(env["company"]["id"], extra1="{}")
@@ -381,7 +381,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         assert "按公司名找到" in text, "要说明这个路径是回找来的，不是记录里的"
 
     def test_purge_actually_deletes_name_matched_dir(self, env):
-        from trade.company import crud
+        from agentbase.company import crud
 
         crud.update_trade_company(env["company"]["id"], extra1="{}")
         desktop_dir = env["desktop"] / "错误公司"
@@ -396,7 +396,7 @@ class TestPurgeFindsUnrecordedWorkDir:
 
     def test_does_not_match_unrelated_same_name_dir(self, env, tmp_path):
         """同名但没有 Trade 目录结构 → 不是它的工作目录，不能删。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         crud.update_trade_company(env["company"]["id"], extra1="{}")
         import shutil
@@ -412,7 +412,7 @@ class TestPurgeFindsUnrecordedWorkDir:
 
     def test_purge_keeps_unrelated_same_name_dir(self, env):
         """确实删公司时，同名普通文件夹不能跟着消失。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         crud.update_trade_company(env["company"]["id"], extra1="{}")
         import shutil
@@ -440,20 +440,20 @@ class TestPurgePasswordGate:
         text, code = company_admin.purge_company("wrong-co", yes=True, password=self.PW)
 
         assert code == 0, text
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(env["company"]["id"]) is None
 
     def test_wrong_password_deletes_nothing(self, env):
         """口令错了必须什么都不删 —— 数据库、数据目录、桌面目录全都原封不动。"""
-        from trade.company.crud import TRADE_HOME
+        from agentbase.company.crud import AGENT_HOME
 
-        data_dir = TRADE_HOME / "wrong-co"
+        data_dir = AGENT_HOME / "wrong-co"
         text, code = company_admin.purge_company("wrong-co", yes=True, password="猜的")
 
         assert code == 1
         assert "口令错误" in text
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(env["company"]["id"]) is not None, "口令错误却删了数据库行"
         assert data_dir.is_dir(), "口令错误却删了数据目录"
@@ -470,7 +470,7 @@ class TestPurgePasswordGate:
 
         assert code == 1
         assert "--password" in text, "要告诉用户怎么把口令传进来"
-        from trade.company import crud
+        from agentbase.company import crud
 
         assert crud.get(env["company"]["id"]) is not None
 
@@ -504,7 +504,7 @@ class TestPurgePasswordGate:
 class TestPurgeDirPasswordGate:
     def _make_orphan(self, env, name="孤儿公司"):
         d = env["desktop"] / name
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         return d
 
@@ -567,7 +567,7 @@ class TestOrphanPurgeLeavesAuditTrail:
 
     def _make_orphan(self, env, name="孤儿公司"):
         d = env["desktop"] / name
-        for cat, _ in __import__("trade.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         (d / "合同" / "某合同.txt").write_text("x", encoding="utf-8")
         return d
@@ -579,7 +579,7 @@ class TestOrphanPurgeLeavesAuditTrail:
             str(orphan), yes=True, password=company_admin._PURGE_PASSWORD
         )
 
-        from trade.company.crud import _audit_dir
+        from agentbase.company.crud import _audit_dir
 
         files = list(_audit_dir().glob("*.jsonl"))
         assert files, "删了东西却没写审计日志"
@@ -598,7 +598,7 @@ class TestOrphanPurgeLeavesAuditTrail:
 
         assert not orphan.exists()
         # 若实现靠"目录内的凭据文件"，这里就是它消失的证据 —— 审计必须写在目录之外
-        from trade.company.crud import _audit_dir
+        from agentbase.company.crud import _audit_dir
 
         assert any(_audit_dir().glob("*.jsonl")), "痕迹必须落在被删目录之外"
 
@@ -628,7 +628,7 @@ class TestWindowsPathCaseInsensitivity:
 
         目录名与名字脱钩后，唯一能救它的只剩记录路径这一路。
         """
-        from trade.company import crud
+        from agentbase.company import crud
 
         company = crud.create(name="甲", slug="jia", work_dir_name="acme-co-b")
         desktop_dir = env["desktop"] / "acme-co-b"
@@ -641,7 +641,7 @@ class TestWindowsPathCaseInsensitivity:
 
     def test_case_differing_record_is_not_orphan(self, env, monkeypatch):
         """记录里是大写路径、实际是小写（或反之）→ 同一目录，不算孤儿。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         company, desktop_dir = self._live_company_with_odd_dir_name(env)
         # 模拟记录里存的是另一种大小写的路径
@@ -659,7 +659,7 @@ class TestWindowsPathCaseInsensitivity:
 
     def test_purge_dir_refuses_case_differing_live_folder(self, env, monkeypatch):
         """purge-dir 也必须认得出「大小写不同但同一个目录」。"""
-        from trade.company import crud
+        from agentbase.company import crud
 
         company, desktop_dir = self._live_company_with_odd_dir_name(env)
         crud.update_trade_company(
@@ -708,7 +708,7 @@ class TestWindowsRobustness:
 
     def _orphan_dir(self, env) -> Path:
         """造一个带 Trade 指纹的孤儿目录（数据库里没有的公司）。"""
-        from trade.company.workdir import _WORK_DIR_CATEGORIES
+        from agentbase.company.workdir import _WORK_DIR_CATEGORIES
 
         d = env["desktop"] / "残留公司"
         d.mkdir()

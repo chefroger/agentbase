@@ -10,13 +10,13 @@ import pytest
 @pytest.fixture
 def db(monkeypatch, tmp_path):
     """创建临时数据库并初始化 schema。"""
-    db_path = tmp_path / "trade.db"
+    db_path = tmp_path / "agentbase.db"
 
-    import trade.database as _db
+    import agentbase.database as _db
     original = _db._get_db_path
     _db._get_db_path = lambda: db_path
 
-    from trade.database import SCHEMA_SQL, _add_spare_columns
+    from agentbase.database import SCHEMA_SQL, _add_spare_columns
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
@@ -30,23 +30,23 @@ def db(monkeypatch, tmp_path):
 
 
 def _mk_company(name, slug):
-    from trade import company
+    from agentbase import company
     return company.create(name=name, slug=slug)
 
 
 def _mk_customer(company_id, name):
-    from trade import customer
+    from agentbase import customer
     return customer.create(name, company_id=company_id)
 
 
 def _mk_library(company_id, name, root):
-    from trade import library
+    from agentbase import library
     return library.create(name, root, company_id=company_id)
 
 
 class TestOrderCRUD:
     def test_create_order(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co = _mk_company("Co", "co")
         cust = _mk_customer(co["id"], "Cust")
         o = order.create(co["id"], cust["id"], "Widget", quantity=10, unit_price=5.0)
@@ -57,7 +57,7 @@ class TestOrderCRUD:
     def test_create_order_customer_not_in_company(self, db):
         import pytest as _pytest
 
-        from trade import order
+        from agentbase import order
         co1 = _mk_company("Co1", "co1")
         co2 = _mk_company("Co2", "co2")
         cust2 = _mk_customer(co2["id"], "Cust2")
@@ -66,7 +66,7 @@ class TestOrderCRUD:
             order.create(co1["id"], cust2["id"], "Widget")
 
     def test_get_and_update(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co = _mk_company("Co", "co")
         cust = _mk_customer(co["id"], "Cust")
         o = order.create(co["id"], cust["id"], "Widget")
@@ -75,7 +75,7 @@ class TestOrderCRUD:
         assert updated["quantity"] == 99
 
     def test_delete(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co = _mk_company("Co", "co")
         cust = _mk_customer(co["id"], "Cust")
         o = order.create(co["id"], cust["id"], "Widget")
@@ -83,7 +83,7 @@ class TestOrderCRUD:
         assert order.get(o["id"], company_id=co["id"]) is None
 
     def test_get_company_scoped(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co1 = _mk_company("Co1", "co1")
         co2 = _mk_company("Co2", "co2")
         cust1 = _mk_customer(co1["id"], "Cust1")
@@ -96,7 +96,7 @@ class TestOrderLibraryIsolation:
     """P2-2 回归：unlink_library 必须校验库归属公司。"""
 
     def test_link_and_unlink(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co = _mk_company("Co", "co")
         cust = _mk_customer(co["id"], "Cust")
         lib = _mk_library(co["id"], "Lib", str(tmp_path / "lib"))
@@ -106,7 +106,7 @@ class TestOrderLibraryIsolation:
 
     def test_unlink_cross_company_blocked(self, db, tmp_path):
         """解绑他公司的库应被拒绝（返回 False）。"""
-        from trade import order
+        from agentbase import order
         co1 = _mk_company("Co1", "co1")
         co2 = _mk_company("Co2", "co2")
         cust1 = _mk_customer(co1["id"], "Cust1")
@@ -116,7 +116,7 @@ class TestOrderLibraryIsolation:
         assert order.unlink_library(o["id"], lib2["id"], company_id=co1["id"]) is False
 
     def test_unlink_order_not_in_company(self, db, tmp_path):
-        from trade import order
+        from agentbase import order
         co1 = _mk_company("Co1", "co1")
         co2 = _mk_company("Co2", "co2")
         cust1 = _mk_customer(co1["id"], "Cust1")

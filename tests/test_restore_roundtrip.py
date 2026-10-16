@@ -3,12 +3,12 @@
 ## 历史 bug（三处，全部只在真还原时暴露）
 
 1. **路径前缀错配**：备份时 arcname 带 `.trade/` 前缀
-   （`backup.py:68` 写 `.trade/data/trade.db`、`:78` 写 `.trade/{rel}`），
+   （`backup.py:68` 写 `.trade/data/agentbase.db`、`:78` 写 `.trade/{rel}`），
    解压到 tmp_dir 后文件落在 `tmp_dir/.trade/...`，可还原代码找的是
-   `tmp_dir/"data"/"trade.db"` 与 `tmp_dir/"companies"` —— **永远不存在**，
+   `tmp_dir/"data"/"agentbase.db"` 与 `tmp_dir/"companies"` —— **永远不存在**，
    于是 `if exists()` 静默跳过，**不报错、不警告**，最后打印「✓ 已还原」。
    公司档案 / 提示词 / 记忆 / skills 全都没回来，只有 DB 因为
-   `rglob("trade.db")` 兜底被碰巧救回 —— 这让整条路径"看起来是对的"。
+   `rglob("agentbase.db")` 兜底被碰巧救回 —— 这让整条路径"看起来是对的"。
 
 2. **重启回退是死代码**：`_build_restart_command()` 返回
    `[sys.executable, "-m", "trade"]`，但**仓库里没有 `trade/__main__.py`**
@@ -37,14 +37,14 @@ def _no_real_restart(monkeypatch):
     不屏蔽的话测试会在 CI 机器上真的拉起一个服务（占端口、留进程），
     既慢又不可控。
     """
-    from trade.post_install import backup as bk
+    from agentbase.post_install import backup as bk
 
     monkeypatch.setattr(bk, "_restart_trade_service", lambda: None)
 
 
 @pytest.fixture
 def trade_env(monkeypatch, tmp_path):
-    """临时 TRADE_HOME / HERMES_HOME，带一份可辨别的数据。"""
+    """临时 AGENT_HOME / HERMES_HOME，带一份可辨别的数据。"""
     trade_home = tmp_path / "trade"
     hermes_home = tmp_path / "hermes"
     (trade_home / "data").mkdir(parents=True)
@@ -55,7 +55,7 @@ def trade_env(monkeypatch, tmp_path):
     # 造一个真实可用的最小 sqlite 库
     import sqlite3
 
-    conn = sqlite3.connect(trade_home / "data" / "trade.db")
+    conn = sqlite3.connect(trade_home / "data" / "agentbase.db")
     conn.execute("CREATE TABLE marker (v TEXT)")
     conn.execute("INSERT INTO marker VALUES ('orig')")
     conn.commit()
@@ -66,7 +66,7 @@ def trade_env(monkeypatch, tmp_path):
     )
     (trade_home / "prompts" / "system.md").write_text("自定义提示词", encoding="utf-8")
 
-    monkeypatch.setenv("TRADE_HOME", str(trade_home))
+    monkeypatch.setenv("AGENT_HOME", str(trade_home))
     monkeypatch.setenv("HERMES_HOME", str(hermes_home))
     return {"trade_home": trade_home, "hermes_home": hermes_home, "tmp": tmp_path}
 
@@ -74,7 +74,7 @@ def trade_env(monkeypatch, tmp_path):
 class TestRoundtripRestoresData:
     def test_companies_and_prompts_come_back(self, trade_env):
         """核心：还原后公司档案与提示词必须真的回来了。"""
-        from trade.post_install.backup import backup_trade, restore_trade
+        from agentbase.post_install.backup import backup_trade, restore_trade
 
         archive = backup_trade(output_dir=str(trade_env["tmp"]))
 
@@ -84,7 +84,7 @@ class TestRoundtripRestoresData:
 
         shutil.rmtree(th / "companies")
         shutil.rmtree(th / "prompts")
-        (th / "data" / "trade.db").unlink()
+        (th / "data" / "agentbase.db").unlink()
 
         msg = restore_trade(archive)
 
@@ -96,17 +96,17 @@ class TestRoundtripRestoresData:
         assert (th / "prompts" / "system.md").read_text(encoding="utf-8") == "自定义提示词"
 
     def test_database_restored(self, trade_env):
-        from trade.post_install.backup import backup_trade, restore_trade
+        from agentbase.post_install.backup import backup_trade, restore_trade
 
         archive = backup_trade(output_dir=str(trade_env["tmp"]))
         th = trade_env["trade_home"]
-        (th / "data" / "trade.db").unlink()
+        (th / "data" / "agentbase.db").unlink()
 
         restore_trade(archive)
 
         import sqlite3
 
-        conn = sqlite3.connect(th / "data" / "trade.db")
+        conn = sqlite3.connect(th / "data" / "agentbase.db")
         try:
             assert conn.execute("SELECT v FROM marker").fetchone()[0] == "orig"
         finally:
@@ -114,14 +114,14 @@ class TestRoundtripRestoresData:
 
     def test_missing_payload_is_reported_not_silent(self, trade_env):
         """备份里缺内容时要报出来，不能静默跳过还宣称成功。"""
-        from trade.post_install import backup as bk
+        from agentbase.post_install import backup as bk
 
         # 造一个只有 DB 的备份（没有 companies/prompts）
         thin = trade_env["tmp"] / "thin.tar.gz"
         with tarfile.open(thin, "w:gz") as tar:
             tar.add(
-                trade_env["trade_home"] / "data" / "trade.db",
-                arcname=".trade/data/trade.db",
+                trade_env["trade_home"] / "data" / "agentbase.db",
+                arcname=".trade/data/agentbase.db",
             )
 
         msg = bk.restore_trade(str(thin))
@@ -134,7 +134,7 @@ class TestRoundtripRestoresData:
 class TestIntegrityCheckHasNoCliDependency:
     def test_does_not_shell_out_to_sqlite3(self, trade_env, monkeypatch):
         """完整性检查必须用 Python 的 sqlite3 模块 —— Windows 没有 sqlite3.exe。"""
-        from trade.post_install import backup as bk
+        from agentbase.post_install import backup as bk
 
         archive = bk.backup_trade(output_dir=str(trade_env["tmp"]))
 
@@ -159,7 +159,7 @@ class TestIntegrityCheckHasNoCliDependency:
 class TestRestartCommandIsRunnable:
     def test_no_nonexistent_module_entrypoint(self):
         """`-m trade` 依赖 trade/__main__.py，而仓库里没有这个文件。"""
-        from trade.post_install.backup import _build_restart_command
+        from agentbase.post_install.backup import _build_restart_command
 
         cmd = _build_restart_command()
 

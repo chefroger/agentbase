@@ -3,13 +3,13 @@
 
 背景：身份文件是「文件优先」提示词链的最高优先级来源（prompts.resolve 第 1 步），
 但历史上三处路径两两不同：
-  - prompts.py 读 ~/.trade/companies/{slug}/agent_identity.md（下划线，基准目录少一层）
-  - onboarding.py 写 ~/.trade/{slug}/companies/{slug}/agent-identity.md
-  - company/crud.py 读 ~/.trade/{slug}/agent-identity.md
+  - prompts.py 读 ~/.agentbase/companies/{slug}/agent_identity.md（下划线，基准目录少一层）
+  - onboarding.py 写 ~/.agentbase/{slug}/companies/{slug}/agent-identity.md
+  - company/crud.py 读 ~/.agentbase/{slug}/agent-identity.md
 结果读取方永远读不到写入方写的文件，整层「改文件即生效」是死的，
 身份实际只靠 DB 的 agent_identity_md 兜底。
 
-约定（以模板/工作目录为准）：~/.trade/{slug}/companies/{slug}/agent-identity.md
+约定（以模板/工作目录为准）：~/.agentbase/{slug}/companies/{slug}/agent-identity.md
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def trade_home(tmp_path, monkeypatch):
     """把 prompts 的数据目录指向临时目录。"""
-    monkeypatch.setattr("trade.prompts._get_trade_home", lambda: tmp_path)
+    monkeypatch.setattr("agentbase.prompts._get_trade_home", lambda: tmp_path)
     return tmp_path
 
 
@@ -34,7 +34,7 @@ class TestAgentIdentityPath:
 
     def test_path_matches_workdir_layout(self, trade_home):
         """解析出的路径必须落在 {data_dir}/companies/{slug}/agent-identity.md。"""
-        from trade.prompts import _company_identity_path
+        from agentbase.prompts import _company_identity_path
 
         assert _company_identity_path("acme") == (
             trade_home / "acme" / "companies" / "acme" / "agent-identity.md"
@@ -45,8 +45,8 @@ class TestAgentIdentityPath:
 
         这是端到端断言：只要路径约定与 _ensure_data_dir 不一致，这里就会读不到内容。
         """
-        from trade.company.workdir import _ensure_data_dir
-        from trade.prompts import get_agent_identity_by_slug
+        from agentbase.company.workdir import _ensure_data_dir
+        from agentbase.prompts import get_agent_identity_by_slug
 
         _ensure_data_dir("acme", trade_home)
 
@@ -61,7 +61,7 @@ class TestAgentIdentityPath:
 
     def test_write_then_read_roundtrip(self, trade_home):
         """write_agent_identity 写出的内容必须能被 get_agent_identity_by_slug 读回。"""
-        from trade.prompts import get_agent_identity_by_slug, write_agent_identity
+        from agentbase.prompts import get_agent_identity_by_slug, write_agent_identity
 
         write_agent_identity("acme", "# 我是 Acme 的助手\n只讲英语。")
 
@@ -69,7 +69,7 @@ class TestAgentIdentityPath:
 
     def test_identity_file_wins_over_db_in_resolution(self, trade_home):
         """文件优先链：文件存在时自定义层取文件内容，且追加在基础规则之后。"""
-        from trade.prompts import resolve_system_prompt, write_agent_identity
+        from agentbase.prompts import resolve_system_prompt, write_agent_identity
 
         write_agent_identity("acme", "文件里的身份")
 
@@ -84,14 +84,14 @@ class TestAgentIdentityPath:
 class TestLegacyIdentityPathCompatibility:
     """历史遗留路径的一次性兼容读取。
 
-    统一路径之前，「读取方」曾指向 ~/.trade/companies/{slug}/agent_identity.md
+    统一路径之前，「读取方」曾指向 ~/.agentbase/companies/{slug}/agent_identity.md
     （下划线、少一层 companies/{slug}）。用户可能已经手动编辑过那个文件，
     直接弃用会让改动凭空消失 —— 所以保留一次性兼容读取，规范路径优先。
     """
 
     def test_legacy_file_is_read_when_canonical_missing(self, trade_home):
         """规范路径没有文件时，回退读历史遗留路径。"""
-        from trade.prompts import get_agent_identity_by_slug
+        from agentbase.prompts import get_agent_identity_by_slug
 
         legacy = trade_home / "companies" / "acme" / "agent_identity.md"
         legacy.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ class TestLegacyIdentityPathCompatibility:
 
     def test_canonical_wins_over_legacy(self, trade_home):
         """两处都存在时以规范路径为准。"""
-        from trade.prompts import get_agent_identity_by_slug, write_agent_identity
+        from agentbase.prompts import get_agent_identity_by_slug, write_agent_identity
 
         write_agent_identity("acme", "规范路径里的身份")
         legacy = trade_home / "companies" / "acme" / "agent_identity.md"
@@ -112,7 +112,7 @@ class TestLegacyIdentityPathCompatibility:
 
     def test_no_file_anywhere_returns_empty(self, trade_home):
         """两处都没有时返回空串，由调用方兜底。"""
-        from trade.prompts import get_agent_identity_by_slug
+        from agentbase.prompts import get_agent_identity_by_slug
 
         assert get_agent_identity_by_slug("acme") == ""
 
@@ -126,11 +126,11 @@ class TestCrudIdentityReaderFileFallback:
 
     def test_file_fallback_reads_canonical_path(self, tmp_path, monkeypatch):
         """DB 字段为空时应能读回规范路径下的身份文件。"""
-        import trade.company as co
-        from trade.company import crud
+        import agentbase.company as co
+        from agentbase.company import crud
 
         # create() 会创建真实桌面工作目录，必须重定向到临时目录。
-        # 注意 create() 里是函数内 `from trade.company.workdir import _setup_work_directory`，
+        # 注意 create() 里是函数内 `from agentbase.company.workdir import _setup_work_directory`，
         # 所以 patch 源模块而不是 crud 命名空间。
         def _mock_setup(cname, slug, suggested_name=""):
             wd = tmp_path / "workdir" / (suggested_name or cname)
@@ -139,10 +139,10 @@ class TestCrudIdentityReaderFileFallback:
                 (wd / cat_name).mkdir(parents=True, exist_ok=True)
             return wd, True
 
-        monkeypatch.setattr("trade.company.workdir._setup_work_directory", _mock_setup)
+        monkeypatch.setattr("agentbase.company.workdir._setup_work_directory", _mock_setup)
 
-        # 建表（TRADE_HOME 已由 conftest 指向临时目录，不碰真实数据）
-        from trade.database import init_db
+        # 建表（AGENT_HOME 已由 conftest 指向临时目录，不碰真实数据）
+        from agentbase.database import init_db
         init_db()
 
         company = crud.create(name="Acme Identity Co", slug="acme-identity")
@@ -153,7 +153,7 @@ class TestCrudIdentityReaderFileFallback:
         crud.update_trade_company(cid, agent_identity_md="")
 
         # 在规范位置（模板/工作目录布局）写文件
-        identity_file = crud.TRADE_HOME / slug / "companies" / slug / "agent-identity.md"
+        identity_file = crud.AGENT_HOME / slug / "companies" / slug / "agent-identity.md"
         identity_file.parent.mkdir(parents=True, exist_ok=True)
         identity_file.write_text("文件里的身份", encoding="utf-8")
 

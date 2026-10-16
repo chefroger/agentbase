@@ -36,7 +36,7 @@ class _FakeDatetime:
 @pytest.fixture
 def freeze_now(monkeypatch):
     """把 trade.chat_memory 内部的 datetime 换成 _FakeDatetime，用例传 now= 即可。"""
-    from trade import chat_memory
+    from agentbase import chat_memory
 
     def _install(now: datetime):
         _FakeDatetime.fixed = now
@@ -47,46 +47,46 @@ def freeze_now(monkeypatch):
 class TestSearchHistoryBoundaries:
 
     def test_today_at_thursday_noon(self, freeze_now):
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 15, 11, 30, 0))  # Thursday
         assert _BOUNDARY_COMPUTERS["today"](_FakeDatetime.fixed) == datetime(2026, 10, 15, 0, 0, 0)
 
     def test_yesterday_at_thursday_noon(self, freeze_now):
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 15, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["yesterday"](_FakeDatetime.fixed) == datetime(2026, 10, 14, 0, 0, 0)
 
     def test_last_week_at_thursday(self, freeze_now):
         """Thursday: this_week = Mon 10-12, last_week = Mon 10-05"""
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 15, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["last_week"](_FakeDatetime.fixed) == datetime(2026, 10, 5, 0, 0, 0)
 
     def test_last_week_at_monday(self, freeze_now):
         """Monday: this_week = today, last_week = 7 days ago"""
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 12, 11, 30, 0))  # Monday
         assert _BOUNDARY_COMPUTERS["last_week"](_FakeDatetime.fixed) == datetime(2026, 10, 5, 0, 0, 0)
 
     def test_last_month_at_october(self, freeze_now):
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 15, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["last_month"](_FakeDatetime.fixed) == datetime(2026, 9, 1, 0, 0, 0)
 
     def test_last_month_january_wraps_to_prev_year(self, freeze_now):
         """1 月的 last_month 必须走 12/去年（stdlib 没有 -1 month）。"""
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 1, 15, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["last_month"](_FakeDatetime.fixed) == datetime(2025, 12, 1, 0, 0, 0)
 
     def test_last_year_at_january_wraps_to_2025(self, freeze_now):
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 1, 1, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["last_year"](_FakeDatetime.fixed) == datetime(2025, 1, 1, 0, 0, 0)
 
     def test_now_2027_01_01_cross_year(self, freeze_now):
         """跨年：now 在 2027-01-01 11:30，last_year 必须跳回 2026。"""
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2027, 1, 1, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["this_year"](_FakeDatetime.fixed) == datetime(2027, 1, 1, 0, 0, 0)
         assert _BOUNDARY_COMPUTERS["last_year"](_FakeDatetime.fixed) == datetime(2026, 1, 1, 0, 0, 0)
@@ -94,7 +94,7 @@ class TestSearchHistoryBoundaries:
         assert _BOUNDARY_COMPUTERS["last_month"](_FakeDatetime.fixed) == datetime(2026, 12, 1, 0, 0, 0)
 
     def test_all_returns_none(self, freeze_now):
-        from trade.chat_memory import _BOUNDARY_COMPUTERS
+        from agentbase.chat_memory import _BOUNDARY_COMPUTERS
         freeze_now(datetime(2026, 10, 15, 11, 30, 0))
         assert _BOUNDARY_COMPUTERS["all"](_FakeDatetime.fixed) is None
 
@@ -106,9 +106,9 @@ class TestSearchHistoryE2E:
 
     @pytest.fixture
     def db_with_rows(self, tmp_path, monkeypatch):
-        """临时 TRADE_HOME + 真实 init_db + 插若干对话。"""
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-        import trade.database as db
+        """临时 AGENT_HOME + 真实 init_db + 插若干对话。"""
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as db
         db.init_db()
         con = db.get_connection()
         con.execute("INSERT INTO companies (id, name, slug) VALUES (1, '测试', 'test')")
@@ -130,39 +130,39 @@ class TestSearchHistoryE2E:
         return tmp_path
 
     def test_today_returns_only_today(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="today")
         assert [x["query"] for x in r] == ["今天的问题"]
 
     def test_yesterday_excludes_today(self, db_with_rows):
         """**关键测试**：yesterday 不应包含今天 00:00 之后的内容。"""
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="yesterday")
         assert [x["query"] for x in r] == ["昨天的问题"]
 
     def test_this_week_includes_today(self, db_with_rows):
         """this_week 含"现在"——所以今天/昨天/前天都进。"""
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="this_week")
         assert [x["query"] for x in r] == ["今天的问题", "昨天的问题", "前天的问题"]
 
     def test_last_week_does_not_include_this_week(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="last_week")
         assert [x["query"] for x in r] == ["上周的问题"]
 
     def test_all_returns_everything(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all")
         assert len(r) == 4
 
     def test_recent_days_includes_only_within_window(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all", recent_days=7)
         # today/昨天/前天都在 7 天内；10 天前的不在
@@ -170,35 +170,35 @@ class TestSearchHistoryE2E:
 
     def test_recent_days_1_equals_today(self, db_with_rows):
         """recent_days=1 = today（同一起点 today 0:00，闭端到"现在"——这里"现在"是 now）。"""
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r_today = search_history(1, time_range="today")
         r_rd1 = search_history(1, time_range="all", recent_days=1)
         assert sorted(x["query"] for x in r_today) == sorted(x["query"] for x in r_rd1)
 
     def test_recent_days_2_includes_today_and_yesterday(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all", recent_days=2)
         # 起点 = 昨天 0:00 → 含今天 + 昨天
         assert sorted(x["query"] for x in r) == sorted(["今天的问题", "昨天的问题"])
 
     def test_recent_months_1_returns_only_this_month(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all", recent_months=1)
         # 所有 4 条都在本月 → 全返
         assert len(r) == 4
 
     def test_unknown_enum_falls_through_to_all(self, db_with_rows):
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="完全不存在的枚举")
         assert len(r) == 4  # fail-safe → all
 
     def test_company_id_isolation(self, db_with_rows):
-        import trade.database as db
-        from trade.chat_memory import search_history
+        import agentbase.database as db
+        from agentbase.chat_memory import search_history
 
         con = db.get_connection()
         con.execute("INSERT INTO companies (id, name, slug) VALUES (2, '另一家', 'other')")
@@ -221,9 +221,9 @@ class TestEnsureChatMemoryPluginEnabled:
 
     @pytest.fixture
     def hermes_home(self, tmp_path, monkeypatch):
-        """临时 HERMES_HOME 与 TRADE_HOME。"""
+        """临时 HERMES_HOME 与 AGENT_HOME。"""
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         return tmp_path
 
     def _write(self, path: Path, content: str) -> None:
@@ -231,7 +231,7 @@ class TestEnsureChatMemoryPluginEnabled:
         path.write_text(content, encoding="utf-8")
 
     def test_creates_minimal_skeleton_when_no_config(self, hermes_home):
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         ensure_chat_memory_plugin_enabled()
 
@@ -241,7 +241,7 @@ class TestEnsureChatMemoryPluginEnabled:
         assert "chat-memory" in content
 
     def test_appends_to_existing_plugins_enabled(self, hermes_home):
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         config_path = Path(hermes_home) / "config.yaml"
         self._write(config_path, "plugins:\n  enabled: [foo, bar]\n")
@@ -261,7 +261,7 @@ class TestEnsureChatMemoryPluginEnabled:
         assert before.split("plugins")[0] in new or before[:20] in new[:20]
 
     def test_idempotent_no_change_on_second_call(self, hermes_home):
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         ensure_chat_memory_plugin_enabled()
         first = (Path(hermes_home) / "config.yaml").read_text(encoding="utf-8")
@@ -273,7 +273,7 @@ class TestEnsureChatMemoryPluginEnabled:
         assert first == second, "第二次应幂等，但文件内容变了"
 
     def test_skip_when_in_plugins_disabled(self, hermes_home, capfd):
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         config_path = Path(hermes_home) / "config.yaml"
         self._write(config_path, "plugins:\n  enabled: [foo]\n  disabled: [chat-memory]\n")
@@ -292,7 +292,7 @@ class TestEnsureChatMemoryPluginEnabled:
 
     def test_skip_when_user_messed_up_list_type(self, hermes_home):
         """plugins.enabled 已被用户改成非 list（如 dict / str）：不要覆盖，警告。"""
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         config_path = Path(hermes_home) / "config.yaml"
         self._write(config_path, "plugins:\n  enabled:\n    foo: bar\n")
@@ -306,11 +306,11 @@ class TestEnsureChatMemoryPluginEnabled:
 
     def test_does_not_delete_unrelated_top_level_keys(self, hermes_home):
         """必须**不**碰其它顶层 key。"""
-        from trade.bootstrap import ensure_chat_memory_plugin_enabled
+        from agentbase.bootstrap import ensure_chat_memory_plugin_enabled
 
         config_path = Path(hermes_home) / "config.yaml"
         self._write(config_path, (
-            "server:\n  port: 9119\n"
+            "server:\n  port: 9120\n"
             "logging:\n  level: info\n"
             "plugins:\n  enabled: [foo]\n"
         ))
@@ -320,7 +320,7 @@ class TestEnsureChatMemoryPluginEnabled:
         new = config_path.read_text(encoding="utf-8")
         # 顶层 key 都得在
         assert "server:" in new
-        assert "port: 9119" in new
+        assert "port: 9120" in new
         assert "logging:" in new
         assert "level: info" in new
         assert "plugins:" in new
@@ -332,8 +332,8 @@ class TestEnsureChatMemoryPluginEnabled:
 class TestSyncChatMemoryPlugin:
 
     def test_creates_plugin_dir_from_source(self, tmp_path, monkeypatch):
-        from trade import bootstrap
-        from trade.post_install import skills as sk_mod
+        from agentbase import bootstrap
+        from agentbase.post_install import skills as sk_mod
 
         src = tmp_path / "src_plugin" / "hermes_chat_memory_plugin"
         src.mkdir(parents=True)
@@ -356,7 +356,7 @@ class TestSyncChatMemoryPlugin:
 
     def test_idempotent_second_run(self, tmp_path, monkeypatch):
         """hash 一致时第二次只打印 up-to-date，不重写文件。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         src = tmp_path / "src_plugin" / "hermes_chat_memory_plugin"
         src.mkdir(parents=True)
@@ -365,7 +365,7 @@ class TestSyncChatMemoryPlugin:
         (src / "tools.py").write_text("x = 1\n", encoding="utf-8")
 
         monkeypatch.setattr(bootstrap, "_local_chat_memory_plugin_source", lambda: src)
-        from trade.post_install import skills as sk_mod
+        from agentbase.post_install import skills as sk_mod
         hermes_home = tmp_path / "hermes_home"
         monkeypatch.setattr(sk_mod, "_get_hermes_home", lambda: hermes_home)
 
@@ -382,7 +382,7 @@ class TestSyncChatMemoryPlugin:
         assert first_mtime == second_mtime, "up-to-date 时不应重写文件（mtime 不该变）"
 
     def test_redeploys_when_source_changes(self, tmp_path, monkeypatch):
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         src = tmp_path / "src_plugin" / "hermes_chat_memory_plugin"
         src.mkdir(parents=True)
@@ -391,7 +391,7 @@ class TestSyncChatMemoryPlugin:
         (src / "tools.py").write_text("x = 1\n", encoding="utf-8")
 
         monkeypatch.setattr(bootstrap, "_local_chat_memory_plugin_source", lambda: src)
-        from trade.post_install import skills as sk_mod
+        from agentbase.post_install import skills as sk_mod
         hermes_home = tmp_path / "hermes_home"
         monkeypatch.setattr(sk_mod, "_get_hermes_home", lambda: hermes_home)
 
@@ -434,20 +434,20 @@ class TestChatMemoryPluginE2E:
         assert "schema" in calls[0] and "handler" in calls[0]
 
     def test_handler_rejects_missing_company_id(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({"time_range": "all"}))
         assert "error" in res
         assert "company_id" in res["error"]
 
     def test_handler_rejects_non_int_company_id(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({"company_id": "1", "time_range": "all"}))
         assert "company_id" in res["error"]
 
     def test_handler_rejects_recent_days_and_months_together(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({
             "company_id": 1, "recent_days": 7, "recent_months": 2,
@@ -455,7 +455,7 @@ class TestChatMemoryPluginE2E:
         assert "mutually exclusive" in res["error"]
 
     def test_handler_rejects_zero_recent_days(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({
             "company_id": 1, "recent_days": 0,
@@ -465,9 +465,9 @@ class TestChatMemoryPluginE2E:
     def test_handler_succeeds_with_valid_args(self, tmp_path, monkeypatch):
         """端到端：真 SQLite + 真 handler。"""
         # 用 monkeypatch 而不是直接赋值 —— 后者不会在用例结束时还原，
-        # 会把 TRADE_HOME 渗给后续用例（它们拿到的是已删除的 tmp_path）
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-        import trade.database as db
+        # 会把 AGENT_HOME 渗给后续用例（它们拿到的是已删除的 tmp_path）
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as db
         db.init_db()
         con = db.get_connection()
         con.execute("INSERT INTO companies (id, name, slug) VALUES (1, 't', 't')")
@@ -501,7 +501,7 @@ class TestPluginToolsetIsEnabled:
     """
 
     def test_plugin_toolset_is_in_default_enabled_toolsets(self):
-        from trade.helpers import DEFAULT_ENABLED_TOOLSETS
+        from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS
 
         plugin = TestChatMemoryPluginE2E()._load_plugin()
         captured = []
@@ -535,12 +535,12 @@ class TestRecentMonthsAtMonthEnd:
         """这些月份的 31 号都要能跑（2/4/6/9/11 月没有 31 号，不在参数里）。"""
         from datetime import datetime as _dt
 
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-        import trade.database as db
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as db
         db.init_db()
 
         freeze_now(_dt(2026, month, 31, 11, 30, 0))
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
 
         for n in (2, 3, 6):
             rows = search_history(1, time_range="all", recent_months=n)
@@ -550,10 +550,10 @@ class TestRecentMonthsAtMonthEnd:
         """归一到月初后，窗口起点仍是"N-1 个月前的 1 号"，不是被截断的月末。"""
         from datetime import datetime as _dt
 
-        from trade.chat_memory import _start_of_month, _subtract_one_month
+        from agentbase.chat_memory import _start_of_month, _subtract_one_month
 
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-        import trade.database as db
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as db
         db.init_db()
 
         now = _dt(2026, 3, 31, 11, 30, 0)
@@ -562,7 +562,7 @@ class TestRecentMonthsAtMonthEnd:
         expected = _subtract_one_month(_start_of_month(now))
         assert expected == _dt(2026, 2, 1, 0, 0, 0)
 
-        from trade.chat_memory import search_history
+        from agentbase.chat_memory import search_history
         ts = _dt(2026, 2, 15, 10, 0, 0).strftime("%Y-%m-%d %H:%M:%S")
         with_ts = _dt(2026, 1, 15, 10, 0, 0).strftime("%Y-%m-%d %H:%M:%S")
         con = db.get_connection()
@@ -585,7 +585,7 @@ class TestSchemaDescriptionAccuracy:
     """
 
     def test_recent_days_description_does_not_claim_yesterday(self):
-        from trade.hermes_chat_memory_plugin import tools as cm_tools
+        from agentbase.hermes_chat_memory_plugin import tools as cm_tools
 
         desc = cm_tools._RECENT_DAYS_DESCRIPTION
         assert "yesterday" not in desc or "不是" in desc or "**不是**" in desc, (
@@ -595,8 +595,8 @@ class TestSchemaDescriptionAccuracy:
 
     def test_enum_values_match_implementation(self):
         """schema 的 enum 必须与 search_history 认的枚举一一对应（两边漏一个就漂移）。"""
-        from trade.chat_memory import _VALID_TIME_RANGES
-        from trade.hermes_chat_memory_plugin.tools import CHAT_MEMORY_LIST_SCHEMA
+        from agentbase.chat_memory import _VALID_TIME_RANGES
+        from agentbase.hermes_chat_memory_plugin.tools import CHAT_MEMORY_LIST_SCHEMA
 
         enum = set(CHAT_MEMORY_LIST_SCHEMA["parameters"]["properties"]["time_range"]["enum"])
         assert enum == set(_VALID_TIME_RANGES), (

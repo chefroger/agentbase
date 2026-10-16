@@ -43,7 +43,7 @@ import pytest
 )
 def test_natural_language_routes_to_specialized_skill(query, expected):
     """自然语言查询应命中最具体的业务技能，而不是泛技能或无匹配。"""
-    from trade.skill_router import match_skill
+    from agentbase.skill_router import match_skill
 
     result = match_skill(query)
 
@@ -53,7 +53,7 @@ def test_natural_language_routes_to_specialized_skill(query, expected):
 
 def test_specialized_outreach_beats_generic_lead_generation():
     """开发信写作应由专职冷 outreach 技能处理，而非客户开发总技能。"""
-    from trade.skill_router import match_skill
+    from agentbase.skill_router import match_skill
 
     result = match_skill("写一封开发信给德国客户")
 
@@ -63,7 +63,7 @@ def test_specialized_outreach_beats_generic_lead_generation():
 
 def test_alias_name_explicit_call_resolves_to_registered_skill():
     """显式使用注册表 alias 时，应解析到对应的实际 skill。"""
-    from trade.skill_router import match_skill
+    from agentbase.skill_router import match_skill
 
     result = match_skill("用 memory")
 
@@ -73,7 +73,7 @@ def test_alias_name_explicit_call_resolves_to_registered_skill():
 
 def test_alias_name_explicit_augmentation_uses_registered_skill():
     """通过 alias 显式注入时，也应加载对应 skill 的规则。"""
-    from trade.skill_router import augment_query
+    from agentbase.skill_router import augment_query
 
     result = augment_query("查询上次讨论", skill_name="memory")
 
@@ -83,7 +83,7 @@ def test_alias_name_explicit_augmentation_uses_registered_skill():
 
 def test_blocked_alias_does_not_resolve_to_another_skill():
     """被禁用的 auto-smtp-email alias 不能绕过封禁解析到自动开发流水线。"""
-    from trade.skill_router import match_skill
+    from agentbase.skill_router import match_skill
 
     assert match_skill("用 auto-smtp-email") is None
 
@@ -103,7 +103,7 @@ def test_qa_cache_reloads_when_reference_file_changes(monkeypatch, tmp_path):
     import os
     import time
 
-    import trade.skill_router as router
+    import agentbase.skill_router as router
 
     skill_dir = tmp_path / "skill"
     qa_path = skill_dir / "references" / "qa_pairs.md"
@@ -165,7 +165,7 @@ class TestChinaLeadsRouting:
         "找同类厂商",
     ])
     def test_domestic_queries_hit_the_new_skill(self, query):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
 
         matched = match_skill(query)
         assert matched is not None, f"{query!r} 没匹配到任何技能"
@@ -182,7 +182,7 @@ class TestChinaLeadsRouting:
         ("竞品分析怎么写", "b2b-market-analysis"),
     ])
     def test_does_not_steal_neighbouring_skills(self, query, expected):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
 
         matched = match_skill(query)
         assert matched is not None and matched["name"] == expected, (
@@ -203,7 +203,7 @@ class TestChinaLeadsRouting:
         这些语句可能归别的技能、也可能无人认领（None）——两种都行，
         唯一不许的就是落到 b2b-china-leads（它的注入提示词会跑错工作流）。
         """
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
 
         matched = match_skill(query)
         assert matched is None or matched["name"] != "b2b-china-leads", (

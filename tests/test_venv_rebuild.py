@@ -25,9 +25,9 @@ sys.path.insert(0, str(ROOT))
 
 @pytest.fixture
 def fake_trade_home(tmp_path, monkeypatch):
-    """造一个带安装脚本的假 TRADE_HOME。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    scripts = tmp_path / "foreign-trade-assistant" / "scripts"
+    """造一个带安装脚本的假 AGENT_HOME。"""
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    scripts = tmp_path / "agentbase" / "scripts"
     scripts.mkdir(parents=True)
     (scripts / "install.sh").write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
     (scripts / "install.ps1").write_text("# fake\n", encoding="utf-8")
@@ -43,14 +43,14 @@ class TestVenvRebuildScript:
 
     每一步的理由（顺序不能换）：
       1. 等 2 秒 —— 让本次 HTTP 响应先发回浏览器，否则前端只看到连接被掐断
-      2. 杀当前进程 —— 腾出 venv 与 9119 端口
+      2. 杀当前进程 —— 腾出 venv 与 9120 端口
       3. 跑安装脚本 —— 脚本本身是原子的（失败保留旧 venv）
       4. **无论成败都启动 Trade** —— 失败了也要用旧环境把服务拉回来。
          漏掉这一步，用户面对的是一台彻底打不开的机器，比升级前还糟。
     """
 
     def _posix_script(self, fake_trade_home):
-        from trade.app import _venv_rebuild_script
+        from agentbase.app import _venv_rebuild_script
 
         built = _venv_rebuild_script()
         assert built is not None, "POSIX 下应该能构造出重建脚本"
@@ -88,15 +88,15 @@ class TestVenvRebuildScript:
         assert "--no-browser" in script[start_at:], "拉起服务时没有 --no-browser"
 
     def test_log_file_is_under_trade_home(self, fake_trade_home):
-        """日志落到 TRADE_HOME/logs —— 服务停掉后它是唯一的事后线索。"""
+        """日志落到 AGENT_HOME/logs —— 服务停掉后它是唯一的事后线索。"""
         _, log_file = self._posix_script(fake_trade_home)
         assert str(fake_trade_home) in log_file
         assert log_file.endswith("rebuild-venv.log")
 
     def test_returns_none_when_install_script_missing(self, tmp_path, monkeypatch):
         """找不到安装脚本时不能硬跑 —— 返回 None 让调用方如实报错。"""
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))  # 空目录，没有 scripts/
-        from trade.app import _venv_rebuild_script
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))  # 空目录，没有 scripts/
+        from agentbase.app import _venv_rebuild_script
 
         assert _venv_rebuild_script() is None
 
@@ -116,7 +116,7 @@ class TestVenvRebuildScriptWindows:
     """
 
     def test_uses_cmd_taskkill_and_powershell_in_order(self, fake_trade_home):
-        from trade.app import _venv_rebuild_script
+        from agentbase.app import _venv_rebuild_script
 
         built = _venv_rebuild_script()
         assert built is not None, "Windows 下应该能构造出重建脚本"
@@ -150,11 +150,11 @@ class TestWindowsLauncherPath:
     def test_app_py_points_at_local_bin(self):
         src = (ROOT / "trade" / "app.py").read_text(encoding="utf-8")
         line = next(
-            (ln for ln in src.splitlines() if "launcher" in ln and "trade.cmd" in ln),
+            (ln for ln in src.splitlines() if "launcher" in ln and "agentbase.cmd" in ln),
             None,
         )
         assert line, "app.py 里没找到 launcher 的 trade.cmd 推导"
-        for part in ('"local"', '"bin"', '"trade.cmd"'):
+        for part in ('"local"', '"bin"', '"agentbase.cmd"'):
             assert part in line, (
                 f"launcher 路径缺 {part}，与 install.ps1 的 $LocalBin 不一致：{line.strip()}"
             )
@@ -178,14 +178,14 @@ class TestRebuildEndpointGuard:
     """
 
     def test_endpoint_checks_fix_before_scheduling(self, monkeypatch, fake_trade_home):
-        import trade.app as app_module
+        import agentbase.app as app_module
 
         scheduled: list[bool] = []
         monkeypatch.setattr(app_module, "_schedule_venv_rebuild", lambda: scheduled.append(True) or True)
 
         # 不需要重建：fix 是别的值 → 必须拒绝，且**不派发**子进程
         monkeypatch.setattr(
-            "trade.bootstrap.hermes_compat_state",
+            "agentbase.bootstrap.hermes_compat_state",
             lambda: {"fix": "upgrade_hermes"},
         )
         router = app_module._create_system_router()

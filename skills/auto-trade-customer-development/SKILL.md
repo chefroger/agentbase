@@ -89,7 +89,7 @@ injection_prompt: |
   - 已存在的客户（按 company_website 或 email 去重）更新 last_contacted_at
   - 输出：{"created": N, "updated": M, "skipped": K}
 
-  【Phase 7 — 日志】生成开发日志写入 ~/.trade/audit/auto-pipeline-{date}.md
+  【Phase 7 — 日志】生成开发日志写入 ~/.agentbase/audit/auto-pipeline-{date}.md
   - 时间戳 / 输入参数 / 每阶段输出统计 / 失败原因（如有）
   - TOP10 客户详情卡片（公司/联系人/评分/发送状态）
   - 下一步建议（如「A 级客户 3 天后跟进」「B 级客户 7 天后跟进」）
@@ -99,7 +99,7 @@ injection_prompt: |
   ════════════════════════════════════════
   1. **可中断**：每个 Phase 完成后输出进度（"Phase X/N 完成 — Y 家候选"），用户可随时喊停
   2. **可回滚**：Phase 5 发送前必须等用户确认，确认前不能调用任何 SMTP 工具
-  3. **可追溯**：每个客户在每个 Phase 的状态必须可查（通过 ~/.trade/audit/ 日志）
+  3. **可追溯**：每个客户在每个 Phase 的状态必须可查（通过 ~/.agentbase/audit/ 日志）
   4. **限速**：单次运行最多处理 50 家候选，超过则分批
   5. **失败容错**：单个客户背调失败不阻断流水线，标记为 "Phase 2 failed" 继续下一个
 
@@ -134,7 +134,7 @@ injection_prompt: |
   ### 下一步建议
   - 3 天后跟进 A 级客户（已有回复的跳过）
   - 7 天后跟进 B 级客户
-  - 完整日志：~/.trade/audit/auto-pipeline-{date}.md
+  - 完整日志：~/.agentbase/audit/auto-pipeline-{date}.md
   ```
 
   如果用户没有提供产品/市场/客户类型等关键信息，先一次性问完，不要逐条挤牙膏。

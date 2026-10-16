@@ -122,7 +122,7 @@ author: Foreign Trade Assistant
   非英语版本规则：使用该语言的正式商业敬语格式（非直译中文/英文模板）、核心信息一致但本地化表达而非逐字翻译、日期格式/货币单位/计量单位本地化、主题行也提供本地化版本。始终以英语版本为主要版本，本地化版本为第二版本。如客户市场信息不明确，默认只生成英语版本。
 
   4. 【重要】如果用户要求整理或保存客户信息到系统中，请使用 execute_code 工具执行以下 Python 代码：
-     from trade import customer as _cust
+     from agentbase import customer as _cust
      _cust.bulk_save(
          company_id={当前公司ID},
          customers=[

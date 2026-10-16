@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import tech_drawing
+from agentbase import tech_drawing
 
 
 class _FakePage:

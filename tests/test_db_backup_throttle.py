@@ -6,7 +6,7 @@
 一台开发机上累积到 **72,626 个备份文件 / 38 GB**（每个 573KB），
 而没有一次是必要的 —— 那台机器的迁移列表是空的、schema 已是最新。
 
-这类问题的可怕之处在于它完全静默：没有人会去看 `~/.trade/backups/`，
+这类问题的可怕之处在于它完全静默：没有人会去看 `~/.agentbase/backups/`，
 直到磁盘满。客户机上同样在发生。
 """
 
@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def _fresh_db(tmp_path: Path) -> Path:
     """建一个已是最新 schema 的库（spare 列/context 列齐全）。"""
-    db = tmp_path / "trade.db"
+    db = tmp_path / "agentbase.db"
     conn = sqlite3.connect(db)
     for table in ("companies", "trade_companies", "libraries", "customers",
                   "customer_libraries", "conversations", "orders", "usage_ledger"):
@@ -35,7 +35,7 @@ def _fresh_db(tmp_path: Path) -> Path:
 
 class TestNeedsSchemaWork:
     def test_up_to_date_db_needs_nothing(self, tmp_path):
-        from trade.database import _needs_schema_work
+        from agentbase.database import _needs_schema_work
 
         conn = sqlite3.connect(_fresh_db(tmp_path))
         try:
@@ -46,7 +46,7 @@ class TestNeedsSchemaWork:
             conn.close()
 
     def test_missing_table_needs_work(self, tmp_path):
-        from trade.database import _needs_schema_work
+        from agentbase.database import _needs_schema_work
 
         db = _fresh_db(tmp_path)
         conn = sqlite3.connect(db)
@@ -58,7 +58,7 @@ class TestNeedsSchemaWork:
             conn.close()
 
     def test_missing_spare_column_needs_work(self, tmp_path):
-        from trade.database import _needs_schema_work
+        from agentbase.database import _needs_schema_work
 
         db = tmp_path / "old.db"
         conn = sqlite3.connect(db)
@@ -74,7 +74,7 @@ class TestNeedsSchemaWork:
             conn.close()
 
     def test_missing_context_column_needs_work(self, tmp_path):
-        from trade.database import _needs_schema_work
+        from agentbase.database import _needs_schema_work
 
         db = _fresh_db(tmp_path)
         # 用重建方式去掉 context 列（sqlite 不支持 DROP COLUMN 的旧版本）
@@ -92,7 +92,7 @@ class TestNeedsSchemaWork:
 
     def test_corrupt_db_is_conservative(self, tmp_path):
         """读不出来（损坏）→ 保守判为需要处理，照旧备份。"""
-        from trade.database import _needs_schema_work
+        from agentbase.database import _needs_schema_work
 
         bad = tmp_path / "bad.db"
         bad.write_text("这不是 sqlite 文件", encoding="utf-8")
@@ -108,11 +108,11 @@ class TestInitDbDoesNotBackUpUnnecessarily:
 
     def _init_once(self, tmp_path, monkeypatch):
         """把库建好（首次 init_db 不备份 —— 库文件还不存在）。返回路径三元组。"""
-        import trade.database as dbmod
+        import agentbase.database as dbmod
 
         trade_home = tmp_path / ".trade"
         (trade_home / "data").mkdir(parents=True)
-        db_path = trade_home / "data" / "trade.db"
+        db_path = trade_home / "data" / "agentbase.db"
         monkeypatch.setattr(dbmod, "_get_db_path", lambda: db_path)
 
         dbmod.init_db()  # 首次：建出真实 schema
@@ -143,7 +143,7 @@ class TestInitDbDoesNotBackUpUnnecessarily:
 
 class TestPruneOldBackups:
     def test_keeps_only_newest(self, tmp_path):
-        from trade.database import prune_old_backups
+        from agentbase.database import prune_old_backups
 
         d = tmp_path / "backups"
         d.mkdir()
@@ -162,7 +162,7 @@ class TestPruneOldBackups:
 
     def test_never_deletes_manual_backups(self, tmp_path):
         """手工备份（trade-before-restore-*）是用户特意留的，绝不能删。"""
-        from trade.database import prune_old_backups
+        from agentbase.database import prune_old_backups
 
         d = tmp_path / "backups"
         d.mkdir()
@@ -176,7 +176,7 @@ class TestPruneOldBackups:
         assert manual.is_file(), "手工备份被误删了"
 
     def test_noop_when_under_limit(self, tmp_path):
-        from trade.database import prune_old_backups
+        from agentbase.database import prune_old_backups
 
         d = tmp_path / "backups"
         d.mkdir()
@@ -185,6 +185,6 @@ class TestPruneOldBackups:
         assert prune_old_backups(d, keep=5) == []
 
     def test_missing_dir_is_safe(self, tmp_path):
-        from trade.database import prune_old_backups
+        from agentbase.database import prune_old_backups
 
         assert prune_old_backups(tmp_path / "nope", keep=5) == []

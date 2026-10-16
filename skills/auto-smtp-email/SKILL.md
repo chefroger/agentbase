@@ -249,7 +249,7 @@ injection_prompt: |
      print(f"✅ 发送成功 → {to_addr} at {time.strftime('%Y-%m-%d %H:%M:%S')}")
      ```
   3. STARTTLS（端口 587）用 smtplib.SMTP + s.starttls() 替代 SMTP_SSL
-  4. 发送结果记录到 ~/.trade/audit/smtp-send-log.md（时间/收件人/主题/状态/错误）
+  4. 发送结果记录到 ~/.agentbase/audit/smtp-send-log.md（时间/收件人/主题/状态/错误）
 
   【批量发送】
   1. 生成预览清单（表格形式）：
@@ -269,7 +269,7 @@ injection_prompt: |
      ```
      ✅ 成功 N 封 / ❌ 失败 M 封 / ⏭ 跳过 K 封
      失败详情：[1] alice@x.com — SMTPAuthenticationError: 535
-     完整日志：~/.trade/audit/smtp-send-log-{date}.md
+     完整日志：~/.agentbase/audit/smtp-send-log-{date}.md
      ```
 
   ════════════════════════════════════════

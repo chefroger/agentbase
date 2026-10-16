@@ -62,13 +62,13 @@ def setup_mocks():
 @pytest.fixture
 def test_db(monkeypatch, tmp_path, setup_mocks):
     """创建临时测试数据库（mock 桌面工作目录到 tmp_path）。"""
-    db_path = tmp_path / "trade.db"
+    db_path = tmp_path / "agentbase.db"
 
-    import trade.database as _db
+    import agentbase.database as _db
     original_db = _db._get_db_path
     _db._get_db_path = lambda: db_path
 
-    from trade.database import SCHEMA_SQL, _add_spare_columns
+    from agentbase.database import SCHEMA_SQL, _add_spare_columns
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
@@ -77,7 +77,7 @@ def test_db(monkeypatch, tmp_path, setup_mocks):
     conn.close()
 
     # 桌面工作目录重定向到 tmp_path
-    import trade.company as _co
+    import agentbase.company as _co
     def _mock_setup(company_name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or company_name)
         wd.mkdir(parents=True, exist_ok=True)
@@ -94,7 +94,7 @@ def test_db(monkeypatch, tmp_path, setup_mocks):
 @pytest.fixture
 def company_id(test_db):
     """创建测试公司并返回 ID。"""
-    from trade import company
+    from agentbase import company
     c = company.create(name="API Test Company", slug="api-test-company")
     return c["id"]
 
@@ -107,7 +107,7 @@ class TestDeps:
 
     def test_require_company_valid(self, company_id, setup_mocks):
         """有效的 X-Company-ID 返回 company_id。"""
-        from trade.api.deps import require_company
+        from agentbase.api.deps import require_company
         # 直接调用函数（绕过 FastAPI Header 依赖注入）
         result = require_company(str(company_id))
         assert result == company_id
@@ -116,7 +116,7 @@ class TestDeps:
         """缺失 header → 401。"""
         from fastapi import HTTPException
 
-        from trade.api.deps import require_company
+        from agentbase.api.deps import require_company
         with pytest.raises(HTTPException) as exc_info:
             require_company("")
         assert exc_info.value.status_code == 401
@@ -125,14 +125,14 @@ class TestDeps:
         """无效 header → 401。"""
         from fastapi import HTTPException
 
-        from trade.api.deps import require_company
+        from agentbase.api.deps import require_company
         with pytest.raises(HTTPException) as exc_info:
             require_company("not-an-int")
         assert exc_info.value.status_code == 401
 
     def test_opt_company_missing(self, setup_mocks):
         """缺失 header → None。"""
-        from trade.api.deps import opt_company
+        from agentbase.api.deps import opt_company
         assert opt_company("") is None
         assert opt_company(None) is None
 
@@ -150,7 +150,7 @@ class TestCronIsMachineLevel:
     @pytest.fixture
     def cron_with_jobs(self, monkeypatch, tmp_path):
         """把 cron 数据源指向临时目录，避免读真实 ~/.hermes。"""
-        import trade.api.cron as cron_mod
+        import agentbase.api.cron as cron_mod
 
         monkeypatch.setattr(cron_mod, "_JOBS_FILE", tmp_path / "jobs.json")
         monkeypatch.setattr(cron_mod, "_CRON_OUTPUT", tmp_path / "output")
@@ -197,7 +197,7 @@ class TestRequireSession:
         """token 不匹配 → 401。"""
         from fastapi import HTTPException
 
-        from trade.api import deps
+        from agentbase.api import deps
 
         deps.set_session_token("correct-token")
         with pytest.raises(HTTPException) as exc_info:
@@ -208,7 +208,7 @@ class TestRequireSession:
         """缺少 token header → 401。"""
         from fastapi import HTTPException
 
-        from trade.api import deps
+        from agentbase.api import deps
 
         deps.set_session_token("correct-token")
         with pytest.raises(HTTPException) as exc_info:
@@ -219,7 +219,7 @@ class TestRequireSession:
         """服务端 token 未初始化时不放行，返回 500（防御性：绝不能当成通过）。"""
         from fastapi import HTTPException
 
-        from trade.api import deps
+        from agentbase.api import deps
 
         deps.set_session_token("")
         with pytest.raises(HTTPException) as exc_info:
@@ -228,7 +228,7 @@ class TestRequireSession:
 
     def test_accepts_matching_token(self, setup_mocks):
         """token 匹配时放行（不抛异常）。"""
-        from trade.api import deps
+        from agentbase.api import deps
 
         deps.set_session_token("correct-token")
         deps.require_session(_FakeRequest({"X-Hermes-Session-Token": "correct-token"}))
@@ -263,7 +263,7 @@ class TestRouterAssembly:
 
     def test_router_imports_and_registers(self, setup_mocks):
         """router 对象可正常导入且注册了所有端点类型。"""
-        from trade.api import router
+        from agentbase.api import router
         assert router is not None
 
         all_routes = self._flatten_routes(router)
@@ -285,7 +285,7 @@ class TestRouterAssembly:
 
     def test_all_endpoints_registered(self, setup_mocks):
         """所有 endpoint 数量符合预期（至少 25 个）。"""
-        from trade.api import router
+        from agentbase.api import router
         # 收集所有 HTTP 路由路径（递归展开嵌套子路由）
         endpoints = []
         for route in self._flatten_routes(router):
@@ -305,13 +305,13 @@ class TestSkillRouter:
     """测试 skill_router 匹配逻辑。"""
 
     def test_match_b2b_osint(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我背调一下这家公司")
         assert result is not None
         assert result["name"] == "b2b-osint"
 
     def test_match_lead_generation(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         # "写开发信" 属冷邮件撰写场景——b2b-cold-outreach 是专职写邮件的技能，
         # b2b-lead-generation 是"找客户"全链路（2026-09 触发词路由调优后归属调整）
         result = match_skill("帮我写一封开发信给欧洲客户")
@@ -319,100 +319,100 @@ class TestSkillRouter:
         assert result["name"] == "b2b-cold-outreach"
 
     def test_match_document_analysis(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("分析这份产品报价单文档")
         assert result is not None
         assert result["name"] == "b2b-document"
 
     def test_match_platform_diagnosis(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我优化阿里国际站的产品标题")
         assert result is not None
         assert result["name"] == "b2b-platform"
 
     def test_match_linkedin_marketing(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我做一个LinkedIn营销方案")
         assert result is not None
         assert result["name"] == "b2b-linkedin-marketing"
 
     def test_match_social_media(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我规划一周的Facebook发帖内容")
         assert result is not None
         assert result["name"] == "b2b-social-media"
 
     def test_match_customs_data(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("分析这批海关数据的采购商")
         assert result is not None
         assert result["name"] == "b2b-customs-data"
 
     def test_match_onboarding(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("我是新公司，怎么开始使用")
         assert result is not None
         assert result["name"] == "b2b-onboarding"
 
     def test_match_document_generation(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我生成一份形式发票给客户")
         assert result is not None
         assert result["name"] == "b2b-doc-generation"
 
     def test_match_customer_management(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("查看我的客户列表")
         assert result is not None
         assert result["name"] == "b2b-customer-mgmt"
 
     def test_match_daily_automation(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("帮我设置早安简报自动发送")
         assert result is not None
         assert result["name"] == "b2b-daily-automation"
 
     def test_match_email_intel(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("查一下这个邮箱 john@test.com")
         assert result is not None
         assert result["name"] in ("b2b-email-intel", "b2b-osint")
 
     def test_explicit_skill_call(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("用 b2b-email-intel 查 john@test.com")
         assert result is not None
         assert result["name"] == "b2b-email-intel"
 
     def test_no_match_irrelevant(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         assert match_skill("今天天气怎么样") is None
 
     def test_empty_query(self):
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         assert match_skill("") is None
         assert match_skill("   ") is None
 
     def test_augment_query_with_skill(self):
-        from trade.skill_router import augment_query
+        from agentbase.skill_router import augment_query
         result = augment_query("帮我背调", skill_name="b2b-osint")
         assert "[SKILL AUGMENTATION]" in result
         assert "b2b-osint" in result
         assert "帮我背调" in result
 
     def test_augment_query_no_match(self):
-        from trade.skill_router import augment_query
+        from agentbase.skill_router import augment_query
         original = "这是什么天气"
         assert augment_query(original) == original
 
     def test_skill_registry_count(self):
         """注册表应有 39 个 skill。"""
-        from trade.skill_registry import _SKILLS
+        from agentbase.skill_registry import _SKILLS
         assert len(_SKILLS) == 39
 
     def test_no_duplicate_triggers(self):
         """每个 skill 的触发词不应有重复。"""
-        from trade.skill_registry import _SKILLS
+        from agentbase.skill_registry import _SKILLS
         for s in _SKILLS:
             triggers = s["triggers"]
             duplicates = [t for t in triggers if triggers.count(t) > 1]
@@ -420,7 +420,7 @@ class TestSkillRouter:
 
     def test_ambiguous_match_order(self):
         """'背景调查'同时命中 b2b-osint 和 b2b-email-intel 时，应返回 osint。"""
-        from trade.skill_router import match_skill
+        from agentbase.skill_router import match_skill
         result = match_skill("背景调查")
         assert result is not None
         assert result["name"] == "b2b-osint"
@@ -433,24 +433,24 @@ class TestCompanyEndpoints:
     """测试公司端点函数。"""
 
     def test_create_company(self, test_db, setup_mocks):
-        from trade import company
+        from agentbase import company
         c = company.create(name="Endpoint Co", slug="endpoint-co")
         assert c["name"] == "Endpoint Co"
         assert c["slug"] == "endpoint-co"
         assert c["is_active"] is True
 
     def test_list_companies(self, test_db, company_id, setup_mocks):
-        from trade import company
+        from agentbase import company
         companies = company.list_all()
         assert any(c["id"] == company_id for c in companies)
 
     def test_agent_identity(self, test_db, company_id, setup_mocks):
-        from trade import company
+        from agentbase import company
         identity = company.get_agent_identity(company_id)
         assert isinstance(identity, str)  # may be empty, but should be a string
 
     def test_update_agent_identity(self, test_db, company_id, setup_mocks):
-        from trade import company
+        from agentbase import company
         result = company.update_trade_company(company_id, agent_identity_md="Test identity")
         assert result["agent_identity_md"] == "Test identity"
 
@@ -462,7 +462,7 @@ class TestLibraryEndpoints:
     """测试文档库端点函数。"""
 
     def test_create_and_list(self, test_db, company_id, setup_mocks):
-        from trade import library
+        from agentbase import library
         Path("/tmp/eplib").mkdir(parents=True, exist_ok=True)
         lib = library.create("Endpoint Lib", "/tmp/eplib", company_id=company_id)
         assert lib["name"] == "Endpoint Lib"
@@ -471,7 +471,7 @@ class TestLibraryEndpoints:
         assert any(l["id"] == lib["id"] for l in libs)
 
     def test_company_scoped_access(self, test_db, company_id, setup_mocks):
-        from trade import company, library
+        from agentbase import company, library
         other = company.create(name="Other Co", slug="other-co-lib")
         Path("/tmp/mylib").mkdir(parents=True, exist_ok=True)
         lib = library.create("My Lib", "/tmp/mylib", company_id=company_id)
@@ -495,17 +495,17 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
-        monkeypatch.setattr("trade.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("trade.company.get",
+        monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 trade_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("trade.company.get_trade_company",
+        monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("trade.company.update_trade_company",
+        monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from trade.api.libraries import upload_to_work_dir
+        from agentbase.api.libraries import upload_to_work_dir
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"hello world"))
         result = self._run(upload_to_work_dir(
@@ -523,17 +523,17 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
-        monkeypatch.setattr("trade.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("trade.company.get",
+        monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 trade_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("trade.company.get_trade_company",
+        monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("trade.company.update_trade_company",
+        monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from trade.api.libraries import upload_to_work_dir
+        from agentbase.api.libraries import upload_to_work_dir
 
         f1 = UploadFile(filename="sub/a.txt", file=io.BytesIO(b"aaa"))
         f2 = UploadFile(filename="sub/deep/b.txt", file=io.BytesIO(b"bbb"))
@@ -551,7 +551,7 @@ class TestWorkDirUpload:
 
         from fastapi import UploadFile
 
-        from trade.api.libraries import upload_to_work_dir
+        from agentbase.api.libraries import upload_to_work_dir
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"test"))
         with pytest.raises(Exception) as exc:
@@ -568,17 +568,17 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="trade-work-test-"))
-        monkeypatch.setattr("trade.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.company._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("trade.company.get",
+        monkeypatch.setattr("agentbase.company.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 trade_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("trade.company.get_trade_company",
+        monkeypatch.setattr("agentbase.company.get_trade_company",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("trade.company.update_trade_company",
+        monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from trade.api.libraries import upload_to_work_dir
+        from agentbase.api.libraries import upload_to_work_dir
 
         f = UploadFile(filename="../escape.txt", file=io.BytesIO(b"bad"))
         result = self._run(upload_to_work_dir(
@@ -597,7 +597,7 @@ class TestCustomerEndpoints:
     """测试客户端点函数。"""
 
     def test_create_and_list(self, test_db, company_id, setup_mocks):
-        from trade import customer
+        from agentbase import customer
         cust = customer.create("Endpoint Customer", company_id=company_id)
         assert cust["name"] == "Endpoint Customer"
 
@@ -612,14 +612,14 @@ class TestConversationEndpoints:
     """测试对话端点函数。"""
 
     def test_save_conversation(self, test_db, company_id, setup_mocks):
-        from trade import chat_memory
+        from agentbase import chat_memory
         conv = chat_memory.save(company_id, "Query", "Response",
                                  files_read=[{"file": "test.pdf", "pages": [1]}])
         assert conv["query"] == "Query"
         assert len(conv["files_read"]) == 1
 
     def test_list_conversations(self, test_db, company_id, setup_mocks):
-        from trade import chat_memory
+        from agentbase import chat_memory
         chat_memory.save(company_id, "Q1", "A1")
         convs = chat_memory.list_by_company(company_id)
         assert len(convs) >= 1
@@ -632,12 +632,12 @@ class TestOnboardingFlow:
     """测试首次引导流程。"""
 
     def test_onboarding_status_new_db(self, test_db, setup_mocks):
-        from trade import onboarding
+        from agentbase import onboarding
         onboarding.reset_onboarding_flag()
         assert onboarding.is_onboarding_done() is False
 
     def test_create_first_company(self, test_db, setup_mocks):
-        from trade import onboarding
+        from agentbase import onboarding
         onboarding.reset_onboarding_flag()
 
         result = onboarding.create_first_company(
@@ -654,7 +654,7 @@ class TestOnboardingFlow:
         assert onboarding.is_onboarding_done() is True
 
     def test_create_first_company_duplicate(self, test_db, company_id, setup_mocks):
-        from trade import onboarding
+        from agentbase import onboarding
         assert onboarding.is_onboarding_done() is True
 
 
@@ -673,26 +673,26 @@ class TestTradeUiTokenScope:
     """
 
     def test_loopback_clients_may_receive_token(self):
-        from trade.app import _client_is_loopback
+        from agentbase.app import _client_is_loopback
 
         for host in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
             assert _client_is_loopback(_FakeClient(host)) is True, host
 
     def test_remote_clients_are_not_loopback(self):
-        from trade.app import _client_is_loopback
+        from agentbase.app import _client_is_loopback
 
         for host in ("192.168.1.5", "10.0.0.7", "203.0.113.9", ""):
             assert _client_is_loopback(_FakeClient(host)) is False, host
 
     def test_remote_client_blocked_by_default(self, monkeypatch):
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         monkeypatch.delenv("TRADE_ALLOW_REMOTE_UI", raising=False)
         assert app_mod._client_may_receive_token(_FakeClient("192.168.1.5")) is False
 
     def test_remote_client_allowed_with_explicit_optin(self, monkeypatch):
         """显式开启后允许局域网使用（用户明确知道风险）。"""
-        from trade import app as app_mod
+        from agentbase import app as app_mod
 
         monkeypatch.setenv("TRADE_ALLOW_REMOTE_UI", "1")
         assert app_mod._client_may_receive_token(_FakeClient("192.168.1.5")) is True

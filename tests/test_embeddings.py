@@ -1,4 +1,4 @@
-"""trade.embeddings 模块测试（纯标准库，无外部依赖）。"""
+"""agentbase.embeddings 模块测试（纯标准库，无外部依赖）。"""
 import math
 import os
 import sys
@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trade.embeddings import (  # noqa: E402
+from agentbase.embeddings import (  # noqa: E402
     TfidfBackend,
     cosine_sim,
     get_backend,

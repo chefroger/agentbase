@@ -65,7 +65,7 @@ injection_prompt: |
   2. 调用 Python 工具分析图纸：
      ```
      python -c "
-  from trade.tech_drawing import analyze_drawing
+  from agentbase.tech_drawing import analyze_drawing
   import json
   result = analyze_drawing('{PDF文件路径}')
   print(json.dumps(result, ensure_ascii=False, indent=2))

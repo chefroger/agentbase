@@ -97,24 +97,24 @@ semantic = [
 # 指向**包内**入口：原先写 server:main，而 server.py 在仓库根、不被打包，
 # pip 安装后 `trade` 命令会 ModuleNotFoundError（且 server.py 无守卫，
 # `from server import main` 会连带执行启动流程）。trade.cli 做 setup() + app.main()。
-trade = "trade.cli:run_server"
+trade = "agentbase.cli:run_server"
 # Installs Trade skills into Hermes at package install time.
 # Copies skills/b2b-* to ~/.hermes/skills/b2b/ so Hermes can discover them.
-install-trade-skills = "trade.post_install:install_skills"
+install-agentbase-skills = "agentbase.post_install:install_skills"
 # Update B2B skills from GitHub (fetches latest SKILL.md from main branch)
-trade-skills-update = "trade.post_install:update_skills"
+agentbase-skills-update = "agentbase.post_install:update_skills"
 # Update entire Trade system (git pull + pip install + skills + db)
-trade-update = "trade.post_install:update_trade"
+agentbase-update = "agentbase.post_install:update_trade"
 # Backup Trade data to tar.gz
-trade-backup = "trade.post_install:backup_trade"
-trade-restore = "trade.post_install:restore_trade"
-tradewin = "tradewin:main"
+agentbase-backup = "agentbase.post_install:backup_trade"
+agentbase-restore = "agentbase.post_install:restore_trade"
+desktop = "desktop:main"
 
 [tool.setuptools]
-# tradewin 是仓库根的桌面启动器（.spec 也按路径引用它），必须声明为顶层模块，
-# 否则 console script `tradewin = tradewin:main` 装完即 ModuleNotFoundError。
+# desktop 是仓库根的桌面启动器（.spec 也按路径引用它），必须声明为顶层模块，
+# 否则 console script `desktop = desktop:main` 装完即 ModuleNotFoundError。
 # server.py 不需要声明：`python server.py` 按路径运行，脚本入口已改为 trade.cli:run_server。
-py-modules = ["tradewin"]
+py-modules = ["desktop"]
 
 [tool.setuptools.packages.find]
 include = ["trade", "trade.*"]
@@ -125,7 +125,7 @@ trade = ["py.typed"]
 # chat-memory 插件的 manifest 是数据文件，必须显式声明 —— 否则 wheel 里缺 plugin.yaml，
 # 而 sync_chat_memory_plugin() 是靠"整个目录的文件 hash 集合是否相等"判断要不要重写的，
 # 缺文件就会被判成"需要部署"，于是每次启动都重写一遍（幂等性失效）。
-"trade.hermes_chat_memory_plugin" = ["*.yaml"]
+"agentbase.hermes_chat_memory_plugin" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -20,13 +20,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def test_db(monkeypatch, tmp_path):
     """创建临时数据库并初始化 schema，mock 掉 _get_db_path 和桌面工作目录。"""
-    db_path = tmp_path / "trade.db"
+    db_path = tmp_path / "agentbase.db"
 
-    import trade.database as _db
+    import agentbase.database as _db
     original_db = _db._get_db_path
     _db._get_db_path = lambda: db_path
 
-    from trade.database import SCHEMA_SQL, _add_spare_columns
+    from agentbase.database import SCHEMA_SQL, _add_spare_columns
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
@@ -35,7 +35,7 @@ def test_db(monkeypatch, tmp_path):
     conn.close()
 
     # 把桌面工作目录重定向到 tmp_path，避免污染真实桌面
-    import trade.company as _co
+    import agentbase.company as _co
 
     def _mock_work_dir(company_name, slug, suggested_name=""):
         work_dir = tmp_path / (suggested_name or company_name)
@@ -54,7 +54,7 @@ def test_db(monkeypatch, tmp_path):
 @pytest.fixture
 def company_id(test_db):
     """创建一个测试公司并返回其 ID。"""
-    from trade import company
+    from agentbase import company
     c = company.create(name="Test Company", slug="test-company")
     return c["id"]
 
@@ -67,7 +67,7 @@ class TestCompanyCRUD:
 
     def test_create_company(self, test_db):
         """创建公司：返回字典含 id/name/slug。"""
-        from trade import company
+        from agentbase import company
         c = company.create(name="ACME Corp")
         assert c["id"] > 0
         assert c["name"] == "ACME Corp"
@@ -76,14 +76,14 @@ class TestCompanyCRUD:
 
     def test_create_duplicate_slug(self, test_db):
         """重复 slug 应自动递增后缀。"""
-        from trade import company
+        from agentbase import company
         company.create(name="First", slug="same-slug")
         c2 = company.create(name="Second", slug="same-slug")
         assert c2["slug"] == "same-slug-2"
 
     def test_list_all(self, test_db):
         """list_all 返回激活和未激活的公司。"""
-        from trade import company
+        from agentbase import company
         company.create(name="Active Co")
         company.create(name="Inactive Co")
         all_companies = company.list_all()
@@ -91,19 +91,19 @@ class TestCompanyCRUD:
 
     def test_get_by_id(self, test_db, company_id):
         """get 返回正确的公司。"""
-        from trade import company
+        from agentbase import company
         c = company.get(company_id)
         assert c["name"] == "Test Company"
         assert c["slug"] == "test-company"
 
     def test_get_nonexistent(self, test_db):
         """不存在的 ID 返回 None。"""
-        from trade import company
+        from agentbase import company
         assert company.get(99999) is None
 
     def test_update_company(self, test_db, company_id):
         """更新公司字段：只更新传入的字段。"""
-        from trade import company
+        from agentbase import company
         result = company.update(company_id, name="Updated Name", website="https://example.com")
         assert result is not None
         assert result["name"] == "Updated Name"
@@ -113,18 +113,18 @@ class TestCompanyCRUD:
 
     def test_update_nonexistent(self, test_db):
         """更新不存在的公司返回 None。"""
-        from trade import company
+        from agentbase import company
         assert company.update(99999, name="X") is None
 
     def test_deactivate_company(self, test_db, company_id):
         """可以将公司设为不活跃。"""
-        from trade import company
+        from agentbase import company
         result = company.update(company_id, is_active=False)
         assert result["is_active"] is False
 
     def test_delete_company_cascade(self, test_db, company_id):
         """软删除：delete 设置 is_active=0，数据保留。purge 才物理删除。"""
-        from trade import chat_memory, company, customer, library
+        from agentbase import chat_memory, company, customer, library
 
         lib = library.create("Test Lib", "/tmp/test", company_id=company_id)
         cust = customer.create("Test Cust", company_id=company_id)
@@ -145,7 +145,7 @@ class TestCompanyCRUD:
 
     def test_create_empty_name(self, test_db):
         """空公司名应抛出 ValueError。"""
-        from trade import company
+        from agentbase import company
         with pytest.raises(ValueError, match="empty"):
             company.create(name="")
         with pytest.raises(ValueError, match="empty"):
@@ -157,7 +157,7 @@ class TestTradeCompany:
 
     def test_trade_company_created_with_company(self, test_db):
         """创建公司时自动创建 trade_companies 记录。"""
-        from trade import company
+        from agentbase import company
         c = company.create(name="New Co")
         tc = company.get_trade_company(c["id"])
         assert tc is not None
@@ -167,14 +167,14 @@ class TestTradeCompany:
 
     def test_update_agent_identity(self, test_db, company_id):
         """更新公司的 agent_identity_md。"""
-        from trade import company
+        from agentbase import company
         identity = "## 公司身份\n测试身份文本"
         result = company.update_trade_company(company_id, agent_identity_md=identity)
         assert result["agent_identity_md"] == identity
 
     def test_get_agent_identity_from_db(self, test_db, company_id):
         """get_agent_identity 优先读 DB。"""
-        from trade import company
+        from agentbase import company
         identity = "DB identity"
         company.update_trade_company(company_id, agent_identity_md=identity)
         assert company.get_agent_identity(company_id) == identity
@@ -188,7 +188,7 @@ class TestLibraryCRUD:
 
     def test_create_library(self, test_db, company_id):
         """创建文档库：返回字典含 name/root_path。"""
-        from trade import library
+        from agentbase import library
         lib = library.create("Product Docs", "/tmp/products", "产品文档",
                              company_id=company_id)
         assert lib["id"] > 0
@@ -197,7 +197,7 @@ class TestLibraryCRUD:
 
     def test_list_by_company(self, test_db, company_id):
         """列出特定公司的文档库（含自动创建的工作目录库）。"""
-        from trade import library
+        from agentbase import library
         # company.create() 自动创建了 8 个工作子目录库
         auto_libs = library.list_by_company(company_id)
         auto_count = len(auto_libs)
@@ -211,7 +211,7 @@ class TestLibraryCRUD:
 
     def test_data_isolation(self, test_db):
         """不同公司的文档库应隔离。"""
-        from trade import company, library
+        from agentbase import company, library
         c1 = company.create(name="Company 1", slug="co1")
         c2 = company.create(name="Company 2", slug="co2")
 
@@ -229,7 +229,7 @@ class TestLibraryCRUD:
 
     def test_get_with_company_scope(self, test_db, company_id):
         """跨公司查询应返回 None。"""
-        from trade import company, library
+        from agentbase import company, library
         c2 = company.create(name="Other Co", slug="other-co")
         lib = library.create("My Lib", "/tmp/mine", company_id=company_id)
 
@@ -240,14 +240,14 @@ class TestLibraryCRUD:
 
     def test_update_library(self, test_db, company_id):
         """更新文档库字段。"""
-        from trade import library
+        from agentbase import library
         lib = library.create("Old Name", "/tmp/old", company_id=company_id)
         result = library.update(lib["id"], company_id=company_id, name="New Name")
         assert result["name"] == "New Name"
 
     def test_delete_library(self, test_db, company_id):
         """删除文档库后 get 返回 None。"""
-        from trade import library
+        from agentbase import library
         lib = library.create("To Delete", "/tmp/del", company_id=company_id)
         library.delete(lib["id"], company_id=company_id)
         assert library.get(lib["id"]) is None
@@ -261,7 +261,7 @@ class TestCustomerCRUD:
 
     def test_create_customer(self, test_db, company_id):
         """创建客户：返回字典含 name/contact。"""
-        from trade import customer
+        from agentbase import customer
         cust = customer.create("ACME Buyer", "buyer@acme.com",
                                "重要客户", company_id=company_id)
         assert cust["id"] > 0
@@ -270,7 +270,7 @@ class TestCustomerCRUD:
 
     def test_list_by_company(self, test_db, company_id):
         """列出特定公司的所有客户。"""
-        from trade import customer
+        from agentbase import customer
         customer.create("Cust A", company_id=company_id)
         customer.create("Cust B", company_id=company_id)
 
@@ -279,7 +279,7 @@ class TestCustomerCRUD:
 
     def test_link_library_to_customer(self, test_db, company_id):
         """关联文档库到客户。"""
-        from trade import customer, library
+        from agentbase import customer, library
         cust = customer.create("Test Cust", company_id=company_id)
         lib = library.create("Test Lib", "/tmp/testlib", company_id=company_id)
 
@@ -290,7 +290,7 @@ class TestCustomerCRUD:
 
     def test_unlink_library(self, test_db, company_id):
         """取消关联。"""
-        from trade import customer, library
+        from agentbase import customer, library
         cust = customer.create("Test Cust", company_id=company_id)
         lib = library.create("Test Lib", "/tmp/testlib", company_id=company_id)
 
@@ -300,7 +300,7 @@ class TestCustomerCRUD:
 
     def test_customer_data_isolation(self, test_db):
         """不同公司的客户应隔离。"""
-        from trade import company, customer
+        from agentbase import company, customer
         c1 = company.create(name="C1", slug="co1")
         c2 = company.create(name="C2", slug="co2")
 
@@ -319,7 +319,7 @@ class TestChatMemory:
 
     def test_save_and_retrieve(self, test_db, company_id):
         """保存对话后可以检索。"""
-        from trade import chat_memory
+        from agentbase import chat_memory
         conv = chat_memory.save(company_id, "What is MOQ?",
                                 "MOQ is Minimum Order Quantity",
                                 files_read=[{"file": "catalog.pdf", "pages": [1, 2]}])
@@ -329,7 +329,7 @@ class TestChatMemory:
 
     def test_list_recent(self, test_db, company_id):
         """list_by_company 按时间倒序返回。"""
-        from trade import chat_memory
+        from agentbase import chat_memory
         chat_memory.save(company_id, "Q1", "A1")
         chat_memory.save(company_id, "Q2", "A2")
 
@@ -340,7 +340,7 @@ class TestChatMemory:
 
     def test_conversation_isolation(self, test_db):
         """不同公司的对话应隔离。"""
-        from trade import chat_memory, company
+        from agentbase import chat_memory, company
         c1 = company.create(name="C1", slug="co1")
         c2 = company.create(name="C2", slug="co2")
 
@@ -353,21 +353,21 @@ class TestChatMemory:
 
     def test_update_response(self, test_db, company_id):
         """更新对话回复。"""
-        from trade import chat_memory
+        from agentbase import chat_memory
         conv = chat_memory.save(company_id, "Q", "Old response")
         result = chat_memory.update_response(company_id, conv["id"], "New response")
         assert result["response"] == "New response"
 
     def test_delete_conversation(self, test_db, company_id):
         """删除对话。"""
-        from trade import chat_memory
+        from agentbase import chat_memory
         conv = chat_memory.save(company_id, "Q", "A")
         assert chat_memory.delete(company_id, conv["id"]) is True
         assert chat_memory.get(company_id, conv["id"]) is None
 
     def test_get_recent_chronological(self, test_db, company_id):
         """get_recent 应按时间正序返回（用于上下文注入）。"""
-        from trade import chat_memory
+        from agentbase import chat_memory
         chat_memory.save(company_id, "First")
         chat_memory.save(company_id, "Second")
         chat_memory.save(company_id, "Third")
@@ -386,14 +386,14 @@ class TestOnboarding:
 
     def test_is_onboarding_done_empty_db(self, test_db):
         """空数据库应返回 False。"""
-        from trade import onboarding
+        from agentbase import onboarding
         # 重置进程级标志（因为模块在被其他测试 import 后可能已设为 True）
         onboarding._onboarding_done = False
         assert onboarding.is_onboarding_done() is False
 
     def test_create_first_company(self, test_db):
         """首次创建公司应成功。"""
-        from trade import onboarding
+        from agentbase import onboarding
         # 重置标志
         onboarding.reset_onboarding_flag()
 
@@ -416,7 +416,7 @@ class TestOnboarding:
 
     def test_create_first_company_after_done(self, test_db, company_id):
         """已有公司后 onboarding flag 应为 True。"""
-        from trade import onboarding
+        from agentbase import onboarding
         # company_id fixture 已创建了公司，所以 onboarding 标志应为 True
         assert onboarding.is_onboarding_done() is True
 
@@ -428,7 +428,7 @@ class TestRootPathValidation:
         """敏感数据目录必须被拒绝（跨平台：家目录下的敏感子目录 + 家目录本身 + 根目录）。"""
         from pathlib import Path
 
-        from trade.library import _validate_root_path
+        from agentbase.library import _validate_root_path
 
         home = Path.home()
         forbidden = [
@@ -447,7 +447,7 @@ class TestRootPathValidation:
         """合法目录必须放行（跨平台：家目录下的普通子目录 + pytest 临时目录）。"""
         from pathlib import Path
 
-        from trade.library import _validate_root_path
+        from agentbase.library import _validate_root_path
 
         home = Path.home()
         legal = [
@@ -472,8 +472,8 @@ class TestCompanyCreateCompensation:
     """
 
     def test_library_registration_failure_leaves_no_company(self, test_db, monkeypatch):
-        from trade import company
-        from trade.company import workdir
+        from agentbase import company
+        from agentbase.company import workdir
 
         def _boom(company_id, work_dir):
             raise RuntimeError("library registration failed")
@@ -489,8 +489,8 @@ class TestCompanyCreateCompensation:
 
     def test_failure_before_insert_is_harmless(self, test_db, monkeypatch):
         """更早的步骤失败时不应因补偿逻辑而报错。"""
-        from trade import company
-        from trade.company import workdir
+        from agentbase import company
+        from agentbase.company import workdir
 
         monkeypatch.setattr(workdir, "_setup_work_directory",
                             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("work dir failed")))

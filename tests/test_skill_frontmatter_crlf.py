@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.skill_router import _parse_frontmatter
+from agentbase.skill_router import _parse_frontmatter
 
 SKILL = Path(__file__).resolve().parent.parent / "skills" / "b2b-short-video" / "SKILL.md"
 

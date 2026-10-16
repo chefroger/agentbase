@@ -1,7 +1,7 @@
 /**
  * Hermes 升级面板的行为测试 —— 零依赖（Node 内置 node:test）。
  *
- * 背景：Trade 进程内嵌 Hermes，Hermes 版本过旧时 agent 功能全废；而桌面端（tradewin）
+ * 背景：Trade 进程内嵌 Hermes，Hermes 版本过旧时 agent 功能全废；而桌面端（desktop）
  * 用户看不到终端。这个面板是他们唯一能看到的解释与出路，所以钉住两件事：
  *   1. 状态 → 文案的映射必须与后端的 6 个状态一一对应（少一个就会出现空白面板）；
  *   2. 「重试」按钮只在停下来的失败态出现 —— 升级中给按钮会让用户以为能加速。
@@ -73,10 +73,10 @@ test('界面认识后端给的 rebuild_trade_venv 方向', () => {
     // 这里直接核对两个文件之间的契约字符串（本地 require，不依赖文件后半段的声明顺序）。
     const fs = require('node:fs');
     const path = require('node:path');
-    const js = fs.readFileSync(path.join(__dirname, '..', 'static', 'trade_chat.js'), 'utf8');
+    const js = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.js'), 'utf8');
     const py = fs.readFileSync(path.join(__dirname, '..', 'trade', 'hermes_compat.py'), 'utf8');
 
-    assert.ok(js.includes('rebuild_trade_venv'), 'trade_chat.js 未处理 rebuild_trade_venv');
+    assert.ok(js.includes('rebuild_trade_venv'), 'app.js 未处理 rebuild_trade_venv');
     assert.ok(py.includes('"rebuild_trade_venv"'), '后端未产出 rebuild_trade_venv');
 });
 
@@ -134,9 +134,9 @@ test('升级步骤渲染出可复制的完整命令', () => {
 const fs = require('node:fs');
 const path = require('node:path');
 
-const HTML = fs.readFileSync(path.join(__dirname, '..', 'static', 'trade_chat.html'), 'utf8');
-const CSS = fs.readFileSync(path.join(__dirname, '..', 'static', 'trade_chat.css'), 'utf8');
-const JS = fs.readFileSync(path.join(__dirname, '..', 'static', 'trade_chat.js'), 'utf8');
+const HTML = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.html'), 'utf8');
+const CSS = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.css'), 'utf8');
+const JS = fs.readFileSync(path.join(__dirname, '..', 'static', 'app.js'), 'utf8');
 
 test('JS 引用的每个面板元素 id 都存在于 HTML', () => {
     const used = new Set(
@@ -144,7 +144,7 @@ test('JS 引用的每个面板元素 id 都存在于 HTML', () => {
     );
     assert.ok(used.size >= 5, `未解析到面板元素 id（实际 ${used.size} 个）`);
     for (const id of used) {
-        assert.ok(HTML.includes(`id="${id}"`), `trade_chat.html 缺少 id="${id}"`);
+        assert.ok(HTML.includes(`id="${id}"`), `app.html 缺少 id="${id}"`);
     }
 });
 
@@ -152,14 +152,14 @@ test('HTML 里的面板元素都被 JS 用到（避免留下死节点）', () =>
     const declared = [...HTML.matchAll(/id="(hermes-upgrade-[a-z-]+)"/g)].map((m) => m[1]);
     assert.ok(declared.length > 0, 'HTML 未声明任何面板元素');
     for (const id of declared) {
-        assert.ok(JS.includes(`'${id}'`), `trade_chat.js 未使用 id="${id}"`);
+        assert.ok(JS.includes(`'${id}'`), `app.js 未使用 id="${id}"`);
     }
 });
 
 test('面板的样式类在 CSS 里有定义', () => {
     // 覆盖层与卡片是最关键的两个：没有它们，面板要么不显示、要么铺满全屏不可读
     for (const cls of ['.hermes-upgrade-overlay', '.hermes-upgrade-card', '.hermes-upgrade-step code']) {
-        assert.ok(CSS.includes(cls), `trade_chat.css 缺少样式 ${cls}`);
+        assert.ok(CSS.includes(cls), `app.css 缺少样式 ${cls}`);
     }
     // .hidden 必须真的能隐藏 —— 否则面板会在正常启动时也盖住界面
     assert.ok(/\.hermes-upgrade-overlay\.hidden\s*\{\s*display:\s*none/.test(CSS),

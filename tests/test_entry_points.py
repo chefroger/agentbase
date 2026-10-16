@@ -1,8 +1,8 @@
 """命令行入口的打包正确性测试。
 
-历史缺陷：`[project.scripts]` 里 `trade = server:main`、`tradewin = tradewin:main`
+历史缺陷：`[project.scripts]` 里 `trade = server:main`、`desktop = desktop:main`
 指向**仓库根的顶层模块**，而 `packages.find` 只收 `trade` 包、也没有声明 `py-modules`
-→ 任何 pip 安装后这两个命令都是 `ModuleNotFoundError`（实测 `~/.trade/venv/bin/trade`
+→ 任何 pip 安装后这两个命令都是 `ModuleNotFoundError`（实测 `~/.agentbase/venv/bin/trade`
 报 `No module named 'server'`）。
 
 另外 `server.py` 原先在**模块顶层**执行 `setup(); main()`，意味着
@@ -52,8 +52,8 @@ class TestServerModuleHasNoSideEffects:
 
     def test_import_does_not_run_startup(self, monkeypatch):
         calls: list[str] = []
-        from trade import app as app_mod
-        from trade import bootstrap as bs
+        from agentbase import app as app_mod
+        from agentbase import bootstrap as bs
 
         monkeypatch.setattr(bs, "setup", lambda *a, **k: calls.append("setup"))
         monkeypatch.setattr(app_mod, "main", lambda *a, **k: calls.append("main"))
@@ -69,9 +69,9 @@ class TestRunServerEntryPoint:
 
     def test_run_server_calls_setup_then_app_main(self, monkeypatch):
         calls: list[str] = []
-        from trade import app as app_mod
-        from trade import bootstrap as bs
-        from trade import cli
+        from agentbase import app as app_mod
+        from agentbase import bootstrap as bs
+        from agentbase import cli
 
         monkeypatch.setattr(bs, "setup", lambda *a, **k: calls.append("setup"))
         monkeypatch.setattr(app_mod, "main", lambda *a, **k: calls.append("app.main"))

@@ -1,4 +1,4 @@
-"""`trade doctor` —— 安装后端到端自检。
+"""`agentbase doctor` —— 安装后端到端自检。
 
 ## 设计要点
 
@@ -21,12 +21,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import doctor
+from agentbase import doctor
 
 
 @pytest.fixture
 def trade_home(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     return tmp_path
 
 
@@ -40,7 +40,7 @@ class TestHermesRuntimeCheck:
 
     @pytest.fixture(autouse=True)
     def _provider_configured(self, monkeypatch):
-        from trade import helpers
+        from agentbase import helpers
 
         monkeypatch.setattr(helpers, "check_provider", lambda: None)
 
@@ -357,7 +357,7 @@ class TestEstopCheck:
     """
 
     def test_no_sentinel_is_ok(self, tmp_path):
-        from trade.doctor import STATUS_OK, check_estop
+        from agentbase.doctor import STATUS_OK, check_estop
 
         results = check_estop(estop_path=tmp_path / "ESTOP")
 
@@ -366,7 +366,7 @@ class TestEstopCheck:
 
     def test_sentinel_is_warn_with_recovery_hint(self, tmp_path):
         """哨兵存在 → 降级（不是致命：Trade 还能用），且必须告诉用户怎么恢复。"""
-        from trade.doctor import STATUS_WARN, check_estop
+        from agentbase.doctor import STATUS_WARN, check_estop
 
         p = tmp_path / "ESTOP"
         p.write_text('{"reason": "升级前暂停", "engaged_at": "2026-10-14"}', encoding="utf-8")
@@ -380,7 +380,7 @@ class TestEstopCheck:
 
     def test_corrupt_or_empty_sentinel_still_counts_as_engaged(self, tmp_path):
         """fail-safe：空文件/损坏内容同样是"已触发"（Hermes 就是这么判的），不是错误。"""
-        from trade.doctor import STATUS_WARN, check_estop
+        from agentbase.doctor import STATUS_WARN, check_estop
 
         p = tmp_path / "ESTOP"
         p.write_text("", encoding="utf-8")
@@ -394,7 +394,7 @@ class TestEstopCheck:
         而 `Path.exists()` 会吞掉 OSError 返回 False，用它就会给出假的"未急停"。"""
         import os as _os
 
-        from trade.doctor import STATUS_OK, STATUS_WARN, check_estop
+        from agentbase.doctor import STATUS_OK, STATUS_WARN, check_estop
 
         def _boom(path, *a, **kw):
             raise PermissionError(13, "Permission denied")
@@ -408,7 +408,7 @@ class TestEstopCheck:
 
     def test_included_in_run_doctor(self, monkeypatch):
         """run_doctor 的编排里必须带上这项检查（快检也要跑，零成本）。"""
-        from trade import doctor
+        from agentbase import doctor
 
         seen = []
         monkeypatch.setattr(doctor, "check_estop", lambda: seen.append(True) or [])
@@ -432,7 +432,7 @@ class TestUnconfiguredLlmIsNotFatal:
     @staticmethod
     def _stub_compat_ok(monkeypatch):
         """让 Hermes 版本那项直接通过，用例只聚焦「Agent 构造」。"""
-        import trade.hermes_compat as compat
+        import agentbase.hermes_compat as compat
 
         monkeypatch.setattr(compat, "hermes_python_compat", lambda: {
             "verdict": "ok", "version": "0.22.0", "python": "3.14.7",
@@ -440,7 +440,7 @@ class TestUnconfiguredLlmIsNotFatal:
         })
 
     def test_missing_provider_reports_warn_not_fatal(self, monkeypatch):
-        from trade import helpers
+        from agentbase import helpers
 
         self._stub_compat_ok(monkeypatch)
         monkeypatch.setattr(
@@ -461,7 +461,7 @@ class TestUnconfiguredLlmIsNotFatal:
 
     def test_real_construction_failure_still_fatal(self, monkeypatch):
         """大模型配好了、agent 却构造不出来 —— 这仍必须是致命项（别把真问题放过去）。"""
-        from trade import helpers
+        from agentbase import helpers
 
         self._stub_compat_ok(monkeypatch)
         monkeypatch.setattr(helpers, "check_provider", lambda: None)
@@ -478,7 +478,7 @@ class TestUnconfiguredLlmIsNotFatal:
 
 
 class TestUpdateInterpreterGuard:
-    """`trade update` 必须拒绝在非 Trade venv 的解释器下运行。
+    """`agentbase update` 必须拒绝在非 Trade venv 的解释器下运行。
 
     为什么：升级过程中的全部 `pip install` 用 `sys.executable`。若被系统 python 调起
     （cron / launchd / 计划任务 / 手敲 python），依赖会装进**全局 site-packages** ——
@@ -489,10 +489,10 @@ class TestUpdateInterpreterGuard:
     def _stub(monkeypatch, tmp_path, *, prefix, base_prefix, trade_venv_exists):
         """把 sys.prefix 与两处 venv 探测路径都钉进临时目录。
 
-        必须连 `Path.home()` 一起钉：开发机上**真的有** `~/.trade/venv`，
+        必须连 `Path.home()` 一起钉：开发机上**真的有** `~/.agentbase/venv`，
         不隔离的话判据会被真实环境干扰（第一版就是这么写的，测试结果不可信）。
         """
-        from trade.post_install import update as upd
+        from agentbase.post_install import update as upd
 
         home = tmp_path / "home"
         trade_home = tmp_path / "tradehome"
@@ -545,7 +545,7 @@ class TestUpdateInterpreterGuard:
         只测 `_refuse_reason_for_interpreter()` 本身发现不了「漏接线」——
         变异检验时把调用点改成恒 None，上面 4 条用例全绿，就是这个缺口。
         """
-        from trade.post_install import update as upd
+        from agentbase.post_install import update as upd
 
         monkeypatch.setattr(upd, "_get_trade_home", lambda: tmp_path)
         monkeypatch.setattr(upd, "_refuse_reason_for_interpreter",
@@ -555,7 +555,7 @@ class TestUpdateInterpreterGuard:
         # 下面的 subprocess 炸弹会先炸在 platform 上（CI 在 Windows 上就是这么炸的：
         # 报「守卫没接住」但其实根本没走到守卫）。钉住之后，炸弹只对
         # 「守卫被绕过」这一种情况生效。
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         monkeypatch.setattr(bootstrap, "check_native_architecture", lambda: True)
 

@@ -17,7 +17,7 @@ ROOT = Path(SPECPATH)  # SPECPATH = directory where this .spec file lives
 
 # files to bundle with the app
 _static_files = [
-    (str(ROOT / "static" / "trade_chat.html"), "static"),
+    (str(ROOT / "static" / "app.html"), "static"),
 ]
 _skill_files = []
 _skills_dir = ROOT / "skills"
@@ -33,7 +33,7 @@ if _chat_skill.is_file():
     _skill_files.append((str(_chat_skill), "skills/chat-memory"))
 
 _template_files = []
-_template_dir = ROOT / ".trade-template"
+_template_dir = ROOT / ".agentbase-template"
 if _template_dir.is_dir():
     for _f in _template_dir.rglob("*"):
         if _f.is_file():
@@ -42,18 +42,18 @@ if _template_dir.is_dir():
 
 # hidden imports that PyInstaller may miss
 _hidden_imports = [
-    "trade", "trade.api", "trade.api.companies", "trade.api.onboarding",
-    "trade.api.libraries", "trade.api.customers", "trade.api.conversations",
-    "trade.api.chat", "trade.api.memory", "trade.api.deps",
-    "trade.osint", "trade.osint.constants", "trade.osint.whois",
-    "trade.osint.email_verify", "trade.osint.sanctions",
-    "trade.osint.tech_stack", "trade.osint.linkedin_verify",
-    "trade.osint.scoring", "trade.osint.orchestrator",
-    "trade.database", "trade.company", "trade.library",
-    "trade.customer", "trade.chat_memory", "trade.memory",
-    "trade.helpers", "trade.prompt", "trade.prompts",
-    "trade.skill_router", "trade.skill_registry",
-    "trade.onboarding", "trade.email_intel", "trade.post_install",
+    "trade", "agentbase.api", "agentbase.api.companies", "agentbase.api.onboarding",
+    "agentbase.api.libraries", "agentbase.api.customers", "agentbase.api.conversations",
+    "agentbase.api.chat", "agentbase.api.memory", "agentbase.api.deps",
+    "agentbase.osint", "agentbase.osint.constants", "agentbase.osint.whois",
+    "agentbase.osint.email_verify", "agentbase.osint.sanctions",
+    "agentbase.osint.tech_stack", "agentbase.osint.linkedin_verify",
+    "agentbase.osint.scoring", "agentbase.osint.orchestrator",
+    "agentbase.database", "agentbase.company", "agentbase.library",
+    "agentbase.customer", "agentbase.chat_memory", "agentbase.memory",
+    "agentbase.helpers", "agentbase.prompt", "agentbase.prompts",
+    "agentbase.skill_router", "agentbase.skill_registry",
+    "agentbase.onboarding", "agentbase.email_intel", "agentbase.post_install",
     "hermes_cli", "hermes_cli.config", "hermes_cli.auth",
     "hermes_cli.env_loader", "hermes_cli.models",
     "hermes_constants", "run_agent",

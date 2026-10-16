@@ -34,7 +34,7 @@ rm -rf build dist *.spec.bak
 
 # ── Build ──
 echo "→ 开始打包..."
-python -m PyInstaller tradewin-mac.spec --noconfirm --clean 2>&1 | tail -10
+python -m PyInstaller desktop-mac.spec --noconfirm --clean 2>&1 | tail -10
 
 # ── Verify ──
 if [ -d "dist/TradeWin.app" ]; then

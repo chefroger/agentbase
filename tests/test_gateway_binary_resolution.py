@@ -2,7 +2,7 @@
 
 ## 为什么（客户机上定时任务静默失效）
 
-Hermes 是装在 Trade 自己的 venv 里的（`~/.trade/venv`），而启动 Gateway 用的是
+Hermes 是装在 Trade 自己的 venv 里的（`~/.agentbase/venv`），而启动 Gateway 用的是
 `shutil.which("hermes") or "hermes"` —— 只查 PATH。
 
 三个平台的 PATH 里有没有 venv 的 bin 目录：
@@ -37,7 +37,7 @@ def _clear_path(monkeypatch):
 class TestVenvFirst:
     def test_prefers_interpreters_own_directory(self, monkeypatch, tmp_path):
         """与解释器同目录的 hermes 优先 —— 那就是 Trade venv 里的那份。"""
-        import trade.app as app
+        import agentbase.app as app
 
         (tmp_path / "bin").mkdir(parents=True)
         exe = "hermes.exe" if os.name == "nt" else "hermes"
@@ -50,7 +50,7 @@ class TestVenvFirst:
 
     def test_falls_back_to_path(self, monkeypatch):
         """venv 里没有时退回 PATH 查找（开发者机器上常见）。"""
-        import trade.app as app
+        import agentbase.app as app
 
         monkeypatch.setenv("PATH", "/usr/bin")
         monkeypatch.setattr(app.shutil, "which", lambda _n: "/usr/bin/hermes")
@@ -64,7 +64,7 @@ class TestVenvFirst:
 
         返回 None 会让 Popen 报更难懂的 TypeError。
         """
-        import trade.app as app
+        import agentbase.app as app
 
         _clear_path(monkeypatch)
         monkeypatch.setattr(app.shutil, "which", lambda _n: None)

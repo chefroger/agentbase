@@ -20,13 +20,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def test_db(monkeypatch, tmp_path):
     """创建临时数据库并初始化 schema，mock 掉 _get_db_path 和桌面工作目录。"""
-    db_path = tmp_path / "trade.db"
+    db_path = tmp_path / "agentbase.db"
 
-    import trade.database as _db
+    import agentbase.database as _db
     original_db = _db._get_db_path
     _db._get_db_path = lambda: db_path
 
-    from trade.database import SCHEMA_SQL, _add_spare_columns
+    from agentbase.database import SCHEMA_SQL, _add_spare_columns
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
@@ -34,7 +34,7 @@ def test_db(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
-    import trade.company as _co
+    import agentbase.company as _co
 
     def _mock_work_dir(company_name, slug, suggested_name=""):
         work_dir = tmp_path / (suggested_name or company_name)
@@ -53,7 +53,7 @@ def test_db(monkeypatch, tmp_path):
 @pytest.fixture
 def company_id(test_db):
     """在临时数据库中创建一个测试公司，返回公司 ID。"""
-    from trade import company
+    from agentbase import company
     c = company.create("Test Company")
     return c["id"]
 
@@ -66,7 +66,7 @@ class TestComputeDataCompleteness:
 
     def test_empty_customer(self):
         """空客户数据应返回 score 0。"""
-        from trade.customer import compute_data_completeness
+        from agentbase.customer import compute_data_completeness
         result = compute_data_completeness({})
         assert result["score"] == 0
         assert result["filled_count"] == 0
@@ -74,7 +74,7 @@ class TestComputeDataCompleteness:
 
     def test_full_customer(self):
         """完整客户数据应返回 score 100。"""
-        from trade.customer import compute_data_completeness
+        from agentbase.customer import compute_data_completeness
         cust = {
             "extra1": json.dumps({
                 "country": "US", "tier": "A", "linkedin_url": "https://linkedin.com/in/example",
@@ -95,7 +95,7 @@ class TestComputeDataCompleteness:
 
     def test_partial_customer(self):
         """部分字段应有合理的中间分数。"""
-        from trade.customer import compute_data_completeness
+        from agentbase.customer import compute_data_completeness
         cust = {
             "extra1": json.dumps({"country": "US", "company_website": "https://example.com"}),
             "extra2": json.dumps({"email": "ceo@example.com"}),
@@ -110,7 +110,7 @@ class TestFindDuplicates:
 
     def test_no_duplicates(self, test_db, company_id):
         """不同客户应返回空列表。"""
-        from trade.customer import create, find_duplicates
+        from agentbase.customer import create, find_duplicates
         create("A Corp", email="a@x.com", company_website="a.com", company_id=company_id)
         create("B Ltd", email="b@x.com", company_website="b.com", company_id=company_id)
         result = find_duplicates(company_id)
@@ -118,7 +118,7 @@ class TestFindDuplicates:
 
     def test_email_match(self, test_db, company_id):
         """相同 email 应被检测为重复。"""
-        from trade.customer import create, find_duplicates
+        from agentbase.customer import create, find_duplicates
         create("A Corp", email="same@x.com", company_website="a.com", company_id=company_id)
         create("B Ltd", email="same@x.com", company_website="b.com", company_id=company_id)
         result = find_duplicates(company_id)
@@ -129,7 +129,7 @@ class TestFindDuplicates:
 
     def test_website_match(self, test_db, company_id):
         """相同 website（标准化后）应被检测为重复。"""
-        from trade.customer import create, find_duplicates
+        from agentbase.customer import create, find_duplicates
         create("A Corp", email="a@x.com", company_website="https://www.example.com/", company_id=company_id)
         create("B Ltd", email="b@x.com", company_website="http://example.com", company_id=company_id)
         result = find_duplicates(company_id)
@@ -143,7 +143,7 @@ class TestBulkSaveDedup:
 
     def test_skips_email_duplicate(self, test_db, company_id):
         """bulk_save 应跳过 email 相同的客户。"""
-        from trade.customer import bulk_save, create
+        from agentbase.customer import bulk_save, create
         create("Existing", email="dup@x.com", company_id=company_id)
         result = bulk_save(company_id, [
             {"name": "New One", "email": "dup@x.com"},
@@ -153,7 +153,7 @@ class TestBulkSaveDedup:
 
     def test_skips_website_duplicate(self, test_db, company_id):
         """bulk_save 应跳过 website 相同的客户（精确匹配）。"""
-        from trade.customer import bulk_save, create
+        from agentbase.customer import bulk_save, create
         create("Existing", company_website="dup.com", company_id=company_id)
         result = bulk_save(company_id, [
             {"name": "New One", "company_website": "dup.com"},
@@ -167,21 +167,21 @@ class TestCreateDedupWarning:
 
     def test_warns_on_email_duplicate(self, test_db, company_id):
         """相同 email 创建第二个客户时应返回 duplicate_warning。"""
-        from trade.customer import create
+        from agentbase.customer import create
         create("First", email="dup@x.com", company_id=company_id)
         result = create("Second", email="dup@x.com", company_id=company_id)
         assert result.get("duplicate_warning") == "email_already_exists"
 
     def test_warns_on_website_duplicate(self, test_db, company_id):
         """相同 website 创建第二个客户时应返回 duplicate_warning（精确匹配）。"""
-        from trade.customer import create
+        from agentbase.customer import create
         create("First", company_website="dup.com", company_id=company_id)
         result = create("Second", company_website="dup.com", company_id=company_id)
         assert result.get("duplicate_warning") == "website_already_exists"
 
     def test_no_warning_unique(self, test_db, company_id):
         """唯一客户不应有警告。"""
-        from trade.customer import create
+        from agentbase.customer import create
         result = create("Unique", email="u@x.com", company_id=company_id)
         assert "duplicate_warning" not in result
 
@@ -191,13 +191,13 @@ class TestBuildBriefing:
 
     def test_empty_customer(self, test_db, company_id):
         """不存在客户返回空字符串。"""
-        from trade.customer import build_briefing
+        from agentbase.customer import build_briefing
         result = build_briefing(99999, company_id=company_id)
         assert result == ""
 
     def test_includes_identity_and_contact(self, test_db, company_id):
         """简报应包含身份和联系方式。"""
-        from trade.customer import build_briefing, create
+        from agentbase.customer import build_briefing, create
         cust = create(
             "Test Corp", contact="John", company_id=company_id,
             country="US", tier="A", title="CEO", buyer_type="品牌商",
@@ -210,7 +210,7 @@ class TestBuildBriefing:
 
     def test_shows_identity_section(self, test_db, company_id):
         """简报应有身份段标题。"""
-        from trade.customer import build_briefing, create
+        from agentbase.customer import build_briefing, create
         cust = create("Sparse Co", company_id=company_id)
         result = build_briefing(cust["id"], company_id=company_id)
         assert "## 客户简报" in result
@@ -221,21 +221,21 @@ class TestHealthAudit:
 
     def test_empty_company(self, test_db, company_id):
         """空公司应返回空列表和零计数。"""
-        from trade.customer import health_audit
+        from agentbase.customer import health_audit
         result = health_audit(company_id)
         assert result["summary"]["total_customers"] == 0
         assert result["summary"]["stale_count"] == 0
 
     def test_detects_incomplete_customer(self, test_db, company_id):
         """数据极少的客户应出现在 incomplete_data 中。"""
-        from trade.customer import create, health_audit
+        from agentbase.customer import create, health_audit
         create("Sparse", company_id=company_id)  # 只有 name，完整度极低
         result = health_audit(company_id)
         assert result["summary"]["incomplete_count"] >= 1
 
     def test_detects_high_value_unconverted(self, test_db, company_id):
         """A 级客户无订单应在 high_value_unconverted 中。"""
-        from trade.customer import create, health_audit
+        from agentbase.customer import create, health_audit
         create("VIP", tier="A", country="US", company_id=company_id)
         result = health_audit(company_id)
         assert result["summary"]["high_value_unconverted_count"] >= 1

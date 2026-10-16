@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade import opener
+from agentbase import opener
 
 
 class _Recorder:
@@ -43,7 +43,7 @@ class TestAlreadyRunning:
         )
 
         assert rec.spawned == [], "服务已在运行时不该再启动一个（会撞端口）"
-        assert rec.opened == ["http://127.0.0.1:9119/trade"]
+        assert rec.opened == ["http://127.0.0.1:9120/agentbase"]
         assert "已在运行" in msg
 
     def test_opens_trade_path_not_root(self):
@@ -74,7 +74,7 @@ class TestColdStart:
                                 focuser=lambda _m: False, timeout=5.0)
 
         assert len(rec.spawned) == 1
-        assert rec.opened == ["http://127.0.0.1:9119/trade"]
+        assert rec.opened == ["http://127.0.0.1:9120/agentbase"]
         assert "已启动" in msg
 
     def test_spawns_with_no_browser(self, monkeypatch):
@@ -160,7 +160,7 @@ class TestReuseExistingPage:
             focuser=lambda _m: False, timeout=1.0,
         )
 
-        assert rec.opened == ["http://127.0.0.1:9119/trade"]
+        assert rec.opened == ["http://127.0.0.1:9120/agentbase"]
 
     def test_focuser_exception_does_not_block_opening(self):
         """聚焦失败不是错误，照常打开新页面。"""
@@ -174,7 +174,7 @@ class TestReuseExistingPage:
             focuser=boom, timeout=1.0,
         )
 
-        assert rec.opened == ["http://127.0.0.1:9119/trade"]
+        assert rec.opened == ["http://127.0.0.1:9120/agentbase"]
 
     def test_focus_happens_after_server_is_ready(self):
         """必须先确保服务在跑再聚焦 —— 反了会把用户切到浏览器的错误页。"""
@@ -220,12 +220,12 @@ class TestWindowTitleMatching:
         assert opener.match_trade_window(["", None]) is None
 
     def test_marker_matches_the_real_page_title(self):
-        """标记必须真的出现在 static/trade_chat.html 的 <title> 里 ——
+        """标记必须真的出现在 static/app.html 的 <title> 里 ——
         否则改了页面标题就会静默失效：快捷方式每次都新开标签页，没人会注意到。
         """
         from pathlib import Path
 
-        html = (Path(__file__).resolve().parent.parent / "static" / "trade_chat.html").read_text(
+        html = (Path(__file__).resolve().parent.parent / "static" / "app.html").read_text(
             encoding="utf-8"
         )
         assert opener.WINDOW_TITLE_MARKER in html, (

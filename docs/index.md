@@ -162,7 +162,7 @@ AI 会自己去 GitHub 查看项目说明，然后自动执行所有安装命令
 trade
 ```
 
-浏览器会自动打开 Trade 界面。如果没有自动打开，手动访问 **http://127.0.0.1:9119/trade**。
+浏览器会自动打开 Trade 界面。如果没有自动打开，手动访问 **http://127.0.0.1:9120/agentbase**。
 
 ### 第九步：设置 Hermes Gateway 开机自启（可选）
 
@@ -176,7 +176,7 @@ hermes gateway install
 
 Trade 服务本身的开机自启由安装脚本 `scripts/install.sh` 单独配置（写入 `~/Library/LaunchAgents/com.trade.assistant.plist`，开机静默启动 `trade`）。
 
-> 以后的使用方式（仅对经 `install.sh` 安装的用户成立）：开机后等约 30 秒，Trade 与 Gateway 均已自启，直接浏览器访问 **http://127.0.0.1:9119/trade** 即可；若未配置 Trade 自启，仍需先手动运行 `trade` 再访问。
+> 以后的使用方式（仅对经 `install.sh` 安装的用户成立）：开机后等约 30 秒，Trade 与 Gateway 均已自启，直接浏览器访问 **http://127.0.0.1:9120/agentbase** 即可；若未配置 Trade 自启，仍需先手动运行 `trade` 再访问。
 
 ---
 
@@ -335,7 +335,7 @@ AI 会自己去 GitHub 查看项目说明，然后自动执行所有安装命令
 trade
 ```
 
-浏览器会自动打开 Trade 界面。如果没有自动打开，手动访问 **http://127.0.0.1:9119/trade**。
+浏览器会自动打开 Trade 界面。如果没有自动打开，手动访问 **http://127.0.0.1:9120/agentbase**。
 
 > 验证能用后，按 `Ctrl+C` 退出 trade（暂时退出，下一步设置开机自启后会自动运行）。
 
@@ -429,7 +429,7 @@ $sc.Save()
 
 **10.4 验证**
 
-执行 `wscript.exe "$env:LOCALAPPDATA\trade\trade-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9119/trade**。能看到界面、且**没有弹出终端窗口**即为正确。
+执行 `wscript.exe "$env:LOCALAPPDATA\trade\trade-autostart.vbs"`，等约 15 秒，访问 **http://127.0.0.1:9120/agentbase**。能看到界面、且**没有弹出终端窗口**即为正确。
 
 > 打不开就看 `%LOCALAPPDATA%\trade\trade-autostart.log`。最常见的是 `ModuleNotFoundError`，说明 trade 没装好。
 
@@ -463,12 +463,12 @@ Trade 会持续更新，新版本增加功能和修复问题。最简单的方�
 
 Trade 装好后**首次启动会自动做一次自检**，检查四项：Hermes 运行环境、图片识别（原
 生 vision）、Tavily 搜索、Trade 自身（数据库 + 一次真实对话）。结果会打印在启动日志里，
-也会出现在 `http://127.0.0.1:9119/api/status` 的 `doctor` 字段中。
+也会出现在 `http://127.0.0.1:9120/api/status` 的 `doctor` 字段中。
 
 想手动再跑一次（推荐在「对话没反应」「图片读不出来」「搜索不工作」时先跑它）：
 
 ```powershell
-trade doctor
+agentbase doctor
 ```
 
 输出形如：
@@ -515,11 +515,11 @@ sentence-transformers 属可选项，装了更好、不装自动降级）。
 | 上面的升级提示「升级失败」 | 多半是网络中途断了。确认科学上网正常后点「重试升级」；反复失败就把界面上的日志复制发给技术支持 |
 | 第五步安装 Hermes 卡住不动 | 科学上网没开好。确认 VPN 是全局模式，关掉 PowerShell 重开再试 |
 | `hermes` 输入后提示「不是内部或外部命令」 | 关掉 PowerShell 重新打开一个新的 |
-| `trade` 输入后提示「不是内部或外部命令」 | 改成输入 `cd $env:LOCALAPPDATA\trade\foreign-trade-assistant` 然后 `python server.py` |
-| 任何功能不对劲 | 先跑 `trade doctor` —— 它会端到端验活并指出是哪一项坏了（见「自检」一节） |
+| `trade` 输入后提示「不是内部或外部命令」 | 改成输入 `cd $env:LOCALAPPDATA\trade\agentbase` 然后 `python server.py` |
+| 任何功能不对劲 | 先跑 `agentbase doctor` —— 它会端到端验活并指出是哪一项坏了（见「自检」一节） |
 | Hermes 对话没反应 | API Key 没配置对。重新运行 `hermes setup` 检查 |
 | 浏览器打开显示「无法访问此网站」 | 程序没在运行。打开一个新的 PowerShell，输入 `trade` 启动 |
-| 开机后访问 127.0.0.1:9119/trade 打不开 | Trade 自启还没跑完，等 30 秒再试。若仍不行，打开 `%LOCALAPPDATA%\trade\trade-autostart.log` 看错误日志；或按 `Win+R` 输入 `taskmgr` 回车，看进程里有没有 `python.exe`，没有就手动运行第十步的 VBS 脚本 |
+| 开机后访问 127.0.0.1:9120/agentbase 打不开 | Trade 自启还没跑完，等 30 秒再试。若仍不行，打开 `%LOCALAPPDATA%\trade\trade-autostart.log` 看错误日志；或按 `Win+R` 输入 `taskmgr` 回车，看进程里有没有 `python.exe`，没有就手动运行第十步的 VBS 脚本 |
 | 定时任务（每日简报等）不执行 | 第九步的 Hermes Gateway 没装好或没运行。重新执行 `hermes gateway install`，再到 `services.msc` 确认服务状态 |
 | 收不到桌面 Trade 图标 | 首次运行 `trade` 时自动创建；被删了的话重启一次 Trade 会重新生成，仍没有就按第十步手动创建 |
 | 登录后弹出黑色终端窗口 | 自启任务还是旧版（直接跑 python.exe）。重启一次 Trade 会自动换成隐藏窗口版本；没换掉就按第十步手动重建计划任务 |

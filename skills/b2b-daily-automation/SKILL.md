@@ -368,49 +368,49 @@ Use Hermes cron to schedule:
 
 ```bash
 # Morning Brief — 08:00 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "Morning Brief" \
   --schedule "0 8 * * 1-5" \
   --deliver local \
   --prompt "按照 b2b-daily-automation 技能中的「早安简报规范」生成今日简报。必须使用 web_search 逐项搜索实时汇率（USD/EUR/GBP→CNY）、大宗商品价格（金/铜/铝/原油）、目标市场新闻。查询昨日对话记录和客户待跟进清单。所有数值必须来自搜索结果，不得编造或留空。输出格式严格遵守简报规范模板。"
 
 # LinkedIn Post — 09:30 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "LinkedIn Post" \
   --schedule "30 9 * * 1-5" \
   --deliver local \
   --prompt "Generate LinkedIn post ready to publish. Include: engaging text post with hook, value proposition, and CTA. Add 5 relevant hashtags. User is in [INDUSTRY] exporting [PRODUCT]. Content should be professional but authentic."
 
 # European Outreach — 10:00 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "EU Outreach" \
   --schedule "0 10 * * 1-5" \
   --deliver local \
   --prompt "Generate [X] personalized outreach emails for European prospects/customers in [COUNTRIES]. For each: reference something specific about them, explain value proposition, include clear CTA. Check CRM for follow-up sequence."
 
 # Platform Check — 11:00 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "Platform Check" \
   --schedule "0 11 * * 1-5" \
   --deliver local \
   --prompt "Generate platform review checklist for today. Include: new RFQ count, pending quotes requiring follow-up, product view trends, competitor activity notes. Platforms: [ALIBABA/INDIAMART/ETC]."
 
 # Social Media — 14:00 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "Social Media Post" \
   --schedule "0 14 * * 1-5" \
   --deliver local \
   --prompt "Generate social media post for [PLATFORM]. Today's content type: [TEXT/IMAGE/VIDEO/POLL]. Include: caption, hashtags, media suggestions. User exports [PRODUCT] targeting [AUDIENCE]."
 
 # US Outreach — 16:00 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "US Outreach" \
   --schedule "0 16 * * 1-5" \
   --deliver local \
   --prompt "Generate [X] personalized outreach emails for US/Americas prospects/customers. Same structure as EU outreach. Target markets: [US/CANADA/LATAM]."
 
 # Daily Summary — 17:30 Monday-Friday
-trade cron create \
+agentbase cron create \
   --name "Daily Summary" \
   --schedule "30 17 * * 1-5" \
   --deliver local \

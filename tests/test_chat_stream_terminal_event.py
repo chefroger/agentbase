@@ -12,7 +12,7 @@ Hermes 的 `hermes_bootstrap.py` 把 server.py 重新 exec 到它自带的 store
    （`Future exception was never retrieved`）；
 2. `_event_stream` 在队列等待超时后只判断 `agent_task.done()` 就 break，
    **从不取 `agent_task.exception()`** → 异常被彻底吞掉；
-3. `finally` 只补发 `done`，而前端 `trade_chat.js` 的 switch 没有 `done` 分支；
+3. `finally` 只补发 `done`，而前端 `app.js` 的 switch 没有 `done` 分支；
 4. 前端 `responseText` 为空，落到兜底文案 —— 网络断、agent 崩、被丢弃，
    三类完全不同的问题长得一模一样。
 
@@ -53,15 +53,15 @@ class _AgentRaising:
 @pytest.fixture
 def company(monkeypatch, tmp_path):
     """临时库 + 一家公司（建目录的过程照 document_rules 那套 harness）。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
 
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
 
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -76,13 +76,13 @@ def company(monkeypatch, tmp_path):
 
 async def _collect_stream(company: dict, exc: BaseException) -> str:
     """驱动真实的 trade_chat_stream，把 SSE 响应体收成一个字符串。"""
-    import trade.api.chat as chat
-    from trade.api.models import ChatRequest
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
 
     with patch.object(chat, "create_agent", return_value=_AgentRaising(exc)), \
          patch.object(chat, "build_query", return_value=("Q", "H")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
-         patch("trade.license.check_license", return_value=(True, "")):
+         patch("agentbase.license.check_license", return_value=(True, "")):
         resp = await chat.trade_chat_stream(
             ChatRequest(query="帮我做一下公司网站诊断"), company["id"]
         )

@@ -1,7 +1,7 @@
 """
 数据库层测试 — schema 创建、v0→v1 迁移、spare columns 幂等性。
 
-所有测试使用临时数据库文件，不影响 data/trade.db。
+所有测试使用临时数据库文件，不影响 data/agentbase.db。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.database import (
+from agentbase.database import (
     SCHEMA_SQL,
     _add_spare_columns,
     _migrate_from_v0,
@@ -255,7 +255,7 @@ class TestWALMode:
         """get_connection 应启用 WAL journal 模式。"""
         db_path = tmp_path / "test_wal.db"
         # 临时 monkey-patch _get_db_path
-        import trade.database
+        import agentbase.database
         original = trade.database._get_db_path
         trade.database._get_db_path = lambda: db_path
 

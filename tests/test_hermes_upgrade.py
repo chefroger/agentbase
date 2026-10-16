@@ -33,7 +33,7 @@ class FakePopen:
 @pytest.fixture(autouse=True)
 def _fresh_upgrade_state():
     """每个用例都从干净的状态机开始（模块级全局会被上一个用例污染）。"""
-    from trade import hermes_upgrade
+    from agentbase import hermes_upgrade
 
     hermes_upgrade.reset_for_tests()
     yield
@@ -43,7 +43,7 @@ def _fresh_upgrade_state():
 @pytest.fixture
 def hu(monkeypatch):
     """加载升级模块，并把「找启动器 / 探网络 / 起进程」换成可控的替身。"""
-    from trade import hermes_upgrade
+    from agentbase import hermes_upgrade
 
     FakePopen.instances = []
     FakePopen.returncode = 0
@@ -164,7 +164,7 @@ def test_success_hook_fires_after_upgrade(hu, monkeypatch):
 
 def _system_endpoint(path: str, method: str):
     """从系统路由里取出端点函数（既有测试惯例：直接调函数，不经过 HTTP）。"""
-    from trade.app import _create_system_router
+    from agentbase.app import _create_system_router
 
     for route in _create_system_router().routes:
         if route.path == path and method in route.methods:
@@ -175,7 +175,7 @@ def _system_endpoint(path: str, method: str):
 @pytest.fixture
 def compat_ok(monkeypatch):
     """把共存状态钉成「可用」。"""
-    from trade import bootstrap
+    from agentbase import bootstrap
 
     monkeypatch.setattr(bootstrap, "hermes_compat_state", lambda: {
         "verdict": "ok", "version": "0.22.0", "python": "3.14.7",
@@ -186,7 +186,7 @@ def compat_ok(monkeypatch):
 @pytest.fixture
 def compat_too_old(monkeypatch):
     """把共存状态钉成「Hermes 版本过旧」。"""
-    from trade import bootstrap
+    from agentbase import bootstrap
 
     monkeypatch.setattr(bootstrap, "hermes_compat_state", lambda: {
         "verdict": "too_old", "version": "0.19.0", "python": "3.14.7",
@@ -198,7 +198,7 @@ def compat_too_old(monkeypatch):
 @pytest.fixture
 def compat_python_too_old(monkeypatch):
     """把共存状态钉成「Trade 运行环境过旧」（Hermes 够新、解释器太老）。"""
-    from trade import bootstrap
+    from agentbase import bootstrap
 
     monkeypatch.setattr(bootstrap, "hermes_compat_state", lambda: {
         "verdict": "python_too_old", "version": "0.22.0", "python": "3.13.5",
@@ -245,11 +245,11 @@ def test_compat_endpoint_rebuild_case_gives_reinstall_steps(compat_python_too_ol
 
 async def test_upgrade_stream_emits_state_and_ends(compat_too_old):
     """进度流必须推得出状态、且在终态立即收尾（不能挂住界面）。"""
-    from trade.hermes_upgrade import DONE, reset_for_tests
+    from agentbase.hermes_upgrade import DONE, reset_for_tests
 
     reset_for_tests()
     # 直接把状态设成终态，验证「不运行就立即结束」
-    import trade.hermes_upgrade as hu
+    import agentbase.hermes_upgrade as hu
 
     hu._set(DONE, "升级完成")
 
@@ -276,7 +276,7 @@ def test_probe_uses_no_pipes_and_disables_prompts(monkeypatch):
       1. 有管道 → 孙进程（凭证助手）持着句柄时 `communicate()` 会越过 timeout 继续等；
       2. 凭证助手会弹提示 → 必须从环境上禁掉。
     """
-    from trade import hermes_upgrade as hu
+    from agentbase import hermes_upgrade as hu
 
     captured: dict = {}
 
@@ -312,7 +312,7 @@ def test_probe_hard_deadline_beats_a_stuck_thread(monkeypatch):
     """
     import time
 
-    from trade import hermes_upgrade as hu
+    from agentbase import hermes_upgrade as hu
 
     monkeypatch.setattr(hu, "_PROBE_DEADLINE", 0.3)
     monkeypatch.setattr(hu, "_probe_github", lambda: time.sleep(30) or True)
@@ -331,7 +331,7 @@ def test_probe_disables_prompts_for_the_update_child_too(monkeypatch):
     它内部要跑 git fetch，撞上凭证提示会挂住；而升级子进程**不能像探测那样被超时杀掉**
     （杀掉一个做到一半的 Hermes 升级很危险），所以只能从源头保证它不会去等输入。
     """
-    from trade import hermes_upgrade as hu
+    from agentbase import hermes_upgrade as hu
 
     monkeypatch.setenv("HERMES_DISABLE_LAZY_INSTALLS", "1")
 
@@ -367,7 +367,7 @@ class TestUpgradeApplicability:
     @staticmethod
     def _stub_fix(monkeypatch, value):
         """只打桩判定来源，不绕过守卫本身。"""
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         monkeypatch.setattr(
             bootstrap, "hermes_compat_state",
@@ -381,7 +381,7 @@ class TestUpgradeApplicability:
         ("none", "无需升级"),
     ])
     def test_reason_by_fix_direction(self, monkeypatch, fix, expect):
-        from trade import hermes_upgrade as hu
+        from agentbase import hermes_upgrade as hu
 
         self._stub_fix(monkeypatch, fix)
 
@@ -394,7 +394,7 @@ class TestUpgradeApplicability:
 
     def test_start_upgrade_refuses_when_rebuild_is_needed(self, monkeypatch):
         """方向是「重建」时必须拒绝，且**不得改动状态机**。"""
-        from trade import hermes_upgrade as hu
+        from agentbase import hermes_upgrade as hu
 
         hu.reset_for_tests()
         self._stub_fix(monkeypatch, "rebuild_trade_venv")
@@ -412,7 +412,7 @@ class TestUpgradeApplicability:
 
         这里**不绕过守卫**：只打桩判定来源，让真实的 `_not_applicable_reason()` 跑一遍。
         """
-        from trade import bootstrap
+        from agentbase import bootstrap
 
         # 撤掉夹具的放行桩，让真实守卫参与（undo 会撤掉全部桩，所以之后要重装）
         monkeypatch.undo()
@@ -438,7 +438,7 @@ def test_child_env_forces_unbuffered_output(monkeypatch):
     不加 PYTHONUNBUFFERED 时子进程 stdout 是块缓冲，界面上会**整段时间一行都看不到**
     （升级要几分钟），用户以为卡死 —— 而「让用户看到有在动」正是这个面板存在的理由。
     """
-    from trade import hermes_upgrade as hu
+    from agentbase import hermes_upgrade as hu
 
     env = hu._child_env()
 
@@ -531,7 +531,7 @@ async def test_stream_does_not_end_on_idle(compat_too_old):
     """
     import asyncio
 
-    import trade.hermes_upgrade as hu
+    import agentbase.hermes_upgrade as hu
 
     hu.reset_for_tests()
     assert hu.status()["status"] == hu.IDLE, "前置：状态应是 idle"

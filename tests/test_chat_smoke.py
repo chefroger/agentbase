@@ -20,8 +20,8 @@ class TestRequireCompanyInjection:
         """
         # Simulate what FastAPI Depends does: require_company returns an int
         # Mock the company lookup
-        import trade.company as co
-        from trade.api.deps import require_company
+        import agentbase.company as co
+        from agentbase.api.deps import require_company
         monkeypatch.setattr(co, "get_trade_company", lambda cid: {"company_id": cid, "is_active": 1})
 
         # A valid header string should parse to int 1
@@ -41,7 +41,7 @@ class TestSmokeChatModule:
 
     def test_chat_module_imports(self, monkeypatch, tmp_path):
         """chat.py 可以正常导入，Depends 签名正确。"""
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         with patch.dict(sys.modules, {
             "hermes_cli": MagicMock(),
             "hermes_cli.config": MagicMock(),
@@ -67,17 +67,17 @@ class TestSmokeChatModule:
                 base_url_env_var = ""
             auth.PROVIDER_REGISTRY = {"openai": _PC()}
 
-            from trade.database import init_db
+            from agentbase.database import init_db
             init_db()
 
-            from trade.api.chat import router, trade_chat, trade_chat_stream
+            from agentbase.api.chat import router, app, trade_chat_stream
             assert router is not None
-            assert callable(trade_chat)
+            assert callable(app)
             assert callable(trade_chat_stream)
 
     def test_create_agent_factory(self, monkeypatch, tmp_path):
         """create_agent 不再写 os.environ。"""
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         with patch.dict(sys.modules, {
             "hermes_cli": MagicMock(),
@@ -106,7 +106,7 @@ class TestSmokeChatModule:
 
             import os
 
-            from trade.helpers import create_agent
+            from agentbase.helpers import create_agent
             os.environ.pop("HERMES_YOLO_MODE", None)
 
             # Mock AIAgent to avoid real LLM call
@@ -138,7 +138,7 @@ class TestSmokeChatModule:
 
 
 class TestChatEndpointHTTP:
-    """真实 HTTP 请求测试：POST /api/trade/chat 不能因依赖注入崩成 500。"""
+    """真实 HTTP 请求测试：POST /api/agentbase/chat 不能因依赖注入崩成 500。"""
 
     @pytest.mark.asyncio
     async def test_chat_endpoint_returns_200_mocked(self, monkeypatch, tmp_path):
@@ -147,10 +147,10 @@ class TestChatEndpointHTTP:
         使用独立 FastAPI app（不与 server.py 共享全局状态），
         避免 test_api.py 中 module-scope mock 的泄漏。
         """
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-        import trade.database as _db
-        _db._get_db_path = lambda p=tmp_path: p / "trade.db"
-        from trade.database import init_db
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as _db
+        _db._get_db_path = lambda p=tmp_path: p / "agentbase.db"
+        from agentbase.database import init_db
         init_db()
 
         # Mock Hermes + agent 依赖
@@ -158,7 +158,7 @@ class TestChatEndpointHTTP:
             def chat(self, q): return "mocked-response"
 
         # 桌面工作目录重定向到 tmp_path
-        import trade.company as co
+        import agentbase.company as co
         def _mock_setup(cname, slug, suggested_name=""):
             wd = tmp_path / (suggested_name or cname)
             wd.mkdir(parents=True, exist_ok=True)
@@ -174,25 +174,25 @@ class TestChatEndpointHTTP:
         monkeypatch.setattr(co, "get_trade_company",
                             lambda cid: {"company_id": cid, "data_dir": str(tmp_path), "agent_identity_md": "", "is_active": 1})
 
-        import trade.helpers
+        import agentbase.helpers
         monkeypatch.setattr(trade.helpers, "check_provider", lambda: None)
         monkeypatch.setattr(trade.helpers, "get_agent_kwargs", lambda: {"provider":"x","model":"x","base_url":"","api_key":""})
         monkeypatch.setattr(trade.helpers, "build_query", lambda c, l, q, **kw: q)
         monkeypatch.setattr(trade.helpers, "create_agent", lambda **kw: _A())
 
         # chat.py 在模块级别 import create_agent，已被其他测试缓存，需 patch 两处
-        import trade.api.chat as chat_mod
+        import agentbase.api.chat as chat_mod
         monkeypatch.setattr(chat_mod, "create_agent", lambda **kw: _A())
         monkeypatch.setattr(chat_mod, "build_query", lambda c, l, q, **kw: q)
         monkeypatch.setattr(chat_mod.chat_memory, "save_with_context", lambda **kw: {"id": 1})
 
-        from trade.api.deps import set_session_token
+        from agentbase.api.deps import set_session_token
         set_session_token("test-token")
 
         # 构建独立 app
         from fastapi import FastAPI
 
-        from trade.api import router as trade_router
+        from agentbase.api import router as trade_router
         app = FastAPI()
         app.include_router(trade_router, prefix="/api/trade")
 
@@ -200,7 +200,7 @@ class TestChatEndpointHTTP:
         transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.post(
-                "/api/trade/chat",
+                "/api/agentbase/chat",
                 json={"query": "hi"},
                 headers={"X-Hermes-Session-Token": "test-token", "X-Company-ID": "1"},
             )

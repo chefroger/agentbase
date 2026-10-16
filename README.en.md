@@ -89,7 +89,7 @@ Trade's search and due diligence features rely on Tavily's AI search engine. Sig
 
 ### If Trade Installation Fails
 
-Manual Trade installation involves three steps (`git clone` + `pip install` + `install-trade-skills`), and network fluctuations can cause any one of them to fail. If you've already successfully installed **Hermes Agent and configured an LLM** but are struggling with the Trade install, simply give the Trade repo URL to Hermes and let it handle the rest:
+Manual Trade installation involves three steps (`git clone` + `pip install` + `install-agentbase-skills`), and network fluctuations can cause any one of them to fail. If you've already successfully installed **Hermes Agent and configured an LLM** but are struggling with the Trade install, simply give the Trade repo URL to Hermes and let it handle the rest:
 
 > Tell Hermes directly in chat:
 > "Help me install Trade from https://github.com/chefroger/smart-trade-ai.git"
@@ -120,9 +120,9 @@ The script handles: Python check → Hermes Agent → Smart Trade AI → 39 skil
 Visit [Releases](https://github.com/chefroger/smart-trade-ai/releases) or specify a version:
 
 ```bash
-git clone --branch v0.6.8 https://github.com/chefroger/smart-trade-ai.git ~/.trade/foreign-trade-assistant
-cd ~/.trade/foreign-trade-assistant && pip install -e ".[docs]"
-install-trade-skills
+git clone --branch v0.6.8 https://github.com/chefroger/smart-trade-ai.git ~/.agentbase/agentbase
+cd ~/.agentbase/agentbase && pip install -e ".[docs]"
+install-agentbase-skills
 python server.py
 ```
 
@@ -145,16 +145,16 @@ curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scri
 hermes setup      # Choose provider, paste API key
 
 # 3. Install Smart Trade AI (venv on the 3.14 that Hermes brought)
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git ~/.trade/foreign-trade-assistant
-cd ~/.trade/foreign-trade-assistant
-python3.14 -m venv ~/.trade/venv
-~/.trade/venv/bin/pip install -r requirements.txt
-~/.trade/venv/bin/pip install -e "." --no-deps
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git ~/.agentbase/agentbase
+cd ~/.agentbase/agentbase
+python3.14 -m venv ~/.agentbase/venv
+~/.agentbase/venv/bin/pip install -r requirements.txt
+~/.agentbase/venv/bin/pip install -e "." --no-deps
 
 # 4. Install skills and launch
-~/.trade/venv/bin/python -c "from trade.post_install import install_skills; install_skills()"
-~/.trade/venv/bin/python server.py
-# → Open http://127.0.0.1:9119/trade
+~/.agentbase/venv/bin/python -c "from agentbase.post_install import install_skills; install_skills()"
+~/.agentbase/venv/bin/python server.py
+# → Open http://127.0.0.1:9120/agentbase
 ```
 
 > If Trade shows "Hermes version too old" after launch, your Hermes is below 0.21.6.
@@ -183,11 +183,11 @@ irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/ins
 hermes setup
 
 # 3. Install Smart Trade AI
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\foreign-trade-assistant
-cd $env:LOCALAPPDATA\trade\foreign-trade-assistant; pip install -e "."; install-trade-skills
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\agentbase
+cd $env:LOCALAPPDATA\trade\agentbase; pip install -e "."; install-agentbase-skills
 
 python server.py
-# → Open http://127.0.0.1:9119/trade
+# → Open http://127.0.0.1:9120/agentbase
 ```
 
 > If step 3 fails with `Filename too long`, long paths are not enabled. Verify step 0 was run and the machine was rebooted.
@@ -250,12 +250,12 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 
 ## Data Security
 
-- **Business data is stored locally by default** (`~/.trade/`), nothing uploaded to any server
+- **Business data is stored locally by default** (`~/.agentbase/`), nothing uploaded to any server
 - With **Ollama or other local models**, full local operation is possible — no data leaves your machine
 - With **DeepSeek or other cloud LLMs**, your input and necessary context are sent to the chosen provider — client identity data is NOT included
 - Multi-company isolation (`X-Company-ID` header)
 - Bound to `127.0.0.1` — only accessible from your local browser; even if you bind another address, session credentials are still handed out to loopback clients only (see Network Exposure Warning below)
-- **Auto-backup before upgrades** → `~/.trade/backups/`
+- **Auto-backup before upgrades** → `~/.agentbase/backups/`
 
 ### Network Exposure Warning
 

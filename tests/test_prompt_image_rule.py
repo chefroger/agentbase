@@ -17,7 +17,7 @@ Apple Vision 框架 OCR，逐区域裁剪跑多轮。工具统计：
 也就是说 `vision_analyze` 当时可选、可用（另经实测：把同一张图直接发给
 deepseek-flash，返回文字与原图逐字一致）。失败原因不在配置，在提示词层 ——
 `trade/prompt.py` 里关于图片 / 截图 / 图像**一条规则都没有**，全项目唯一一句图片
-指令是 `static/trade_chat.js:1884`，而它只挂在**拖拽导入**路径上。用户这次是在
+指令是 `static/app.js:1884`，而它只挂在**拖拽导入**路径上。用户这次是在
 聊天框里直接给的路径，那句提示压根没触发。
 
 所以规则必须**常驻四档**：一条「有时在、有时不在」的提示不构成硬约束，
@@ -36,43 +36,43 @@ class TestImageBlockContent:
     """铁律块本身的内容要求。"""
 
     def test_block_exists_and_nonempty(self):
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert TRADE_IMAGE_BLOCK.strip(), "图片铁律块不能为空"
 
     def test_block_has_header(self):
         """块必须有可识别的标题行（测试和排查都靠它定位）。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert IMAGE_BLOCK_HEADER in TRADE_IMAGE_BLOCK
 
     def test_block_names_the_vision_tool(self):
         """必须点名 `vision_analyze` —— 只说「用视觉工具」模型可能不知道叫什么。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert "vision_analyze" in TRADE_IMAGE_BLOCK
 
     def test_block_forbids_self_written_ocr(self):
         """必须明文禁止自建 OCR（这次就是自写了 Swift 脚本）。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert "OCR" in TRADE_IMAGE_BLOCK or "ocr" in TRADE_IMAGE_BLOCK
 
     def test_block_forbids_browser_route_for_local_images(self):
         """必须禁止用浏览器路径去开本地图片（这次空等 browser_exec 420s）。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert "browser_exec" in TRADE_IMAGE_BLOCK
 
     def test_block_mentions_read_file_cannot_read_images(self):
         """必须说明 `read_file` 不支持图片，免得模型读完得出「无法读取」的结论。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert "read_file" in TRADE_IMAGE_BLOCK
 
     def test_block_is_compact(self):
         """常驻块要付每请求的成本，必须克制（这条规则值不了几千 token）。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         assert len(TRADE_IMAGE_BLOCK) < 900, (
             f"图片铁律块 {len(TRADE_IMAGE_BLOCK)} 字符，超出常驻预算（<900）"
@@ -87,7 +87,7 @@ class TestImageBlockAlwaysPresent:
     """
 
     def _tiers(self):
-        from trade.prompt import (
+        from agentbase.prompt import (
             TRADE_SYSTEM_PROMPT_FIRST_TURN,
             TRADE_SYSTEM_PROMPT_FULL,
             TRADE_SYSTEM_PROMPT_MINIMAL,
@@ -111,7 +111,7 @@ class TestImageBlockAlwaysPresent:
 
     def test_all_tiers_share_the_same_block(self):
         """四档共用同一个常量（单一事实来源），避免各写一份而慢慢漂移。"""
-        from trade.prompt import TRADE_IMAGE_BLOCK
+        from agentbase.prompt import TRADE_IMAGE_BLOCK
 
         for name, text in self._tiers().items():
             assert TRADE_IMAGE_BLOCK in text, f"{name} 档内嵌的块与 TRADE_IMAGE_BLOCK 不一致"
@@ -120,15 +120,15 @@ class TestImageBlockAlwaysPresent:
 @pytest.fixture
 def company_env(monkeypatch, tmp_path):
     """临时库 + 一家公司：只为跑真实 build_query 装配器。"""
-    monkeypatch.setenv("TRADE_HOME", str(tmp_path))
-    import trade.database as _db
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+    import agentbase.database as _db
 
-    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "trade.db")
-    from trade.database import init_db
+    monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
+    from agentbase.database import init_db
 
     init_db()
 
-    import trade.company as co
+    import agentbase.company as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -149,7 +149,7 @@ class TestImageRuleReachesModel:
     """
 
     def _build(self, env, query, *, calls=1):
-        import trade.helpers as helpers
+        import agentbase.helpers as helpers
 
         result = None
         for _ in range(calls):

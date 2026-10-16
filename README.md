@@ -99,7 +99,7 @@ Trade 的搜索和客户尽职调查功能依赖 Tavily 的 AI 搜索引擎。�
 
 ### 如果 Trade 安装失败
 
-手动安装 Trade 涉及 `git clone` + `pip install` + `install-trade-skills` 三个步骤，网络波动可能导致某一步失败。如果你已经成功安装了 **Hermes Agent 并配置好了 LLM**，但 Trade 安装遇到困难，可以直接把 Trade 的仓库地址告诉 Hermes，让它帮你完成安装：
+手动安装 Trade 涉及 `git clone` + `pip install` + `install-agentbase-skills` 三个步骤，网络波动可能导致某一步失败。如果你已经成功安装了 **Hermes Agent 并配置好了 LLM**，但 Trade 安装遇到困难，可以直接把 Trade 的仓库地址告诉 Hermes，让它帮你完成安装：
 
 > 在 Hermes 对话中直接说：
 > 「帮我安装 Trade，仓库地址是 https://github.com/chefroger/smart-trade-ai.git」
@@ -138,20 +138,20 @@ hermes
 
 > 请分析 https://github.com/chefroger/smart-trade-ai 这个 GitHub 仓库，并帮我安装
 
-3. Hermes 会自动：访问仓库 README → 识别安装步骤 → `git clone` → `pip install` → `install-trade-skills` → 初始化数据库
+3. Hermes 会自动：访问仓库 README → 识别安装步骤 → `git clone` → `pip install` → `install-agentbase-skills` → 初始化数据库
 4. 安装完成后，**新开一个 PowerShell**（让 PATH 生效），启动 Trade：
 
 ```powershell
 trade
-# → 浏览器自动打开 http://127.0.0.1:9119/trade
+# → 浏览器自动打开 http://127.0.0.1:9120/agentbase
 ```
 
 > 如果 `trade` 命令找不到，说明 PATH 没生效，可以改用：
 > ```powershell
-> cd $env:LOCALAPPDATA\trade\foreign-trade-assistant
+> cd $env:LOCALAPPDATA\trade\agentbase
 > python server.py
 > ```
-> 然后浏览器手动打开 http://127.0.0.1:9119/trade
+> 然后浏览器手动打开 http://127.0.0.1:9120/agentbase
 
 > AI 会根据你当前的环境（Python 版本、操作系统、已有依赖）动态调整命令，遇到报错也能自行排查重试，比固定脚本更鲁棒。
 
@@ -177,9 +177,9 @@ curl -fsSL https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scrip
 访问 [Releases](https://github.com/chefroger/smart-trade-ai/releases) 下载最新版，或指定版本：
 
 ```bash
-git clone --branch v0.6.8 https://github.com/chefroger/smart-trade-ai.git ~/.trade/foreign-trade-assistant
-cd ~/.trade/foreign-trade-assistant && pip install -e ".[docs]"
-install-trade-skills
+git clone --branch v0.6.8 https://github.com/chefroger/smart-trade-ai.git ~/.agentbase/agentbase
+cd ~/.agentbase/agentbase && pip install -e ".[docs]"
+install-agentbase-skills
 python server.py
 ```
 
@@ -201,16 +201,16 @@ curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scri
 hermes setup      # 按提示选择 provider、填入 API Key
 
 # 3. 安装 Smart Trade AI（用上一步 Hermes 自带的 3.14 建 venv）
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git ~/.trade/foreign-trade-assistant
-cd ~/.trade/foreign-trade-assistant
-python3.14 -m venv ~/.trade/venv
-~/.trade/venv/bin/pip install -r requirements.txt
-~/.trade/venv/bin/pip install -e "." --no-deps
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git ~/.agentbase/agentbase
+cd ~/.agentbase/agentbase
+python3.14 -m venv ~/.agentbase/venv
+~/.agentbase/venv/bin/pip install -r requirements.txt
+~/.agentbase/venv/bin/pip install -e "." --no-deps
 
 # 4. 安装 skills 并启动
-~/.trade/venv/bin/python -c "from trade.post_install import install_skills; install_skills()"
-~/.trade/venv/bin/python server.py
-# → 浏览器打开 http://127.0.0.1:9119/trade
+~/.agentbase/venv/bin/python -c "from agentbase.post_install import install_skills; install_skills()"
+~/.agentbase/venv/bin/python server.py
+# → 浏览器打开 http://127.0.0.1:9120/agentbase
 ```
 
 > 如果启动后 Trade 界面提示「Hermes 版本过旧」，说明你的 Hermes 低于 0.21.6。
@@ -240,11 +240,11 @@ irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/ins
 hermes setup
 
 # 3. 安装 Smart Trade AI
-git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\foreign-trade-assistant
-cd $env:LOCALAPPDATA\trade\foreign-trade-assistant; pip install -e "."; install-trade-skills
+git clone --branch main https://github.com/chefroger/smart-trade-ai.git $env:LOCALAPPDATA\trade\agentbase
+cd $env:LOCALAPPDATA\trade\agentbase; pip install -e "."; install-agentbase-skills
 
 python server.py
-# → 浏览器打开 http://127.0.0.1:9119/trade
+# → 浏览器打开 http://127.0.0.1:9120/agentbase
 ```
 
 > 如果第 3 步 `pip install` 报 `Filename too long` 错误，说明长路径未生效，请确认已完成第 0 步并重启电脑。
@@ -299,12 +299,12 @@ python server.py
 
 ## 数据安全
 
-- **业务数据默认存储在本地**（`~/.trade/`），不上传任何服务器
+- **业务数据默认存储在本地**（`~/.agentbase/`），不上传任何服务器
 - 如使用 **Ollama 等本地模型**，可实现完整本地运行，数据完全不出电脑
 - 如使用 **DeepSeek 等云端 LLM**，用户输入和必要上下文会发送至所选服务商——不包含客户身份信息
 - 多公司数据隔离（`X-Company-ID` header）
 - 绑定 `127.0.0.1`，仅本机浏览器可访问；即使改用 `--host 0.0.0.0`，会话凭据也只下发给本机（见下方网络暴露警告）
-- **升级前自动备份数据库**到 `~/.trade/backups/`
+- **升级前自动备份数据库**到 `~/.agentbase/backups/`
 
 ### 多公司记忆共享说明
 
@@ -372,12 +372,12 @@ ruff check trade/ server.py                 # 代码检查
 
 ## 故障排除
 
-### 先跑自检：`trade doctor`
+### 先跑自检：`agentbase doctor`
 
 任何功能不对劲，先跑它再看别的：
 
 ```bash
-trade doctor
+agentbase doctor
 ```
 
 它会**端到端验活**四项，并指出是哪一项坏了：
@@ -390,7 +390,7 @@ trade doctor
 | Trade 自身 | 数据库可读写 + 真的走一次对话回合 |
 
 **首次启动会自动跑一次**；没通过则每次启动重试，直到修好（改完配置重启即自动恢复）。
-结果也会出现在 `http://127.0.0.1:9119/api/status` 的 `doctor` 字段里。
+结果也会出现在 `http://127.0.0.1:9120/api/status` 的 `doctor` 字段里。
 
 输出里 `✗` 分两种：标「无法正常使用」的是致命项（必须先修），标「功能不可用」的
 不影响基本使用。加 `--quick` 可跳过所有真实请求（零 token，安装脚本用的就是它）。
@@ -403,7 +403,7 @@ trade doctor
 帮我更新trade，并重启trade，地址是https://github.com/chefroger/smart-trade-ai
 ```
 
-Hermes 会自动执行 `git pull` → `pip install` → `install-trade-skills` → 数据库检查 → 重启 Trade。遇到报错它会自行排查重试，比手动操作更省心。
+Hermes 会自动执行 `git pull` → `pip install` → `install-agentbase-skills` → 数据库检查 → 重启 Trade。遇到报错它会自行排查重试，比手动操作更省心。
 
 ### 系统升级按钮无反应
 
@@ -420,10 +420,10 @@ Hermes 会自动执行 `git pull` → `pip install` → `install-trade-skills` �
 3. 逐行复制粘贴以下命令，每行按回车：
 
 ```bash
-cd ~/.trade/foreign-trade-assistant
+cd ~/.agentbase/agentbase
 git pull origin main
 pip install -e "."
-install-trade-skills
+install-agentbase-skills
 ```
 
 4. 所有命令执行完后，关闭终端
@@ -436,10 +436,10 @@ install-trade-skills
 3. 逐行复制粘贴以下命令，每行按回车：
 
 ```powershell
-cd $env:LOCALAPPDATA\trade\foreign-trade-assistant
+cd $env:LOCALAPPDATA\trade\agentbase
 git pull origin main
 pip install -e "."
-install-trade-skills
+install-agentbase-skills
 ```
 
 4. 所有命令执行完后，关闭 PowerShell
@@ -452,10 +452,10 @@ install-trade-skills
 3. 逐行复制粘贴以下命令，每行按回车：
 
 ```bash
-cd ~/.trade/foreign-trade-assistant
+cd ~/.agentbase/agentbase
 git pull origin main
 pip install -e "."
-install-trade-skills
+install-agentbase-skills
 ```
 
 4. 重新运行 `python server.py` 启动
@@ -472,10 +472,10 @@ install-trade-skills
 2. 逐行执行（确保 VPN 全局模式已开启）：
 
 ```bash
-cd ~/.trade/foreign-trade-assistant
+cd ~/.agentbase/agentbase
 git pull origin main
 pip install -e "."
-install-trade-skills
+install-agentbase-skills
 python server.py
 ```
 
@@ -485,10 +485,10 @@ python server.py
 2. 逐行执行（确保 VPN 全局模式已开启）：
 
 ```powershell
-cd $env:LOCALAPPDATA\trade\foreign-trade-assistant
+cd $env:LOCALAPPDATA\trade\agentbase
 git pull origin main
 pip install -e "."
-install-trade-skills
+install-agentbase-skills
 python server.py
 ```
 
@@ -498,7 +498,7 @@ python server.py
 |---------|---------|------------|
 | ⚠️ 更新结果未知，请检查网络 | `git pull` 超时（120s）或 HTTP 错误 | 全部 4 步 |
 | ⚠️ 请求超时 | `fetch()` 120s AbortController 触发 | 全部 4 步 |
-| ⚠️ 升级完成，但有 N 项警告 | skills 同步等**非关键步骤**失败（网络波动）——不影响升级 | 无需处理：代码与依赖已更新并会正常重启，仅技能清单可能未更新，可稍后手动执行 `install-trade-skills` |
+| ⚠️ 升级完成，但有 N 项警告 | skills 同步等**非关键步骤**失败（网络波动）——不影响升级 | 无需处理：代码与依赖已更新并会正常重启，仅技能清单可能未更新，可稍后手动执行 `install-agentbase-skills` |
 | ❌ 更新失败: Git 未安装或不在 PATH 中 | 系统找不到 `git` 命令 | [安装 Git](https://git-scm.com/download/win) 后全部 4 步 |
 | ❌ 更新失败: pip install failed | 依赖包下载失败（PyPI 不通） | `pip install -e "."` 重试 |
 | ❌ 更新失败: git pull / clone failed | GitHub 连不上 | 开 VPN 全局模式后重试 `git pull` |

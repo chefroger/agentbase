@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.post_install import win_setup as ws
+from agentbase.post_install import win_setup as ws
 
 
 class TestBatchPathRewriting:
@@ -81,12 +81,12 @@ class TestGeneratedScripts:
     def test_resolve_command_prefers_venv_exe(self, tmp_path, monkeypatch):
         exe_dir = tmp_path / "Scripts"
         exe_dir.mkdir()
-        (exe_dir / "trade.exe").write_text("", encoding="utf-8")
+        (exe_dir / "agentbase.exe").write_text("", encoding="utf-8")
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
         cmd = ws.resolve_trade_command(tmp_path, executable=str(exe_dir / "python.exe"))
 
-        assert "trade.exe" in cmd
+        assert "agentbase.exe" in cmd
 
     def test_resolve_command_falls_back_to_python(self, tmp_path, monkeypatch):
         exe_dir = tmp_path / "Scripts"
@@ -316,10 +316,10 @@ class TestNoStrayLaunchersOnDesktop:
         assert stray.is_file(), "检测过程把文件删了"
 
     def test_launcher_dir_is_never_the_desktop(self, tmp_path, monkeypatch):
-        """启动器目录落在 TRADE_HOME / %LOCALAPPDATA%\\trade，绝不是桌面。"""
-        monkeypatch.setenv("TRADE_HOME", str(tmp_path / "th"))
+        """启动器目录落在 AGENT_HOME / %LOCALAPPDATA%\\trade，绝不是桌面。"""
+        monkeypatch.setenv("AGENT_HOME", str(tmp_path / "th"))
         assert ws.launcher_dir() == tmp_path / "th"
 
-        monkeypatch.delenv("TRADE_HOME", raising=False)
+        monkeypatch.delenv("AGENT_HOME", raising=False)
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "la"))
         assert "trade" in str(ws.launcher_dir())

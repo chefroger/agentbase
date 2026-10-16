@@ -36,7 +36,7 @@ class TestTechStackFailureNotEnterprise:
         """抓取失败时不得保留 is_enterprise=True。"""
         import urllib.request
 
-        import trade.osint.tech_stack as ts
+        import agentbase.osint.tech_stack as ts
 
         def _boom(*_a, **_k):
             raise OSError("connection timed out")
@@ -52,7 +52,7 @@ class TestTechStackFailureNotEnterprise:
 
     def test_scoring_does_not_praise_unreachable_site(self):
         """评分侧：有 error 时不得输出企业级加分。"""
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         recs = generate_recommendations(
             {"layers": {"tech_stack": {"error": "connection timed out", "is_enterprise": False}}}
@@ -64,7 +64,7 @@ class TestTechStackFailureNotEnterprise:
 
     def test_healthy_enterprise_site_still_praised(self):
         """正常抓到企业级技术栈时，加分建议仍在（别把好路径改坏）。"""
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         recs = generate_recommendations(
             {"layers": {"tech_stack": {"error": None, "is_enterprise": True, "platforms": []}}}
@@ -79,7 +79,7 @@ class TestTechStackFailureNotEnterprise:
 class TestMxFailureDistinctFromNoRecord:
     def test_query_error_is_reported(self, monkeypatch):
         """DNS 查询本身失败时，结果里要能看出是「查询失败」而非「没有记录」。"""
-        import trade.osint.email_verify as ev
+        import agentbase.osint.email_verify as ev
 
         monkeypatch.setattr(
             ev, "_query_mx_records_impl", lambda _d: (_ for _ in ()).throw(OSError("dns timeout")),
@@ -95,7 +95,7 @@ class TestMxFailureDistinctFromNoRecord:
 
     def test_genuine_no_mx_still_flagged(self, monkeypatch):
         """确实没有 MX 记录时，红旗照旧（这是真实的假域名信号）。"""
-        import trade.osint.email_verify as ev
+        import agentbase.osint.email_verify as ev
 
         monkeypatch.setattr(
             ev, "_query_mx_records_impl", lambda _d: ([], False, None), raising=False
@@ -110,7 +110,7 @@ class TestOrchestratorFlagNames:
     """红旗名要对应真实含义 —— 否则扣分理由与事实不符。"""
 
     def test_mx_flag_is_not_labelled_personal_email(self):
-        from trade.osint.orchestrator import _map_email_flags
+        from agentbase.osint.orchestrator import _map_email_flags
 
         flags = _map_email_flags(["域名未检测到 MX 记录（可能是假域名）"])
 
@@ -120,13 +120,13 @@ class TestOrchestratorFlagNames:
         assert "no_mx_record" in flags
 
     def test_personal_email_flag_kept(self):
-        from trade.osint.orchestrator import _map_email_flags
+        from agentbase.osint.orchestrator import _map_email_flags
 
         assert "personal_email_domain" in _map_email_flags(["使用个人邮箱域名"])
 
     def test_new_flag_has_smaller_deduction(self):
         """「无 MX」的证据强度低于「个人邮箱」，扣分应更轻。"""
-        from trade.osint.scoring import _deductions
+        from agentbase.osint.scoring import _deductions
 
         d = _deductions()
         assert d["no_mx_record"] > 0
@@ -142,7 +142,7 @@ class TestWhoisFailureDisclosed:
 
         报告里这一层的键名是 ``domain_intel``（见 orchestrator 的 layers 结构）。
         """
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         recs = generate_recommendations(
             {"layers": {"domain_intel": {"error": "WHOIS 服务器无响应", "registered": None}}}
@@ -167,7 +167,7 @@ class TestEmailRegistrationLayerDisclosed:
     """
 
     def test_missing_holehe_is_disclosed(self):
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         recs = generate_recommendations(
             {"layers": {"email_registration": {"error": "holehe not installed: no module named holehe"}}}
@@ -180,7 +180,7 @@ class TestEmailRegistrationLayerDisclosed:
         assert "⚠️" in joined, "应给出警示标记"
 
     def test_healthy_layer_does_not_warn(self):
-        from trade.osint.scoring import generate_recommendations
+        from agentbase.osint.scoring import generate_recommendations
 
         recs = generate_recommendations(
             {"layers": {"email_registration": {"email": "a@b.com", "registered_platforms": []}}}

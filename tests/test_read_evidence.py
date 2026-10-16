@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from trade.read_evidence import ReadEvidenceCollector
+from agentbase.read_evidence import ReadEvidenceCollector
 
 
 def _read(collector, path, *, offset=None, limit=None):

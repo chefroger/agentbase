@@ -1,4 +1,4 @@
-"""trade.vec_search 模块测试。
+"""agentbase.vec_search 模块测试。
 
 - 降级路径（无 sqlite-vec）：纯标准库可跑；
 - 向量路径：sqlite-vec 可用时才跑，否则 skip。
@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trade import vec_search  # noqa: E402
-from trade.embeddings import TfidfBackend  # noqa: E402
+from agentbase import vec_search  # noqa: E402
+from agentbase.embeddings import TfidfBackend  # noqa: E402
 
 try:
     import sqlite_vec  # noqa: F401
@@ -123,7 +123,7 @@ def test_state_persists_across_process_restart(conn):
 
     不持久化的话：服务一重启，查询向量与库里存的向量不可比 → 语义检索静默消失。
     """
-    from trade.embeddings import reset_backend
+    from agentbase.embeddings import reset_backend
 
     reset_backend()
     rows = [(1, 1, "深圳光明照明有限公司 灯具出口 德国汉堡"), (2, 1, "宁波五金制品厂 紧固件 美国")]
@@ -141,7 +141,7 @@ def test_default_threshold_excludes_orthogonal_noise(conn):
     score = 1/(1+distance)，无关向量（正交）距离恒为 √2 → score 恒 0.4142。
     出厂默认 0.35 低于该基线，实测会把 5 个客户全数返回。
     """
-    from trade.embeddings import reset_backend
+    from agentbase.embeddings import reset_backend
 
     reset_backend()
     rows = [
@@ -159,7 +159,7 @@ def test_default_threshold_excludes_orthogonal_noise(conn):
 @needs_vec
 def test_scores_expose_cosine_for_interpretable_tuning(conn):
     """返回值带 cosine，便于按可解释尺度调阈值（score 尺度有 0.4142 的隐形基线）。"""
-    from trade.embeddings import reset_backend
+    from agentbase.embeddings import reset_backend
 
     reset_backend()
     assert vec_search.rebuild_customer_index(
@@ -181,26 +181,26 @@ class TestCustomerIndexHooks:
     @pytest.fixture()
     def env(self, monkeypatch, tmp_path):
         """临时库（schema 就绪），不触碰真实数据。"""
-        db_path = tmp_path / "trade.db"
-        import trade.database as _db
+        db_path = tmp_path / "agentbase.db"
+        import agentbase.database as _db
 
         monkeypatch.setattr(_db, "_get_db_path", lambda: db_path)
-        from trade.database import SCHEMA_SQL, _add_spare_columns
+        from agentbase.database import SCHEMA_SQL, _add_spare_columns
 
         c = sqlite3.connect(str(db_path))
         c.executescript(SCHEMA_SQL)
         _add_spare_columns(c)
         c.commit()
         c.close()
-        from trade.embeddings import reset_backend
+        from agentbase.embeddings import reset_backend
 
         reset_backend()  # 每个用例从干净的向量空间开始
         return db_path
 
     def test_new_customer_searchable_immediately_and_gone_after_delete(self, env):
-        from trade import customer as cust_mod
-        from trade.company import create as create_company
-        from trade.database import get_connection
+        from agentbase import customer as cust_mod
+        from agentbase.company import create as create_company
+        from agentbase.database import get_connection
 
         company = create_company(name="钩子公司", slug="hook-co")
         cid = company["id"]
@@ -226,8 +226,8 @@ class TestCustomerIndexHooks:
 
     def test_index_failure_never_breaks_customer_write(self, env, monkeypatch):
         """索引写失败（如扩展坏掉）绝不能让建客户失败。"""
-        from trade import customer as cust_mod
-        from trade.company import create as create_company
+        from agentbase import customer as cust_mod
+        from agentbase.company import create as create_company
 
         company = create_company(name="容错公司", slug="tolerant-co")
 
@@ -262,7 +262,7 @@ def test_default_threshold_keeps_weak_but_real_matches(conn):
     用户得到空结果。搜索场景里弱结果优于空结果，故默认取 0.42（刚过正交基线）。
     正交噪声（0.4142）在 0.42 下仍被滤掉 —— 见 test_default_threshold_excludes_orthogonal_noise。
     """
-    from trade.embeddings import reset_backend
+    from agentbase.embeddings import reset_backend
 
     reset_backend()
     rows = [
