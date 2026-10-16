@@ -273,15 +273,15 @@ AGENTBASE_DIR="$HOME/.agentbase/agentbase"
 # 记录回滚点（2026-10-16 加）。重建场景下依赖若装不上，代码必须能退回升级前 ——
 # 否则「新代码 + 旧 venv」照样起不来，等于把「重建失败」升级成「彻底打不开」。
 # 新装用户这里是空的（目录还不存在），_rollback_code 自然什么都不做。
-_TRADE_HEAD_BEFORE=""
+_AGENTBASE_HEAD_BEFORE=""
 if [ -d "$AGENTBASE_DIR/.git" ] && git -C "$AGENTBASE_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
-    _TRADE_HEAD_BEFORE=$(git -C "$AGENTBASE_DIR" rev-parse HEAD)
+    _AGENTBASE_HEAD_BEFORE=$(git -C "$AGENTBASE_DIR" rev-parse HEAD)
 fi
 
 _rollback_code() {
-    [ -z "$_TRADE_HEAD_BEFORE" ] && return 0
-    log_warn "正在把代码回退到升级前的版本（${_TRADE_HEAD_BEFORE:0:8}）..."
-    git -C "$AGENTBASE_DIR" reset --hard "$_TRADE_HEAD_BEFORE" 2>/dev/null \
+    [ -z "$_AGENTBASE_HEAD_BEFORE" ] && return 0
+    log_warn "正在把代码回退到升级前的版本（${_AGENTBASE_HEAD_BEFORE:0:8}）..."
+    git -C "$AGENTBASE_DIR" reset --hard "$_AGENTBASE_HEAD_BEFORE" 2>/dev/null \
         && log_ok "代码已回退，旧版本仍可正常使用" \
         || log_err "代码回退失败 —— 请把上面的输出发给技术支持"
     # 丢弃半成品的新环境；旧环境（$_VENV_OLD）始终没被动过

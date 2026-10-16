@@ -850,7 +850,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def serve_trade_chat(app: FastAPI) -> None:
+def serve_app(app: FastAPI) -> None:
     """注册 /trade SPA 路由（需要 app 实例和 _SESSION_TOKEN）。"""
     # 静态文件查找优先级：PyInstaller _MEIPASS > 运行时目录 > 开发目录
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
@@ -862,7 +862,7 @@ def serve_trade_chat(app: FastAPI) -> None:
             _STATIC_DIR = _runtime_static
         else:
             _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-    _TRADE_CHAT_HTML = _STATIC_DIR / "app.html"
+    _APP_HTML = _STATIC_DIR / "app.html"
 
     # 托管 static/ 目录下的 CSS/JS 等静态资源
     if _STATIC_DIR.is_dir():
@@ -876,7 +876,7 @@ def serve_trade_chat(app: FastAPI) -> None:
         而本页面无需鉴权即可获取它，绑定 0.0.0.0 时照常下发等于把 API 交给整个局域网。
         远程客户端会拿到一页说明，引导其改用本机地址访问。
         """
-        if not _TRADE_CHAT_HTML.exists():
+        if not _APP_HTML.exists():
             return HTMLResponse(
                 content='<html><body style="font-family:sans-serif;padding:2rem;"><h1>Trade chat UI not found</h1><p>The frontend file <code>static/app.html</code> is missing.</p></body></html>',
                 status_code=404,
@@ -895,8 +895,8 @@ def serve_trade_chat(app: FastAPI) -> None:
                 ).replace("{port}", str(getattr(request.url, "port", "") or "")),
                 status_code=403,
             )
-        html = _TRADE_CHAT_HTML.read_text(encoding="utf-8")
-        html = html.replace("__TRADE_SESSION_TOKEN__", _SESSION_TOKEN)
+        html = _APP_HTML.read_text(encoding="utf-8")
+        html = html.replace("__AGENTBASE_SESSION_TOKEN__", _SESSION_TOKEN)
         return HTMLResponse(content=html)
 
 
@@ -924,7 +924,7 @@ def main() -> None:
     atexit.register(lambda: pid_file.unlink(missing_ok=True))
 
     app = create_app()
-    serve_trade_chat(app)
+    serve_app(app)
     _install_cors(app, args.port)
 
     # 降级模式（Hermes 不可用）不拉 Gateway：旧 Hermes 在当前 Python 上根本起不来，

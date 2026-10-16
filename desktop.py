@@ -21,13 +21,13 @@ def main():
     setup()
 
     # 2. 创建 FastAPI app
-    from agentbase.app import create_app, serve_trade_chat
+    from agentbase.app import create_app, serve_app
 
     host = "127.0.0.1"
     port = 9120
 
     app = create_app()
-    serve_trade_chat(app)
+    serve_app(app)
 
     # 3. 启动 uvicorn 在后台线程
     server_thread = threading.Thread(

@@ -492,7 +492,7 @@ class TestVenvRebuildIsAtomic:
         """
         body = _code_lines(SH)
         assert "_rollback_code()" in body, "install.sh 未定义代码回滚函数"
-        assert "_TRADE_HEAD_BEFORE" in body, "install.sh 未记录回滚点"
+        assert "_AGENTBASE_HEAD_BEFORE" in body, "install.sh 未记录回滚点"
         # 两处 pip 失败分支都要调用回滚（requirements.txt 与 trade 自身）
         assert body.count("_rollback_code") >= 3, (
             "install.sh 的 pip 失败分支没有调用回滚（应至少：定义 1 次 + 两处失败分支各 1 次）"
