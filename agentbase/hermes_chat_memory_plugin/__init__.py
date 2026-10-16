@@ -15,7 +15,10 @@ import logging
 # 用绝对路径而非相对导入 —— 相对导入 `from .tools` 在 importlib.util 直接加载时
 # 会报 `No module named 'chat_memory_plugin'`，因为单文件 spec 没有父包。
 # 绝对路径要求 trade 是 installed package（pip install -e . 满足）。
-from agentbase.hermes_chat_memory_plugin.tools import CHAT_MEMORY_LIST_SCHEMA, handle_chat_memory_list
+from agentbase.hermes_chat_memory_plugin.tools import (
+    CHAT_MEMORY_LIST_SCHEMA,
+    handle_chat_memory_list,
+)
 
 logger = logging.getLogger(__name__)
 

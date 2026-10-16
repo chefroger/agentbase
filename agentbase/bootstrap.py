@@ -132,7 +132,12 @@ def dispatch_subcommands() -> bool:
         from agentbase.osint.cli import main as osint_main
         sys.exit(osint_main(sys.argv[2:]))
     elif cmd == "doctor":
-        from agentbase.doctor import format_report, has_fatal_failure, run_doctor, save_doctor_result
+        from agentbase.doctor import (
+            format_report,
+            has_fatal_failure,
+            run_doctor,
+            save_doctor_result,
+        )
 
         # 默认端到端验活；--quick 只查配置与工具表（零 token，安装脚本用）
         deep = "--quick" not in sys.argv[2:]
@@ -1233,7 +1238,7 @@ def ensure_desktop_integration() -> None:
         return
 
     try:
-        from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module
+        from agentbase.post_install.win_setup import agentbase_dir_from_module, ensure_windows_setup
 
         for msg in ensure_windows_setup(agentbase_dir_from_module()):
             print(f"  {msg}")
