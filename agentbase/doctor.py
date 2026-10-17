@@ -402,7 +402,7 @@ def check_post_install() -> list[CheckResult]:
     """安装后自检：可选但重要的外部依赖是否真的可用（优化路线 P1-4）。
 
     背景：README 反复出现"助手回报安装成功、实际完全不能用"的事故，
-    根因都是外部依赖（Hermes/Hindsight/holehe）只看了"装没装"、
+    根因都是外部依赖（Hermes/Hindsight）只看了"装没装"、
     没验证"能不能用"。本检查做最小可用性探测：
       - import 能成功（装没装）
       - 关键符号/最小调用能跑通（能不能用）
@@ -410,16 +410,6 @@ def check_post_install() -> list[CheckResult]:
     哪一层能力会缺失 —— 延续项目"不给虚假绿灯"的设计。
     """
     out: list[CheckResult] = []
-
-    # holehe：OSINT Layer 1 邮箱注册检测。缺失时该层静默跳过。
-    try:
-        import holehe  # noqa: F401
-        out.append(CheckResult("holehe（邮箱注册检测）", STATUS_OK, "已安装，Layer 1 可用"))
-    except ImportError:
-        out.append(CheckResult(
-            "holehe（邮箱注册检测）", STATUS_WARN,
-            "未安装：OSINT 报告将缺失 120+ 平台注册检测。如需请按文档安装 holehe",
-        ))
 
     # Hindsight：长期记忆后端。复用 agentbase.memory 的可用性检测。
     try:

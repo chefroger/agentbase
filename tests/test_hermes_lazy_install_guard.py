@@ -43,7 +43,7 @@ H 上游为此提供了正式的 sealed-venv 模式开关（`tools/lazy_deps.py`
 本机升级到 Hermes main（v0.21.6+ 的 pm 托管运行时）后实测：`agentbase doctor`
 每次 ~2 秒即崩 —— `hermes_bootstrap.py` 的 `prepare_launch()` 判定「当前解释器
 ≠ 托管解释器」，用 runpy 把当前命令重拉到托管环境；重拉环境里没有 trade 包。
-而 doctor/osint/company 子命令与版本检查都发生在 `load_env_and_set_yolo()`
+而 doctor/company 子命令与版本检查都发生在 `load_env_and_set_yolo()`
 **之前**（`setup()` 里先分发子命令）—— 开关只设在那里 = 子命令路径全程裸奔。
 修法：`setup()` 第 0 步先调 `_disable_hermes_lazy_installs()`（无导入、幂等），
 `load_env_and_set_yolo()` 在 dotenv 之后仍会再设一次（防 .env 顶掉）。
@@ -136,7 +136,7 @@ class TestLazyInstallDisabled:
 class TestGuardSetBeforeSubcommandDispatch:
     """子命令分发前守卫也必须就位（2026-10-14 升级事故的回归防线）。
 
-    子命令（doctor/osint/company/update）在 setup() 里执行于
+    子命令（doctor/company/update）在 setup() 里执行于
     load_env_and_set_yolo() 之前，且自己就会导入 Hermes —— 新版 Hermes 的重拉
     机制会在导入时把进程重拉到托管环境，重拉环境里没有 trade 包直接崩。
     """

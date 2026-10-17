@@ -110,18 +110,16 @@ _MIN_HERMES_VERSION = "0.21.6"
 
 
 def dispatch_subcommands() -> bool:
-    """处理子命令（update/backup/skills-update/open/doctor/company/osint），无需启动服务器。
+    """处理子命令（update/backup/skills-update/open/doctor/company），无需启动服务器。
 
     `open` 是桌面快捷方式的目标：确保服务在跑，然后打开界面。
-    `doctor` 是安装后自检：验 Hermes 运行环境 / vision / Tavily / Trade 自身。
-    `company` 是公司管理（作者用的隐藏功能，不写进用户文档）：见 agentbase.company_admin。
-    `osint` 是 6 层背调的机器判定入口（skill 提示词也指向同一个命令，
-    等价的跨平台写法是 `python -m agentbase.osint <目标>`）：见 agentbase.osint.cli。
+    `doctor` 是安装后自检：验 Hermes 运行环境 / vision / Tavily / agentbase 自身。
+    `company` 是 workspace 管理（隐藏功能，不写进用户文档）：见 agentbase.company_admin。
 
     Returns True 表示已处理子命令并应退出进程。
     """
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    if cmd not in ("update", "backup", "skills-update", "open", "doctor", "company", "osint"):
+    if cmd not in ("update", "backup", "skills-update", "open", "doctor", "company"):
         return False
 
     if cmd == "update":
@@ -136,9 +134,6 @@ def dispatch_subcommands() -> bool:
     elif cmd == "company":
         from agentbase.company_admin import main as company_main
         sys.exit(company_main(sys.argv[2:]))
-    elif cmd == "osint":
-        from agentbase.osint.cli import main as osint_main
-        sys.exit(osint_main(sys.argv[2:]))
     elif cmd == "doctor":
         from agentbase.doctor import (
             format_report,

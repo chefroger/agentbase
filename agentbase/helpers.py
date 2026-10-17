@@ -425,10 +425,6 @@ def _get_history_block(company_id: int | None, total_prompt_chars: int) -> tuple
 
     return block, _estimate_tokens(block)
 
-# OSINT 类 skill 名称列表（使用精简 system prompt）
-_OSINT_SKILL_NAMES = frozenset({"b2b-osint", "b2b-email-intel"})
-
-
 # ── 用户问题中显式文件/目录路径提取 ──────────────────────────────────────
 
 # 匹配常见文件路径模式：绝对路径、带扩展名的文件名、中文文件名
@@ -492,13 +488,12 @@ def build_query(
     # 0. Skill auto-detection — 评分排序后取最高置信度 skill
     matched_skills = _skill_router.match_skills(query)
     matched_name = matched_skills[0]["skill_name"] if matched_skills else None
-    matched_skill = _skill_router.get_skill_by_name(matched_name) if matched_name else None
 
     # 连续同 skill 时跳过完整注入，大幅节约 token（injection_prompt 通常 1000-2000 tokens）
     same_skill_repeat = bool(last_skill_name and matched_name == last_skill_name)
 
-    if same_skill_repeat and matched_name and matched_name not in _OSINT_SKILL_NAMES:
-        # 非 OSINT 且连续同 skill → augmented_query 仅含简短提示，不重复注入完整规则
+    if same_skill_repeat and matched_name:
+        # 连续同 skill → augmented_query 仅含简短提示，不重复注入完整规则
         augmented_query = (
             f"[SKILL AUGMENTATION]\n"
             f"继续使用 {matched_name} 技能，规则同上一次。\n\n"
@@ -520,11 +515,7 @@ def build_query(
     # 问题里点名的文件/目录（文档类任务判定要用，后面 doc_context 复用同一份）
     explicit_paths = _extract_explicit_paths(query)
 
-    if matched_name in _OSINT_SKILL_NAMES:
-        # OSINT 背调场景：精简档，去掉文档生成/Cognee 等无关段落
-        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_OSINT
-        code_fallback = AGENTBASE_SYSTEM_PROMPT_OSINT
-    elif _prompts.needs_full_prompt(
+    if _prompts.needs_full_prompt(
         matched_name=matched_name, library_id=library_id, explicit_paths=explicit_paths
     ):
         # 文档处理类任务：注入完整档（含文档生成指南、文档分析协议等，
@@ -677,33 +668,16 @@ def build_query(
 
     # 6. Skill system hint — OSINT 类 skill 的注入指令作为 system 层独立传入
     #
-    # OSINT **不做**「连续同 skill 走简短提示」的省 token 优化：那套机制依赖模型能
-    # 从对话历史里读到上一次的规则，而 OSINT 恰恰不注入历史（见下方第 7 步，理由是
-    # 每次背调目标独立）。走了简短提示就等于整个三阶段协议丢失 —— 第二次背调起
-    # agent 自由发挥：不查 WHOIS、不查制裁名单、不给来源 URL。
     skill_system_hint: str | None = None
-    if matched_name in _OSINT_SKILL_NAMES and matched_skill:
-        augment = _skill_router.load_injection_prompt(matched_name)
-        if augment is None:
-            augment = matched_skill.get("augment_prompt", "")
-        if augment:
-            skill_system_hint = (
-                f"## 当前技能：{matched_name}\n\n{augment}"
-            )
-        # OSINT skill 的 system hint 已单独抽出，augmented_query 中无需
-        # 再拼 [SKILL AUGMENTATION] 块。用原始 query 替代。
-        augmented_query = query
 
-    # 7. History block — OSINT 类 skill 不注入历史，每次背调目标是独立的
-    #    非 OSINT 场景注入最近对话历史，帮助 AI 保持上下文连续
+    # 7. History block — 注入最近对话历史，帮助 AI 保持上下文连续
     history_block = ""
-    if matched_name not in _OSINT_SKILL_NAMES:
-        # 估算已有 prompt 长度，动态决定注入多少条历史
-        pre_history_chars = (
-            len(system_prompt) + len(customer_context) + len(doc_context) +
-            len(augmented_query) + 200
-        )
-        history_block, _ = _get_history_block(company_id, pre_history_chars)
+    # 估算已有 prompt 长度，动态决定注入多少条历史
+    pre_history_chars = (
+        len(system_prompt) + len(customer_context) + len(doc_context) +
+        len(augmented_query) + 200
+    )
+    history_block, _ = _get_history_block(company_id, pre_history_chars)
 
     # 8. Assemble final user message：system → 客户 → 订单 → 文档库 → 历史 → 查询
     final_prompt = system_prompt + customer_context + order_context + doc_context

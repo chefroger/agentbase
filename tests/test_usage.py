@@ -19,7 +19,7 @@ def conn():
 
 def test_record_and_summary(conn):
     cost = usage.record_usage(
-        conn, skill="b2b-osint", provider="deepseek", model="deepseek-chat",
+        conn, skill="demo-alpha", provider="deepseek", model="deepseek-chat",
         prompt_tokens=1_000_000, completion_tokens=1_000_000,
     )
     # (0.27 + 1.10) = 1.37
@@ -28,7 +28,7 @@ def test_record_and_summary(conn):
     assert s["calls"] == 1
     assert s["total_tokens"] == 2_000_000
     assert s["total_cost_usd"] == pytest.approx(1.37)
-    assert s["by_skill"][0]["skill"] == "b2b-osint"
+    assert s["by_skill"][0]["skill"] == "demo-alpha"
     assert s["by_model"][0]["model"] == "deepseek-chat"
 
 
@@ -65,9 +65,9 @@ def test_summary_grouping(conn):
 
 
 def test_format_summary_text(conn):
-    usage.record_usage(conn, skill="b2b-osint", model="deepseek-chat", prompt_tokens=10)
+    usage.record_usage(conn, skill="demo-alpha", model="deepseek-chat", prompt_tokens=10)
     text = usage.format_summary_text(usage.summary(conn))
-    assert "b2b-osint" in text
+    assert "demo-alpha" in text
     assert "近 7 天" in text
 
 

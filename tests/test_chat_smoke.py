@@ -70,7 +70,7 @@ class TestSmokeChatModule:
             from agentbase.database import init_db
             init_db()
 
-            from agentbase.api.chat import router, app, chat_stream
+            from agentbase.api.chat import app, chat_stream, router
             assert router is not None
             assert callable(app)
             assert callable(chat_stream)

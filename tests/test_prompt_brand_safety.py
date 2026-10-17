@@ -115,7 +115,10 @@ class TestAccuracyRulesAlwaysPresent:
 
     def test_first_turn_base_is_not_smaller_than_minimal(self):
         """首轮基础块应比后续轮次的精简档更完整（否则档位是反的）。"""
-        from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN, AGENTBASE_SYSTEM_PROMPT_MINIMAL
+        from agentbase.prompt import (
+            AGENTBASE_SYSTEM_PROMPT_FIRST_TURN,
+            AGENTBASE_SYSTEM_PROMPT_MINIMAL,
+        )
 
         assert len(AGENTBASE_SYSTEM_PROMPT_FIRST_TURN) >= len(AGENTBASE_SYSTEM_PROMPT_MINIMAL)
 

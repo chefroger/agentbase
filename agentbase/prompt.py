@@ -122,8 +122,6 @@ AGENTBASE_SYSTEM_PROMPT_MINIMAL = (
     + "\n\n" + AGENTBASE_IMAGE_BLOCK
 )
 
-# OSINT/情报类精简 prompt — 只保留 Role + Language Policy，去掉文档生成/Cognee 等无关段落
-# 背调也会碰上图片（名片、截图、注册证书扫描件），所以铁律同样常驻。
 AGENTBASE_SYSTEM_PROMPT_OSINT = (
     AGENTBASE_ROLE_BLOCK + "\n\n" + LANGUAGE_POLICY_BLOCK
     + "\n\n" + COMPANY_ISOLATION_BLOCK + "\n\n" + AGENTBASE_IMAGE_BLOCK

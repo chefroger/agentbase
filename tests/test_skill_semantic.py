@@ -11,25 +11,25 @@ from agentbase.embeddings import TfidfBackend  # noqa: E402
 
 FAKE_SKILLS = [
     {
-        "name": "b2b-osint",
-        "triggers": ["背景调查", "背调", "查公司", "due diligence", "whois"],
+        "name": "demo-alpha",
+        "triggers": ["摘要", "结构化", "summarize", "summary"],
         "aliases": [],
-        "input_fmt": "邮箱地址 / 域名 / 公司名",
-        "output_fmt": "风险评分报告",
+        "input_fmt": "任意文本",
+        "output_fmt": "结构化摘要",
     },
     {
-        "name": "b2b-cold-outreach",
-        "triggers": ["开发信", "cold email", "写邮件"],
+        "name": "demo-beta",
+        "triggers": ["文档分析", "document analysis", "读文档"],
         "aliases": [],
-        "input_fmt": "客户信息",
-        "output_fmt": "开发信正文",
+        "input_fmt": "文档路径",
+        "output_fmt": "文档分析结果",
     },
     {
-        "name": "b2b-linkedin-marketing",
-        "triggers": ["LinkedIn", "领英", "内容日历"],
+        "name": "demo-gamma",
+        "triggers": ["会议纪要", "meeting notes", "纪要"],
         "aliases": [],
-        "input_fmt": "公司介绍",
-        "output_fmt": "LinkedIn 发文计划",
+        "input_fmt": "会议记录",
+        "output_fmt": "会议纪要",
     },
 ]
 
@@ -44,23 +44,23 @@ def router():
 def test_build_documents():
     docs = skill_semantic.build_documents(FAKE_SKILLS)
     assert len(docs) == 3
-    assert docs[0][0] == "b2b-osint"
-    assert "背调" in docs[0][1]
+    assert docs[0][0] == "demo-alpha"
+    assert "摘要" in docs[0][1]
 
 
 def test_search_exact_trigger(router):
-    hits = router.search("帮我做个背景调查")
-    assert hits, "应命中 b2b-osint"
-    assert hits[0]["skill_name"] == "b2b-osint"
+    hits = router.search("帮我做个摘要")
+    assert hits, "应命中 demo-alpha"
+    assert hits[0]["skill_name"] == "demo-alpha"
 
 
 def test_search_paraphrase(router):
     # 换个说法：关键词路由很可能 miss，语义应能兜住。
-    # 注：min_score 是部署调参项（取决于真实 37 个 skill 的 IDF 分布），
+    # 注：min_score 是部署调参项（取决于真实 skill 集合 的 IDF 分布），
     # 这里用 min_score=0 断言排序质量本身。
-    hits = router.search("这家公司靠谱吗，帮我查查", min_score=0.0)
+    hits = router.search("把这段内容整理成结构化摘要", min_score=0.0)
     assert hits, "应有候选"
-    assert hits[0]["skill_name"] == "b2b-osint"
+    assert hits[0]["skill_name"] == "demo-alpha"
 
 
 def test_search_no_match(router):
@@ -76,18 +76,18 @@ def test_search_empty(router):
 
 def test_hybrid_rank_merge():
     kw = [
-        {"skill_name": "b2b-osint", "score": 3},
-        {"skill_name": "b2b-cold-outreach", "score": 1},
+        {"skill_name": "demo-alpha", "score": 3},
+        {"skill_name": "demo-beta", "score": 1},
     ]
     sem = [
-        {"skill_name": "b2b-osint", "score": 0.9},
-        {"skill_name": "b2b-linkedin-marketing", "score": 0.8},
+        {"skill_name": "demo-alpha", "score": 0.9},
+        {"skill_name": "demo-gamma", "score": 0.8},
     ]
     ranked = skill_semantic.hybrid_rank(kw, sem, w_keyword=0.5, w_semantic=0.5)
-    assert ranked[0]["skill_name"] == "b2b-osint"
+    assert ranked[0]["skill_name"] == "demo-alpha"
     assert ranked[0]["source"] == "hybrid"
     # 只在语义出现的也应保留
-    assert any(r["skill_name"] == "b2b-linkedin-marketing" for r in ranked)
+    assert any(r["skill_name"] == "demo-gamma" for r in ranked)
 
 
 def test_hybrid_rank_empty():
@@ -99,7 +99,7 @@ def test_match_skill_hybrid_confident_keyword(monkeypatch):
     monkeypatch.setenv("AGENTBASE_HYBRID_KEYWORD_CONFIDENT", "6")
     class FakeRouter:
         def _score_skills(self, q):
-            return [{"skill_name": "b2b-osint", "score": 9}]
+            return [{"skill_name": "demo-alpha", "score": 9}]
 
     import types
 
@@ -111,8 +111,8 @@ def test_match_skill_hybrid_confident_keyword(monkeypatch):
     import agentbase
 
     monkeypatch.setattr(agentbase, "skill_router", fake_mod, raising=False)
-    best, alts = skill_semantic.match_skill_hybrid("背景调查 背调 查公司")
-    assert best["skill_name"] == "b2b-osint"
+    best, alts = skill_semantic.match_skill_hybrid("摘要 结构化 summarize")
+    assert best["skill_name"] == "demo-alpha"
     assert best["source"] == "keyword"
 
 
