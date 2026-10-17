@@ -1,11 +1,11 @@
 """
-pre_install_check: Verify hermes-agent is installed and compatible before agentbase install.
+pre_install_check: Verify AgentBase's bundled Hermes (vendor/hermes) is present and compatible.
 
 This module runs BEFORE pip install of the agentbase package.
 It checks:
-  1. Is hermes-agent installed at all?
-  2. Is the installed version compatible with agentbase's requirements?
-  3. If not compatible → print instructions to install from NousResearch/hermes-agent first.
+  1. Is Hermes importable at all (bundled checkout on sys.path, or an existing install)?
+  2. Is the version compatible with agentbase's requirements?
+  3. If not compatible → print instructions to update the AgentBase checkout.
 
 Exit codes:
   0  = compatible, proceed with agentbase install
@@ -379,9 +379,9 @@ def run_check() -> int:
 
     # Case 1: not installed at all
     if installed_version is None:
-        print_fail("hermes-agent is NOT installed.")
+        print_fail("Bundled Hermes (vendor/hermes) was not found.")
         print()
-        print_warn("Hermes Agent must be installed BEFORE agentbase.")
+        print_warn("Hermes ships inside AgentBase; the checkout looks incomplete.")
         print()
         _print_install_instructions()
         return 1
@@ -412,58 +412,46 @@ def run_check() -> int:
         print()
         return 0
     if verdict == "too_old":
-        print_fail(f"hermes-agent version {installed_version} is too old.")
-        print_warn(f"AgentBase requires version >= {MIN_COMPATIBLE_VERSION} from NousResearch/hermes-agent.")
+        print_fail(f"Bundled Hermes version {installed_version} is too old.")
+        print_warn(f"AgentBase requires version >= {MIN_COMPATIBLE_VERSION}.")
         print()
-        print_info("Please upgrade:")
-        print_info("  pip install --upgrade hermes-agent")
-        print_info("  # or: cd ~/.hermes/hermes-agent && uv pip install -e . --upgrade")
+        print_info("Update the AgentBase checkout (Hermes version is pinned by it).")
         print()
         _print_install_instructions_compat()
         return 2
 
-    print_ok(f"hermes-agent {installed_version} from NousResearch/hermes-agent — compatible.")
+    print_ok(f"Hermes {installed_version} — compatible with AgentBase.")
     print()
     return 0
 
 
 def _print_install_instructions():
-    """Print installation instructions for NousResearch/hermes-agent."""
+    """Print how to obtain AgentBase's bundled Hermes (vendor/hermes)."""
     print("=" * 60)
-    print("  Install Hermes Agent")
+    print("  Get AgentBase (Hermes is bundled)")
     print("=" * 60)
     print()
-    print("  Option A — One-liner (recommended):")
-    print("    curl -fsSL \\")
-    print("      https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \\")
-    print("      | bash")
+    print("  Hermes ships inside AgentBase at vendor/hermes — there is no")
+    print("  separate Hermes install step. Re-clone or update the AgentBase")
+    print("  repository (or re-run its install script), then re-run this check:")
     print()
-    print("  Option B — Manual install:")
-    print("    git clone --branch main \\")
-    print("      https://github.com/NousResearch/hermes-agent.git \\")
-    print("      ~/.hermes/hermes-agent")
-    print("    cd ~/.hermes/hermes-agent")
-    print("    uv pip install -e .   # or: pip install -e .")
+    print("    curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash")
     print()
-    print("  After installation, re-run this check:")
     print("    python pre_install_check.py")
     print()
 
 
 def _print_install_instructions_compat():
-    """Print upgrade instructions for incompatible version."""
+    """Print how to update AgentBase's bundled Hermes."""
     print("=" * 60)
-    print("  Upgrade Hermes Agent")
+    print("  Update AgentBase")
     print("=" * 60)
     print()
-    print("  cd ~/.hermes/hermes-agent")
-    print("  git pull origin main")
-    print("  uv pip install -e . --upgrade")
+    print("  The bundled Hermes version is pinned by AgentBase itself; update")
+    print("  the AgentBase checkout (or re-run its install script) instead of")
+    print("  upgrading a standalone Hermes installation:")
     print()
-    print("  Or re-run the official installer:")
-    print("    curl -fsSL \\")
-    print("      https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \\")
-    print("      | bash")
+    print("    curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash")
     print()
     print("  Then verify:")
     print("    python pre_install_check.py")

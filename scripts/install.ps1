@@ -23,7 +23,6 @@ Write-Host "Step 1/5: 检查 Python 环境" -ForegroundColor White
 # 而 AgentBase 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
 # 在 3.11~3.13 上会变成「装得上、起不来」，所以这里不再接受 3.11~3.13。
 $PythonCmd = $null
-$HermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { "$env:LOCALAPPDATA\hermes" }
 
 # 判据：解释器正好是 3.14（不是「>= 3.11」下限）
 $IsPython314 = { param($cmd) & $cmd -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 14) else 1)" 2>$null; $LASTEXITCODE -eq 0 }
@@ -65,12 +64,8 @@ if (-not $PythonCmd) {
 if (-not $PythonCmd) {
     Write-Host "  ✗ 需要 Python 3.14，但未找到。" -ForegroundColor Red
     Write-Host ""
-    Write-Host "  AgentBase 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式：" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  1) 让 Hermes 自带（推荐）—— 先安装 Hermes，它会自带 3.14，本脚本能自动找到：" -ForegroundColor White
-    Write-Host "       irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
-    Write-Host ""
-    Write-Host "  2) 自己装 3.14：" -ForegroundColor White
+    Write-Host "  AgentBase 需要 Python 3.14（内置 Hermes 也运行在同一解释器上）。" -ForegroundColor White
+    Write-Host "  安装一个 3.14 后重新运行本脚本：" -ForegroundColor White
     Write-Host "       winget install Python.Python.3.14"
     exit 1
 }
@@ -180,7 +175,7 @@ Write-Host "  OK Hermes 随 agentbase 内置分发，无需单独安装" -Foregr
 Write-Host ""
 Write-Host "Step 3/5: 安装 AgentBase" -ForegroundColor White
 
-$AgentbaseRepo = "https://github.com/chefroger/smart-trade-ai.git"
+$AgentbaseRepo = "https://github.com/chefroger/agentbase.git"
 $AgentbaseDir = "$AgentHome\agentbase"
 
 # 记录回滚点（2026-10-16 加，与 install.sh 同步）。重建场景下依赖若装不上，代码必须能
@@ -310,26 +305,26 @@ if ($VenvOld) {
 Write-Host "  ✓ AgentBase 安装完成" -ForegroundColor Green
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4: 安装 B2B skills
+# Step 4: 安装内置 skills
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Step 4/5: 安装 B2B skills" -ForegroundColor White
+Write-Host "Step 4/5: 安装内置 skills" -ForegroundColor White
 
 # 必须用真实存在的入口：此前写的是 `python -m agentbase.post_install install`，而该包
 # **没有 __main__.py** → 从未生效过；再加上原生命令失败不抛异常，旧代码会在失败时
 # 照样打印「✓ 完成」（虚假成功）。实测新装后 skills 数为 0。
 & $PyCmd -c "from agentbase.post_install import install_skills; install_skills()"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ B2B skills 安装完成" -ForegroundColor Green
+    Write-Host "  ✓ 内置 skills 安装完成" -ForegroundColor Green
 } else {
-    Write-Host "  ⚠ B2B skills 安装可能不完整（首次启动时会自动同步）" -ForegroundColor Yellow
+    Write-Host "  ⚠ 内置 skills 安装可能不完整（首次启动时会自动同步）" -ForegroundColor Yellow
 }
 
 # chat-memory 插件：agentbase 自带的工具（让 LLM 能查 conversations 表的历史对话）。
 # setup() 会兜底同步 + 写 config.yaml；这里做一次显式的初始安装，幂等。
 & $PyCmd -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ chat-memory 插件已部署到 ~/.hermes\plugins\chat-memory" -ForegroundColor Green
+    Write-Host "  ✓ chat-memory 插件已部署到 $AgentHome\plugins\chat-memory" -ForegroundColor Green
 } else {
     Write-Host "  ⚠ chat-memory 插件部署失败（首次启动时会自动重试）" -ForegroundColor Yellow
 }
@@ -359,7 +354,7 @@ New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
 
 @"
 @echo off
-set HERMES_HOME=$HermesHome
+set HERMES_HOME=$AgentHome
 REM 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes 自带的 store python
 REM （那里没有 agentbase 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 REM 前端只会看到「Agent 未返回有效响应」。bootstrap.py 里也设了一处，这里是双保险。

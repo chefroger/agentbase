@@ -201,11 +201,13 @@ def check_hermes_version() -> bool:
     verdict = state.get("verdict")
 
     if verdict == "too_old":
-        from agentbase.hermes_compat import incompatible_upgrade_steps
+        # vendored Hermes 随 agentbase 分发，用户没有「升级 Hermes」这个动作 ——
+        # 唯一正确的修复是重跑安装脚本，把代码（含 vendor/hermes）整体更新。
+        from agentbase.hermes_compat import incompatible_rebuild_steps
 
-        print(f"  ✗ Hermes 版本过旧，无法与当前 Python 共存：{state.get('reason')}")
-        print(f"    已安装: {state.get('version') or '未知'}    Python: {state.get('python')}")
-        for line in incompatible_upgrade_steps():
+        print(f"  ✗ 内置 Hermes 与当前 Python 不兼容：{state.get('reason')}")
+        print(f"    内置版本: {state.get('version') or '未知'}    Python: {state.get('python')}")
+        for line in incompatible_rebuild_steps():
             print(f"    {line}")
         return False
 

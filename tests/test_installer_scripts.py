@@ -127,8 +127,8 @@ class TestHermesInstallPolicy:
         并把用户的 Hermes 降级。新方案只确认 `hermes` 命令存在。
 
         注意断言要针对**旧方案的具体特征**（克隆 Hermes 到数据目录、pip 装它、
-        固定 ref），不能简单地禁掉 "hermes-agent" —— 安装指引里的仓库 URL
-        （`NousResearch/hermes-agent/...`）本来就含这个词。
+        固定 ref），而不是简单地禁掉 "hermes-agent" 这个词 —— vendor 目录与
+        说明文案里本来就会出现它。
         """
         baselines = (
             ("install.sh", SH, ("$HERMES_HOME/hermes-agent", '$PIP" install -e "."',
@@ -143,17 +143,23 @@ class TestHermesInstallPolicy:
                     f"{name} 的 Step 2 仍残留旧方案特征：{needle!r}"
                 )
 
-    def test_hermes_step_gives_install_guidance_when_missing(self):
-        """找不到 hermes 时必须给一条可直接复制的安装命令（用户群是电脑小白）。"""
+    def test_hermes_step_says_hermes_is_bundled(self):
+        """vendored 架构：安装脚本只说明 Hermes 内置，不再指导用户单独安装。
+
+        用户侧任何「安装/升级独立 Hermes」的指引都会把他们引向 ~/.hermes，
+        绕过 HERMES_HOME=AGENT_HOME 的隔离铁律。
+        """
         for name, text in (("install.sh", SH), ("install.ps1", PS1)):
-            assert "NousResearch/hermes-agent/main/scripts" in text, (
-                f"{name} 未给出 Hermes 安装指引"
+            assert "无需单独安装" in text, f"{name} 未说明 Hermes 内置"
+            assert "NousResearch/hermes-agent/main/scripts" not in text, (
+                f"{name} 仍给出独立 Hermes 的安装指引"
             )
 
     def test_installer_does_not_abort_on_old_hermes(self):
         """安装脚本不得因「Hermes 版本过旧」判定安装失败。
 
-        否则用户永远见不到 AgentBase 界面里那个自动升级面板 —— 而升级正是在那里做的。
+        否则用户会被挡在 AgentBase 外面；此时正确的修复入口是重跑安装脚本
+        （启动时的降级分支会给出这条指引）。
         """
         assert "ignore_names=('Hermes 版本',)" in SH, (
             "install.sh 的自检未忽略「Hermes 版本」致命项"

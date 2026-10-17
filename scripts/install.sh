@@ -73,7 +73,9 @@ log_step "Step 1/5: 检查 Python 环境"
 # （requires-python 里那个 `>=3.11` 只是留给旧安装「跑完自己的升级步骤」的过渡桥），
 # 而 AgentBase 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
 # 在 3.11~3.13 上会变成「装得上、起不来」，所以这里不再接受 3.11~3.13。
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+# 隔离铁律：HERMES_HOME 永远等于 AGENT_HOME，绝不指向用户的 ~/.hermes。
+# 下面的 Python 搜索因此只看 AgentBase 自己的目录树，不再碰独立 Hermes 的安装。
+HERMES_HOME="$AGENT_HOME"
 
 # 判据：这个解释器的版本号**正好**是 3.14（不是「>= 3.11」那种下限写法）
 _is_py314() {
@@ -138,12 +140,8 @@ PYTHON="$(_find_python314 || true)"
 if [ -z "$PYTHON" ]; then
     log_err "需要 Python 3.14，但未找到。"
     echo ""
-    echo "  AgentBase 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式："
-    echo ""
-    echo "  1) 让 Hermes 自带（推荐）—— 先安装 Hermes，它会自带 3.14，本脚本能自动找到："
-    echo "       curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
-    echo ""
-    echo "  2) 自己装 3.14："
+    echo "  AgentBase 需要 Python 3.14（内置 Hermes 也运行在同一解释器上）。"
+    echo "  安装一个 3.14 后重新运行本脚本："
     echo "       macOS:  brew install python@3.14"
     echo "       Ubuntu: sudo apt install python3.14 python3.14-venv"
     exit 1
@@ -181,7 +179,7 @@ if [ "$ARCH" = "arm64" ] && [ "$PY_ARCH" = "x86_64" ]; then
         echo "    2. 安装原生 Python："
         echo "       brew install python@3.12"
         echo "    3. 重新运行此安装脚本："
-        echo "       curl -fsSL https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scripts/install.sh | bash"
+        echo "       curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash"
         exit 1
     fi
 fi
@@ -252,7 +250,7 @@ log_ok "Hermes 随 agentbase 内置分发，无需单独安装（版本见 vendo
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 3/5: 安装 AgentBase"
 
-AGENTBASE_REPO="https://github.com/chefroger/smart-trade-ai.git"
+AGENTBASE_REPO="https://github.com/chefroger/agentbase.git"
 AGENTBASE_DIR="$HOME/.agentbase/agentbase"
 
 # 记录回滚点（2026-10-16 加）。重建场景下依赖若装不上，代码必须能退回升级前 ——
@@ -351,24 +349,24 @@ fi
 log_ok "AgentBase 安装完成"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4: 安装 B2B skills
+# Step 4: 安装内置 skills
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "Step 4/5: 安装 B2B skills"
+log_step "Step 4/5: 安装内置 skills"
 
 # 必须用真实存在的入口：此前写的是 `python -m agentbase.post_install install`，
 # 但该包**没有 __main__.py** → 这一步从未生效过（报错被 2>/dev/null 吞掉，
-# 只打印下面那句警告）。实测新装后 ~/.hermes/skills 里 0 个 skill。
+# 只打印下面那句警告）。实测新装后 AGENT_HOME 的 skills 目录里 0 个 skill。
 if "$PY" -c "from agentbase.post_install import install_skills; install_skills()"; then
-    log_ok "B2B skills 安装完成"
+    log_ok "内置 skills 安装完成"
 else
-    log_warn "B2B skills 安装可能不完整（首次启动时会自动同步）"
+    log_warn "内置 skills 安装可能不完整（首次启动时会自动同步）"
 fi
 
 # chat-memory 插件：agentbase 自带的工具（让 LLM 能用 agentbase.conversations 表查历史对话）。
 # setup() 也会兜底同步 + 写 config.yaml，这里做一次显式的初始安装，避免用户装完
 # 还没启动 agentbase 之前就看不到工具（虽然通常不实际发生，但稳）。
 if "$PY" -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"; then
-    log_ok "chat-memory 插件已部署到 ~/.hermes/plugins/chat-memory"
+    log_ok "chat-memory 插件已部署到 $AGENT_HOME/plugins/chat-memory"
 else
     log_warn "chat-memory 插件部署失败（首次启动时会自动重试）"
 fi
@@ -391,7 +389,7 @@ mkdir -p "$AGENT_HOME/workspaces"
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/agentbase" << LAUNCHER
 #!/bin/bash
-export HERMES_HOME="\${HERMES_HOME:-$HOME/.hermes}"
+export HERMES_HOME="$AGENT_HOME"
 # 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes 自带的 store python
 # （那里没有 agentbase 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 # 前端只会看到「Agent 未返回有效回复」。bootstrap.py 里也设了一处，这里是双保险。

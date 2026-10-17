@@ -187,9 +187,10 @@ class TestHermesPythonCompat:
         assert result["fix"] == "rebuild_venv", "补救方向必须是重建 AgentBase 环境"
 
     def test_old_hermes_on_old_interpreter_points_at_hermes(self, monkeypatch, compat_module):
-        """对比项：Hermes 自己过旧时，补救方向是升 Hermes 而不是重装 AgentBase。
+        """Hermes 自己过旧时，修复动作仍是重跑 AgentBase 安装脚本。
 
-        两个方向的用户动作完全不同，判错会让人白折腾 —— 所以这里成对钉住。
+        vendored Hermes 随框架分发，用户没有「单独升级 Hermes」这个入口 ——
+        任何不兼容都只能通过重跑安装脚本整体更新。
         """
         self._stub(monkeypatch, compat_module, version="0.19.0",
                    requires=">=3.11,<3.14", python=(3, 13, 5))
@@ -197,7 +198,7 @@ class TestHermesPythonCompat:
         result = compat_module.hermes_python_compat()
 
         assert result["verdict"] == "too_old"
-        assert result["fix"] == "upgrade_hermes"
+        assert result["fix"] == "rebuild_venv"
 
     def test_version_below_floor_rejected_even_with_loose_specifier(
         self, monkeypatch, compat_module
@@ -250,15 +251,16 @@ class TestHermesVersionGate:
         )
 
     def test_too_old_is_rejected_with_actionable_steps(self, monkeypatch, capsys):
-        """过旧时返回 False，并把三条可照做的升级步骤打到终端。"""
+        """过旧时返回 False，并给出「重跑安装脚本」的可照做步骤。"""
         from agentbase import bootstrap
 
         self._stub_state(monkeypatch, bootstrap, "too_old")
 
         assert bootstrap.check_hermes_version() is False
         out = capsys.readouterr().out
-        assert "hermes update" in out          # 主路径命令必须出现
-        assert "升级完成后" in out              # 收尾指引
+        assert "install.sh" in out or "install.ps1" in out   # 唯一正确的修复入口
+        assert "hermes update" not in out                    # 不能把用户引向独立 Hermes
+        assert "重装完成后" in out                            # 收尾指引
 
     def test_unknown_warns_and_continues(self, monkeypatch, capsys):
         """拿不到版本（如 main 上无安装印章）→ 打印警告但继续启动。"""
@@ -279,23 +281,28 @@ class TestHermesVersionGate:
         assert "可共存" in capsys.readouterr().out
 
 
-class TestUpgradeSteps:
-    """给小白看的升级步骤：必须每条都能直接复制粘贴。"""
+class TestRebuildSteps:
+    """给小白看的重建步骤：必须可直接复制粘贴，且不能再出现独立 Hermes 的升级入口。"""
 
     def test_steps_are_copy_pasteable(self, compat_module):
-        steps = compat_module.upgrade_steps()
+        steps = compat_module.rebuild_steps()
 
-        assert len(steps) == 3
-        # 主路径就是上游自己的一键升级命令
-        assert steps[0]["command"] == "hermes update"
-        # 每条都必须带一条可直接复制的完整命令，不能是「运行相应的升级命令」这类空话
+        assert len(steps) == 1
+        # vendored 架构下唯一修复入口就是 agentbase 自己的安装脚本
+        assert "agentbase" in steps[0]["command"]
+        assert "install.sh" in steps[0]["command"] or "install.ps1" in steps[0]["command"]
         assert all(step["command"].strip() for step in steps)
 
     def test_terminal_rendering_includes_every_command(self, compat_module):
-        lines = "\n".join(compat_module.incompatible_upgrade_steps())
+        lines = "\n".join(compat_module.incompatible_rebuild_steps())
 
-        for step in compat_module.upgrade_steps():
+        for step in compat_module.rebuild_steps():
             assert step["command"] in lines
+
+    def test_no_upgrade_hermes_entry_point_remains(self, compat_module):
+        """P0 回归：vendored 下不允许任何「升级独立 Hermes」的公开入口。"""
+        assert not hasattr(compat_module, "upgrade_steps")
+        assert not hasattr(compat_module, "incompatible_upgrade_steps")
 
 
 class TestDegradedStartup:
@@ -321,10 +328,10 @@ class TestDegradedStartup:
         monkeypatch.setattr(
             bootstrap, "check_hermes_version", lambda: calls.append("version") or usable
         )
-        # 降级分支要按 fix 决定「要不要自动升级 Hermes」，所以状态必须一起钉住
+        # 降级分支要按 fix 决定给出哪套补救步骤，所以状态必须一起钉住
         monkeypatch.setattr(
             bootstrap, "hermes_compat_state",
-            lambda: {"verdict": "ok" if usable else "too_old", "fix": "upgrade_hermes",
+            lambda: {"verdict": "ok" if usable else "too_old", "fix": "rebuild_venv",
                      "reason": "r", "version": "0.19.0", "python": "3.14.7"},
         )
         monkeypatch.setattr(

@@ -282,7 +282,7 @@ def hermes_python_compat() -> dict[str, Any]:
                 requires_ok = True
             else:
                 result["verdict"] = "too_old"
-                result["fix"] = "upgrade_hermes"
+                result["fix"] = "rebuild_venv"
                 result["reason"] = (
                     f"Hermes 声明的 Python 区间 {requires_python} 不包含当前解释器 {python_version}"
                 )
@@ -299,7 +299,7 @@ def hermes_python_compat() -> dict[str, Any]:
 
             if Version(str(version)) < Version(_MIN_HERMES_VERSION_314):
                 result["verdict"] = "too_old"
-                result["fix"] = "upgrade_hermes"
+                result["fix"] = "rebuild_venv"
                 result["reason"] = (
                     f"Hermes {version} 低于共存所需的最低版本 {_MIN_HERMES_VERSION_314}"
                 )
@@ -318,42 +318,8 @@ def hermes_python_compat() -> dict[str, Any]:
     return result
 
 
-def upgrade_steps() -> list[dict[str, str]]:
-    """给用户照着做的 Hermes 升级步骤（结构化，终端与界面共用同一份文案）。
-
-    受众是电脑小白：每一步都给**可直接复制粘贴**的完整命令，不写「运行相应的升级命令」
-    这类需要用户自己推导的话。文案只有这一处来源，终端与前端都从这里取，避免两边漂移。
-
-    Returns:
-        步骤列表，每项 {"title": 标题, "detail": 怎么做, "command": 可复制的命令}。
-    """
-    # Windows 的重装命令与 POSIX 不同（PowerShell 没有 curl/bash 管道写法）
-    reinstall = (
-        "irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
-        if os.name == "nt"
-        else "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
-    )
-    return [
-        {
-            "title": "让 Hermes 自己升级（最简单）",
-            "detail": "复制下面这一行，粘贴到终端后回车，等它跑完。",
-            "command": "hermes update",
-        },
-        {
-            "title": "让 AI 帮你升级",
-            "detail": "打开 Hermes，把下面这句话整句复制粘贴进去。",
-            "command": "请把我自己的 Hermes 升级到最新版本",
-        },
-        {
-            "title": "前两种都不行时，重装 Hermes",
-            "detail": "复制下面这一行，粘贴到终端后回车。",
-            "command": reinstall,
-        },
-    ]
-
-
 def rebuild_steps() -> list[dict[str, str]]:
-    """「AgentBase 的运行环境需要重建」时给用户的步骤（与 upgrade_steps 同构）。
+    """「AgentBase 的运行环境需要重建」时给用户的步骤（终端与界面共用同一份文案）。
 
     什么时候会用到：Hermes 已是 pm 时代（≥0.21.6，需要 3.14 运行时），但 AgentBase 的
     venv 还是旧装时建的 3.11~3.13。典型来源是**旧装机器就地升级 agentbase** ——
@@ -380,28 +346,15 @@ def rebuild_steps() -> list[dict[str, str]]:
 def compat_steps(compat: dict[str, Any]) -> list[dict[str, str]]:
     """按判定给出的补救方向返回对应步骤（界面与终端共用同一份）。
 
-    `fix` 的两个方向对应**完全不同的用户动作**，给错会让人白折腾：
-      - upgrade_hermes     → 去升级 Hermes
-      - rebuild_venv → 重跑 AgentBase 的安装脚本
+    vendored Hermes 的版本由 agentbase 自己决定，用户无法（也不该）去升级独立的
+    Hermes —— 因此所有不兼容情形的唯一动作都是**重跑 AgentBase 安装脚本**。
+    `fix` 历史上出现过 `upgrade_hermes` 值（来自共存旧版 Hermes 的时代），
+    现在统一映射到重建步骤，避免残留文案把用户引到 `~/.hermes`。
     """
     fix = compat.get("fix")
-    if fix == "upgrade_hermes":
-        return upgrade_steps()
-    if fix == "rebuild_venv":
+    if fix in ("rebuild_venv", "upgrade_hermes"):
         return rebuild_steps()
     return []
-
-
-def incompatible_upgrade_steps() -> list[str]:
-    """把 upgrade_steps() 渲染成终端可读的行（给能看见终端的用户）。"""
-    lines = ["", "【现在照着做 —— 三种方式，推荐第 1 种】", ""]
-    for index, step in enumerate(upgrade_steps(), start=1):
-        lines.append(f"{index}) {step['title']}")
-        lines.append(f"   {step['detail']}")
-        lines.append(f"       {step['command']}")
-        lines.append("")
-    lines.append("升级完成后，重新运行：  agentbase")
-    return lines
 
 
 def incompatible_rebuild_steps() -> list[str]:

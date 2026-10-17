@@ -186,7 +186,7 @@ class TestRebuildEndpointGuard:
         # 不需要重建：fix 是别的值 → 必须拒绝，且**不派发**子进程
         monkeypatch.setattr(
             "agentbase.bootstrap.hermes_compat_state",
-            lambda: {"fix": "upgrade_hermes"},
+            lambda: {"fix": "none"},
         )
         router = app_module._create_system_router()
         endpoint = next(
