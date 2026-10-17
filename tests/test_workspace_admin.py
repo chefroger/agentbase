@@ -27,9 +27,16 @@ from pathlib import Path
 
 import pytest
 
+PURGE_PW = "test-purge-password"
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agentbase import workspace_admin
+
+
+@pytest.fixture(autouse=True)
+def _purge_env(monkeypatch):
+    monkeypatch.setenv("AGENTBASE_PURGE_PASSWORD", PURGE_PW)
 
 
 @pytest.fixture
@@ -135,7 +142,7 @@ class TestPurgeExecutes:
 
         data_dir = AGENT_HOME / "wrong-co"
         assert data_dir.is_dir(), f"前置条件：数据目录应先存在（{data_dir}）"
-        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=PURGE_PW)
 
         assert code == 0, text
         from agentbase.workspace import crud
@@ -147,7 +154,7 @@ class TestPurgeExecutes:
     def test_purge_by_numeric_id(self, env):
         cid = env["workspace"]["id"]
 
-        text, code = workspace_admin.purge_workspace(str(cid), yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace(str(cid), yes=True, password=PURGE_PW)
 
         assert code == 0
         from agentbase.workspace import crud
@@ -155,14 +162,14 @@ class TestPurgeExecutes:
         assert crud.get(cid) is None
 
     def test_unknown_target_is_reported(self, env):
-        text, code = workspace_admin.purge_workspace("no-such-workspace", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("no-such-workspace", yes=True, password=PURGE_PW)
 
         assert code == 1
         assert "找不到" in text
 
     def test_reports_verified_deletion(self, env):
         """删完要复核并说出来，不能只说"已执行"。"""
-        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=PURGE_PW)
 
         assert "已删除" in text
 
@@ -178,7 +185,7 @@ class TestDirGuard:
             env["workspace"]["id"], extra1=json.dumps({"work_dir": str(outside)})
         )
 
-        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=PURGE_PW)
 
         assert code == 0
         assert "保护范围" in text, "要说明这个目录没被删"
@@ -238,7 +245,7 @@ class TestPurgeDir:
     def test_deletes_orphan(self, env):
         orphan = self._make_orphan(env)
 
-        text, code = workspace_admin.purge_dir(str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(orphan), yes=True, password=PURGE_PW)
 
         assert code == 0
         assert not orphan.exists()
@@ -249,7 +256,7 @@ class TestPurgeDir:
         plain.mkdir()
         (plain / "报价单.xlsx").write_text("x", encoding="utf-8")
 
-        text, code = workspace_admin.purge_dir(str(plain), yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(plain), yes=True, password=PURGE_PW)
 
         assert code == 1
         assert plain.is_dir(), "普通目录被删了 —— 这条命令太危险"
@@ -259,7 +266,7 @@ class TestPurgeDir:
         for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (outside / cat).mkdir(parents=True)
 
-        text, code = workspace_admin.purge_dir(str(outside), yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(outside), yes=True, password=PURGE_PW)
 
         assert code == 1
         assert outside.is_dir()
@@ -387,7 +394,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         desktop_dir = env["desktop"] / "错误公司"
         assert desktop_dir.is_dir(), "前置条件：桌面文件夹存在"
 
-        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=PURGE_PW)
 
         assert code == 0, text
         assert not desktop_dir.exists(), (
@@ -422,7 +429,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         plain.mkdir()
         (plain / "我的笔记.txt").write_text("x", encoding="utf-8")
 
-        workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
+        workspace_admin.purge_workspace("wrong-co", yes=True, password=PURGE_PW)
 
         assert (plain / "我的笔记.txt").is_file(), "误删了同名的普通文件夹"
 
@@ -434,7 +441,7 @@ class TestPurgePasswordGate:
     与许可证私钥同一性质，作者已知情。
     """
 
-    PW = workspace_admin._PURGE_PASSWORD
+    PW = PURGE_PW
 
     def test_correct_password_deletes(self, env):
         text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=self.PW)
@@ -469,7 +476,7 @@ class TestPurgePasswordGate:
         text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=None)
 
         assert code == 1
-        assert "--password" in text, "要告诉用户怎么把口令传进来"
+        assert "AGENTBASE_PURGE_PASSWORD" in text, "要告诉用户怎么配置口令"
         from agentbase.workspace import crud
 
         assert crud.get(env["workspace"]["id"]) is not None
@@ -520,7 +527,7 @@ class TestPurgeDirPasswordGate:
         orphan = self._make_orphan(env)
 
         text, code = workspace_admin.purge_dir(
-            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(orphan), yes=True, password=PURGE_PW
         )
 
         assert code == 0
@@ -540,21 +547,20 @@ class TestPurgeDirPasswordGate:
 
 
 class TestFlagParsing:
-    def test_parses_yes_and_password(self):
-        yes, pw = workspace_admin._parse_flags(["--yes", "--password", "abc"])
-
-        assert yes is True and pw == "abc"
+    def test_password_on_argv_is_rejected(self):
+        """审计 #10：口令不得经由 argv（会进 shell history / 进程列表）。"""
+        with pytest.raises(SystemExit):
+            workspace_admin._parse_flags(["--yes", "--password", "abc"])
 
     def test_password_absent_is_none(self):
         yes, pw = workspace_admin._parse_flags(["--yes"])
 
         assert yes is True and pw is None
 
-    def test_password_flag_without_value_is_none(self):
-        """`--password` 后面没跟值 → 当作没提供，走交互/拒绝分支，不能崩。"""
-        _yes, pw = workspace_admin._parse_flags(["--yes", "--password"])
-
-        assert pw is None
+    def test_password_flag_without_value_also_rejected(self):
+        """即使没跟值也直接拒绝：统一引导到 env / 交互输入。"""
+        with pytest.raises(SystemExit):
+            workspace_admin._parse_flags(["--yes", "--password"])
 
 
 class TestOrphanPurgeLeavesAuditTrail:
@@ -576,7 +582,7 @@ class TestOrphanPurgeLeavesAuditTrail:
         orphan = self._make_orphan(env)
 
         workspace_admin.purge_dir(
-            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(orphan), yes=True, password=PURGE_PW
         )
 
         from agentbase.workspace.crud import _audit_dir
@@ -593,7 +599,7 @@ class TestOrphanPurgeLeavesAuditTrail:
         orphan = self._make_orphan(env)
 
         workspace_admin.purge_dir(
-            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(orphan), yes=True, password=PURGE_PW
         )
 
         assert not orphan.exists()
@@ -669,7 +675,7 @@ class TestWindowsPathCaseInsensitivity:
         self._simulate_windows(monkeypatch)
 
         text, code = workspace_admin.purge_dir(
-            str(desktop_dir), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(desktop_dir), yes=True, password=PURGE_PW
         )
 
         assert code == 1, "大小写不同就放行删除 —— 会删掉在用公司的真实文件"
@@ -749,7 +755,7 @@ class TestWindowsRobustness:
         monkeypatch.setattr(workspace_admin.shutil, "rmtree", fake_rmtree)
 
         text, code = workspace_admin.purge_dir(
-            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(d), yes=True, password=PURGE_PW
         )
 
         assert code == 0, f"只读文件把删除卡死了：{text}"
@@ -772,7 +778,7 @@ class TestWindowsRobustness:
         monkeypatch.setattr(workspace_admin.shutil, "rmtree", flaky_rmtree)
 
         text, code = workspace_admin.purge_dir(
-            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(d), yes=True, password=PURGE_PW
         )
 
         assert code == 0, f"瞬时占用没有重试：{text}"
@@ -789,7 +795,7 @@ class TestWindowsRobustness:
         monkeypatch.setattr(workspace_admin.shutil, "rmtree", always_fail)
 
         text, code = workspace_admin.purge_dir(
-            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
+            str(d), yes=True, password=PURGE_PW
         )
 
         assert code == 1
@@ -806,5 +812,5 @@ class TestWindowsRobustness:
         )
 
         assert code == 1
-        assert "--password" in text
+        assert "AGENTBASE_PURGE_PASSWORD" in text
         assert env["desktop"].joinpath("错误公司").is_dir(), "没有口令就必须什么都不删"

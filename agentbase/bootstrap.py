@@ -783,11 +783,17 @@ def _patch_yaml_list(text: str, key_path: tuple[str, ...], value: str) -> str:
         inline = stripped[len(target) + 1:].strip()
 
         # 行内 list：key: [a, b]
+        # **必须逐项精确比较**：子串匹配会让 chat-memory-pro 误命中 chat-memory（审计 #8）。
         if inline.startswith("["):
-            if value in inline:
-                return text  # 已存在 → 幂等
             if not inline.endswith("]"):
                 return text  # 跨行/畸形 → 不动
+            _items = [
+                item.strip().strip("'\"")
+                for item in inline[1:-1].split(",")
+                if item.strip()
+            ]
+            if value in _items:
+                return text  # 已存在 → 幂等
             inner = inline[1:-1].strip().rstrip(",")
             body = f"[{inner}, {value}]" if inner else f"[{value}]"
             lines[i] = f"{indent}{target}: {body}\n"

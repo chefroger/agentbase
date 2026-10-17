@@ -3,12 +3,15 @@
 # AgentBase — 一键安装脚本 (macOS / Linux / WSL2)
 # ==============================================================================
 # 使用方式:
-#   curl -fsSL https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash
 #
 # 全程使用 venv，不碰系统 Python site-packages，兼容 Homebrew PEP 668。
 # ==============================================================================
 
 set -e
+
+# 数据根目录必须在建 venv 之前确定：venv 跟着 AGENT_HOME 走（审计 #4）
+AGENT_HOME="${AGENT_HOME:-$HOME/.agentbase}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -193,7 +196,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # 创建 venv（所有后续安装都在 venv 内，不碰系统 Python）
 # ─────────────────────────────────────────────────────────────────────────────
-_VENV_REAL="$HOME/.agentbase/venv"
+_VENV_REAL="$AGENT_HOME/venv"
 VENV_DIR="$_VENV_REAL"
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 _VENV_OLD=""
@@ -375,7 +378,6 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 5/5: 初始化数据目录"
 
-AGENT_HOME="${AGENT_HOME:-$HOME/.agentbase}"
 mkdir -p "$AGENT_HOME/data"
 mkdir -p "$AGENT_HOME/workspaces"
 

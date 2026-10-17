@@ -46,13 +46,19 @@ from agentbase.workspace.workdir import _WORK_DIR_CATEGORIES
 def _orphan_min_hits() -> int:
     return max(1, min(5, len(_WORK_DIR_CATEGORIES)))
 
-# 清理口令：删除公司/残留目录前必须输入。
+# 清理口令：删除 workspace/残留目录前必须输入。
 #
-# 定位是**防误操作**（客户机常被远程操作，误删不可恢复），不是防攻击 ——
-# 代码是公开的，口令自然也公开，这一点作者已知情（同许可证私钥那套「防君子不防小人」）。
-# 校验发生在**预览之后、删除之前**：先看到"将要删什么"，再输口令授权。
-# 只读的 `list` 不需要口令（诊断要方便）。
-_PURGE_PASSWORD = "Lele@885918"
+# **不得硬编码在代码里**（审计 #10，安全红线）：口令来自环境变量
+# `AGENTBASE_PURGE_PASSWORD`，只通过交互式 getpass 读取，**永不从命令行参数读取**
+# （argv 会进 shell history / 进程列表）。
+# 定位是防误操作，不是防攻击；未配置口令时拒绝删除。
+PURGE_PASSWORD_ENV = "AGENTBASE_PURGE_PASSWORD"
+
+
+def _purge_password() -> str | None:
+    """当前生效的清理口令；未配置时返回 None（= 禁止删除）。"""
+    value = os.environ.get(PURGE_PASSWORD_ENV, "").strip()
+    return value or None
 
 
 def _stdin_is_tty() -> bool:
@@ -76,22 +82,29 @@ def _check_password(provided: str | None) -> tuple[str, str]:
     没有 TTY 时不尝试读输入 —— `getpass` 在非交互环境会去读 stdin，
     在脚本/管道里表现为"卡住"或读到脏数据，不如直接告诉用户改用 `--password`。
     """
+    expected = _purge_password()
+    if expected is None:
+        return (
+            "not_configured",
+            f"  未配置清理口令。请先设置环境变量 {PURGE_PASSWORD_ENV}，再重试。\n",
+        )
+
     if provided:
-        return ("ok", "") if provided == _PURGE_PASSWORD else ("wrong", "")
+        return ("ok", "") if provided == expected else ("wrong", "")
 
     import getpass
 
     if not _stdin_is_tty():
         return (
             "no_tty",
-            "  当前不是交互终端。请改用：\n"
-            "      agentbase workspace <子命令> <目标> --yes --password <口令>\n",
+            "  当前不是交互终端：请在终端里交互执行，或通过环境变量 "
+            f"{PURGE_PASSWORD_ENV} 提供口令（不接受命令行参数）。\n",
         )
     try:
         entered = getpass.getpass("请输入清理口令：")
     except Exception as e:
-        return ("error", f"  无法读取口令（{e}）。请改用 --password 传入。\n")
-    return ("ok", "") if entered == _PURGE_PASSWORD else ("wrong", "")
+        return ("error", f"  无法读取口令（{e}）。\n")
+    return ("ok", "") if entered == expected else ("wrong", "")
 
 
 def _password_gate(provided: str | None, lines: list[str]) -> bool:
@@ -115,9 +128,11 @@ def _parse_flags(args: list[str]) -> tuple[bool, str | None]:
     yes = "--yes" in args
     password = None
     if "--password" in args:
-        idx = args.index("--password")
-        if idx + 1 < len(args):
-            password = args[idx + 1]
+        # 审计 #10：口令不得经由 argv（shell history / 进程列表可见）
+        raise SystemExit(
+            "不再支持 --password（会泄漏到 shell history / 进程列表）。\n"
+            f"请改用交互终端，或设置环境变量 {PURGE_PASSWORD_ENV}。"
+        )
     return yes, password
 
 

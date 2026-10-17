@@ -6,6 +6,7 @@ AgentBase AI Assistant — FastAPI application factory.
 
 import os
 import secrets
+import shlex
 import shutil
 import subprocess as _sp
 import sys
@@ -494,10 +495,10 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
         f"kill -TERM {old_pid} 2>/dev/null; sleep 1; kill -KILL {old_pid} 2>/dev/null; "
         f"echo \"[rebuild] 开始重建运行环境\"; "
         # 重建失败不阻止启动 —— 安装脚本是原子的，失败时旧 venv 原样可用
-        f"if /bin/bash {sh!r}; then echo \"[rebuild] 重建成功\"; "
+        f"if /bin/bash {shlex.quote(str(sh))}; then echo \"[rebuild] 重建成功\"; "
         f"else echo \"[rebuild] 重建失败（退出码 $?），将用原环境启动\"; fi; "
         f"echo \"[rebuild] 启动 AgentBase\"; "
-        f"exec {launcher!r} --no-browser"
+        f"exec {shlex.quote(str(launcher))} --no-browser"
     )
     return (["/bin/sh", "-c", script], str(log_file))
 

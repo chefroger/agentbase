@@ -200,3 +200,34 @@ class TestRebuildEndpointGuard:
         result = endpoint(_Req())
         assert result["ok"] is False
         assert not scheduled, "明明不需要重建，却派发了子进程"
+
+
+class TestPosixRebuildScriptPaths:
+    """审计 #1（P0 砖机 bug）：重建脚本里的路径必须用 shell 引号，不能是 `Path.__repr__`。
+
+    `f"... {path!r}"` 会写出 `PosixPath('/…')`，`/bin/sh` 把它当成不存在的脚本/命令 →
+    重建失败、启动器也执行失败 → 服务再也起不来。
+    """
+
+    def test_no_posixpath_repr_in_script(self, monkeypatch, tmp_path):
+        import agentbase.app as app_mod
+
+        runtime = tmp_path / "runtime"
+        (runtime / "scripts").mkdir(parents=True)
+        install_sh = runtime / "scripts" / "install.sh"
+        install_sh.write_text("#!/bin/bash\n", encoding="utf-8")
+
+        monkeypatch.setattr(app_mod, "_runtime_dir", lambda: runtime)
+        monkeypatch.setattr(app_mod, "_get_agent_home_path", lambda: tmp_path)
+        monkeypatch.setattr(
+            pathlib.Path, "home", classmethod(lambda cls: tmp_path / "home")
+        )
+
+        built = app_mod._venv_rebuild_script()
+        assert built is not None, "POSIX 下应能构造重建脚本"
+        script = built[0][2]
+
+        assert "PosixPath(" not in script, f"Path repr 漏进脚本：{script}"
+        assert "WindowsPath(" not in script
+        assert str(install_sh) in script
+        assert str(tmp_path / "home" / ".local" / "bin" / "agentbase") in script

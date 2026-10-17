@@ -28,3 +28,25 @@
 2. 文件上传 → 解析 → Agent 读取全链路真机验证（需要模型 Key）。
 3. Phase 7（单文件打包 + 常驻服务）尚未开始。
 4. `COMPATIBILITY.md` 保留为 Hermes 兼容历史记录（含旧项目名称，属溯源材料）。
+
+## 审计 bug（任务书 v2 引用的 76c98d1 审计）处置
+
+> 基线说明：实际基线与任务书不同，见 §基线差异。
+
+| # | 审计项 | 状态 |
+|---|---|---|
+| 1 | 重建脚本 `{sh!r}` 写入 `PosixPath(...)` → 砖机 | ✅ 已修（`shlex.quote` + 回归测试 `TestPosixRebuildScriptPaths`） |
+| 3 | Windows launcher 路径少 `local\bin` | ✅ 基线提交 `e3f4772` 已含修复（任务书说的"未修"针对旧基线 76c98d1） |
+| 4 | `AGENT_HOME` 定义晚于 venv 块 | ✅ 已修（前移到脚本顶部；venv 跟随 `AGENT_HOME`） |
+| 6 | Rosetta 下缺 python3.14 候选 | ✅ 已含（候选 + 版本校验 + Rosetta 拒绝） |
+| 7 | launchd label 与 unit 名不一致 | ✅ 一致（`com.agentbase.assistant`） |
+| 8 | `_patch_yaml_list` 子串匹配误伤 | ✅ 已修（逐项精确比较 + 回归测试） |
+| 10 | 硬编码销毁口令 + 口令进 argv | ✅ 已修（`AGENTBASE_PURGE_PASSWORD` 环境变量 / getpass；拒绝 `--password`） |
+| 11 | license 路由无鉴权 / 跨租户 fallback | ⚠️ 部分：跨租户读取已消除（license 为机器级）；**路由仍未要求 session token**，记为安全债 |
+| 12 | plugin 的 workspace_id 由 LLM 从 system prompt 读取 | ⚠️ **未修**：仍是 LLM 传参；服务端注入需要插件上下文改造，记为安全债 |
+
+## 基线差异（重要）
+
+| 项 | 任务书写的 | 实际使用 | 原因 |
+|---|---|---|---|
+| trade 基线 | `76c98d1` | **`e3f4772`** | `e3f4772` 是 `76c98d1` 的**直接后继**（中间恰好 1 个提交），内容正是修复审计 #3 的 Windows launcher 路径。任务书 §10.6 说"76c98d1 上仍未修"——即任务书基线早于该修复。使用 e3f4772 = 使用含修复的最新 main。 |
