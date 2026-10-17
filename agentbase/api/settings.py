@@ -32,6 +32,11 @@ class ModelPayload(BaseModel):
     model: str = Field(..., min_length=1)
 
 
+class MoaPayload(BaseModel):
+    enabled: bool
+    preset_name: str = "default"
+
+
 def _env_path() -> Path:
     return business_config.agent_home() / ".env"
 
@@ -86,6 +91,7 @@ def get_settings() -> dict:
     active_provider, active_model = current_model_config()
 
     configured = sum(1 for p in providers if p.get("has_key"))
+    moa_cfg = _moa_config()
     return {
         "providers": [
             {
@@ -101,8 +107,91 @@ def get_settings() -> dict:
         "configured_provider_count": configured,
         "moa_available": configured >= 2,
         "moa_hint": "MoA 会同时调用多个模型，token 消耗约为 N 倍。",
+        "moa": {
+            "enabled": active_provider == "moa",
+            "presets": sorted((moa_cfg.get("presets") or {}).keys()),
+            "active_preset": moa_cfg.get("active_preset") or moa_cfg.get("default_preset") or "",
+        },
         "work_dirs": business_config.work_dir_names(),
     }
+
+
+def _moa_config() -> dict:
+    try:
+        from hermes_cli.config import load_config
+        from hermes_cli.moa_config import normalize_moa_config
+
+        raw = load_config().get("moa")
+        return normalize_moa_config(raw)
+    except Exception:
+        return {}
+
+
+@router.post("/settings/moa")
+def set_moa(payload: MoaPayload) -> dict:
+    """开启 / 关闭 MoA。
+
+    开启时用「已配置 Key 的 provider」自动组装一个合法 preset（最多 3 个 reference），
+    并用 Hermes 自己的 `validate_moa_payload` 校验，绝不写入半成品配置。
+    """
+    try:
+        from hermes_cli.config import load_config, save_config
+        from hermes_cli.moa_config import validate_moa_payload
+
+        config = load_config()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"读取配置失败：{exc}") from exc
+
+    model_cfg = config.get("model")
+    if not isinstance(model_cfg, dict):
+        model_cfg = {}
+
+    if payload.enabled:
+        from agentbase.hermes_compat import list_provider_records
+
+        usable = [
+            p for p in list_provider_records()
+            if p.get("has_key") and p.get("models") and p.get("id") != "moa"
+        ]
+        if len(usable) < 2:
+            raise HTTPException(status_code=400, detail="至少需要 2 个已配置 Key 的 provider 才能开启 MoA")
+
+        refs = [
+            {"provider": str(p["id"]), "model": str(p["models"][0])}
+            for p in usable[:3]
+        ]
+        preset_name = (payload.preset_name or "default").strip() or "default"
+        presets = {preset_name: {"reference_models": refs, "aggregator": dict(refs[0])}}
+        problems = validate_moa_payload({"presets": presets})
+        if problems:
+            raise HTTPException(status_code=400, detail="MoA 配置无效：" + "; ".join(problems))
+
+        config["moa"] = {
+            **(config.get("moa") if isinstance(config.get("moa"), dict) else {}),
+            "default_preset": preset_name,
+            "active_preset": preset_name,
+            "presets": presets,
+        }
+        model_cfg["provider"] = "moa"
+        config["model"] = model_cfg
+    else:
+        from agentbase.hermes_compat import list_provider_records
+
+        usable = [
+            p for p in list_provider_records()
+            if p.get("has_key") and p.get("models") and p.get("id") != "moa"
+        ]
+        if usable:
+            model_cfg["provider"] = str(usable[0]["id"])
+            model_cfg["default"] = str(usable[0]["models"][0])
+        config["model"] = model_cfg
+
+    try:
+        save_config(config, merge_existing=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"保存配置失败：{exc}") from exc
+
+    return {"ok": True, "enabled": payload.enabled}
 
 
 @router.post("/settings/keys")

@@ -2243,9 +2243,13 @@ async function loadSettings() {
             <button class="btn btn-primary" onclick="saveDefaultModel()">保存</button>
             <span style="font-size:12px;color:var(--text-muted);">当前：${esc(data.active?.provider || '未设置')} / ${esc(data.active?.model || '未设置')}</span>
         </div>
-        <h3 style="font-size:15px;margin:18px 0 10px;">MoA</h3>
+        <h3 style="font-size:15px;margin:18px 0 10px;">MoA（多模型协作）</h3>
         <p style="font-size:12px;color:var(--text-secondary);">${data.moa_available ? '已配置 ' + data.configured_provider_count + ' 个 provider，可开启 MoA。' : '至少配置 2 个 provider 的 Key 才能开启 MoA。'}<br>${esc(data.moa_hint || '')}</p>
-        <p style="font-size:12px;color:var(--text-muted);">MoA 开关与预设选择将在下一阶段接入。</p>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px;${data.moa_available ? '' : 'opacity:.5;'}">
+            <input type="checkbox" id="moa-toggle" ${data.moa?.enabled ? 'checked' : ''} ${data.moa_available ? '' : 'disabled'} onchange="setMoa(this.checked)">
+            启用 MoA
+        </label>
+        ${data.moa?.presets?.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:4px;">预设：${esc((data.moa.presets || []).join(', '))}</p>` : ''}
         <h3 style="font-size:15px;margin:18px 0 10px;">业务技能包</h3>
         <div id="packs-body" style="font-size:13px;">加载中...</div>
     `;
@@ -2258,6 +2262,13 @@ async function saveProviderKey(providerId, envVar) {
     if (!value) { toast('请输入 Key'); return; }
     const resp = await api('POST', '/api/agentbase/settings/keys', { keys: { [envVar]: value } });
     if (resp?.ok) { el.value = ''; toast('已保存'); loadSettings(); }
+}
+
+async function setMoa(enabled) {
+    const resp = await api('POST', '/api/agentbase/settings/moa', { enabled });
+    if (resp?.ok) { toast(enabled ? '已开启 MoA，重启后生效' : '已关闭 MoA，重启后生效'); }
+    else { const el = document.getElementById('moa-toggle'); if (el) el.checked = !enabled; }
+    loadSettings();
 }
 
 async function saveDefaultModel() {

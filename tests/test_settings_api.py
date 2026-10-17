@@ -97,6 +97,35 @@ def test_pack_install_activate_remove(_isolated, tmp_path):
     assert not business_config.get("skill_pack")
 
 
+def test_moa_requires_two_configured_providers(_isolated, monkeypatch):
+    """少于 2 个已配置 provider 时必须拒绝开启，而不是写一份坏配置。"""
+    import types
+
+    from fastapi import HTTPException
+
+    fake_pkg = types.ModuleType("hermes_cli")
+    fake_cfg = types.ModuleType("hermes_cli.config")
+    fake_cfg.load_config = lambda: {}
+    fake_cfg.save_config = lambda *a, **k: None
+    fake_moa = types.ModuleType("hermes_cli.moa_config")
+    fake_moa.validate_moa_payload = lambda raw: []
+    monkeypatch.setitem(sys.modules, "hermes_cli", fake_pkg)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", fake_cfg)
+    monkeypatch.setitem(sys.modules, "hermes_cli.moa_config", fake_moa)
+
+    from agentbase import hermes_compat
+    monkeypatch.setattr(
+        hermes_compat, "list_provider_records",
+        lambda: [{"id": "openai", "has_key": True, "models": ["gpt-5"]}],
+    )
+
+    from agentbase.api.settings import MoaPayload, set_moa
+
+    with pytest.raises(HTTPException) as exc:
+        set_moa(MoaPayload(enabled=True))
+    assert exc.value.status_code == 400
+
+
 def test_pack_name_traversal_rejected(_isolated, tmp_path):
     from fastapi import HTTPException
 
