@@ -39,7 +39,7 @@ class _SlowAgent:
 
 
 @pytest.fixture
-def company(monkeypatch, tmp_path):
+def workspace(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
 
@@ -48,7 +48,7 @@ def company(monkeypatch, tmp_path):
 
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -61,7 +61,7 @@ def company(monkeypatch, tmp_path):
     return co.create(name="Deadline Co", slug="deadline-co")
 
 
-async def _collect(company: dict) -> str:
+async def _collect(workspace: dict) -> str:
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
 
@@ -72,7 +72,7 @@ async def _collect(company: dict) -> str:
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
          patch("agentbase.license.check_license", return_value=(True, "")):
         resp = await chat.chat_stream(
-            ChatRequest(query="做个网站诊断"), company["id"]
+            ChatRequest(query="做个网站诊断"), workspace["id"]
         )
         chunks = []
         async for chunk in resp.body_iterator:
@@ -81,21 +81,21 @@ async def _collect(company: dict) -> str:
 
 
 class TestDeadlineEmitsError:
-    async def test_timeout_event_is_delivered(self, company):
-        body = await _collect(company)
+    async def test_timeout_event_is_delivered(self, workspace):
+        body = await _collect(workspace)
 
         assert "event: error" in body, (
             "超时事件没有下发 —— 用户只会看到「未返回有效回复」"
             f"\n实际流内容：{body!r}"
         )
 
-    async def test_timeout_message_mentions_the_limit(self, company):
-        body = await _collect(company)
+    async def test_timeout_message_mentions_the_limit(self, workspace):
+        body = await _collect(workspace)
 
         assert "30 分钟" in body or "30分钟" in body, f"超时文案缺失：{body!r}"
 
-    async def test_stream_still_carries_done(self, company):
+    async def test_stream_still_carries_done(self, workspace):
         """即便超时，`done` 仍要在（前端据此判断流正常收尾）。"""
-        body = await _collect(company)
+        body = await _collect(workspace)
 
         assert "event: done" in body

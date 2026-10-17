@@ -62,7 +62,7 @@ class TestResolveSystemPrompt:
 
         self._assert_composed(result, AGENTBASE_SYSTEM_PROMPT, "DB_IDENTITY")
 
-    def test_company_file_appended_and_wins_over_db(self, agentbase_home):
+    def test_workspace_file_appended_and_wins_over_db(self, agentbase_home):
         """公司身份文件优先于 DB，且追加在基础规则之后。
 
         通过生产的写入 API 落文件，不手写路径 —— 手写路径会跟着实现一起错，
@@ -73,7 +73,7 @@ class TestResolveSystemPrompt:
 
         prompts.write_agent_identity("acme", "FILE_IDENTITY")
 
-        result = prompts.resolve_system_prompt(company_slug="acme", db_identity="DB_IDENTITY")
+        result = prompts.resolve_system_prompt(workspace_slug="acme", db_identity="DB_IDENTITY")
 
         self._assert_composed(result, AGENTBASE_SYSTEM_PROMPT, "FILE_IDENTITY")
         assert "DB_IDENTITY" not in result, "有公司文件时不应再拼 DB 身份"

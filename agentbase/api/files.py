@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from agentbase.api.deps import require_company
+from agentbase.api.deps import require_workspace
 
 router = APIRouter(tags=["files"])
 
@@ -25,26 +25,26 @@ _PATH_TRAVERSAL = re.compile(r"\.\.|^[/\\]|[<>:\"|?*]")
 async def upload_to_work_dir(
     subdir: str = Form(),
     files: list[UploadFile] = File(),  # noqa: B008
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """上传文件到 workspace 数据目录的指定子目录。
 
     保留浏览器传来的相对路径结构；做路径穿越、空文件、大小上限校验。
     """
-    from agentbase import company as _co
-    from agentbase.company import _WORK_DIR_CATEGORIES, _setup_work_directory
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase import workspace as _co
+    from agentbase.workspace import _WORK_DIR_CATEGORIES, _setup_work_directory
+    from agentbase.workspace.workdir import _get_desktop_path
 
     valid_subdirs = frozenset(name for name, _ in _WORK_DIR_CATEGORIES)
     if subdir not in valid_subdirs:
         raise HTTPException(status_code=400, detail=f"无效的子目录: {subdir}")
 
-    co = _co.get(x_company_id)
+    co = _co.get(x_workspace_id)
     if not co:
         raise HTTPException(status_code=404, detail="workspace 不存在")
 
     work_dir = None
-    tc = _co.get_trade_company(x_company_id)
+    tc = _co.get_trade_workspace(x_workspace_id)
     if tc and tc.get("extra1"):
         import json as _json
 
@@ -65,8 +65,8 @@ async def upload_to_work_dir(
         try:
             import json as _json
 
-            _co.update_trade_company(
-                x_company_id, extra1=_json.dumps({"work_dir": str(work_dir)})
+            _co.update_trade_workspace(
+                x_workspace_id, extra1=_json.dumps({"work_dir": str(work_dir)})
             )
         except Exception:
             pass

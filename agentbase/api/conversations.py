@@ -15,7 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from agentbase import chat_memory
-from agentbase.api.deps import require_company
+from agentbase.api.deps import require_workspace
 from agentbase.api.models import ConversationRate, ConversationSave, ConversationUpdate
 
 router = APIRouter(tags=["conversations"])
@@ -25,18 +25,18 @@ router = APIRouter(tags=["conversations"])
 def list_conversations(
     context: str | None = None,
     limit: int = 50,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """列出当前公司的最近对话，可按上下文过滤。"""
     if context:
-        return chat_memory.list_by_context(x_company_id, context, limit)
-    return chat_memory.list_by_company(x_company_id, limit)
+        return chat_memory.list_by_context(x_workspace_id, context, limit)
+    return chat_memory.list_by_workspace(x_workspace_id, limit)
 
 
 @router.get("/conversations/quality-stats")
 def get_quality_stats(
     days: int = 30,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """聚合当前公司近 N 天的对话评分，返回按技能/场景聚合的均分与低分排行。
 
@@ -44,17 +44,17 @@ def get_quality_stats(
     注意：此路由必须声明在 /conversations/{conversation_id} 之前，
     否则 "quality-stats" 会被当作 conversation_id 解析。
     """
-    return chat_memory.get_quality_stats(x_company_id, days=days)
+    return chat_memory.get_quality_stats(x_workspace_id, days=days)
 
 
 @router.post("/conversations")
 def save_conversation(
     payload: ConversationSave,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """保存对话回合到 SQLite + Hindsight 长期记忆。"""
     return chat_memory.save_with_context(
-        company_id=x_company_id,
+        workspace_id=x_workspace_id,
         query=payload.query, response=payload.response,
         files_read=payload.files_read,
         context=payload.context or "",
@@ -65,10 +65,10 @@ def save_conversation(
 @router.get("/conversations/{conversation_id}")
 def get_conversation(
     conversation_id: int,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """获取单条对话记录。"""
-    conv = chat_memory.get(x_company_id, conversation_id)
+    conv = chat_memory.get(x_workspace_id, conversation_id)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conv
@@ -78,10 +78,10 @@ def get_conversation(
 def update_conversation_response(
     conversation_id: int,
     payload: ConversationUpdate,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """更新对话的回复字段。"""
-    result = chat_memory.update_response(x_company_id, conversation_id, payload.response)
+    result = chat_memory.update_response(x_workspace_id, conversation_id, payload.response)
     if not result:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return result
@@ -90,10 +90,10 @@ def update_conversation_response(
 @router.delete("/conversations/{conversation_id}")
 def delete_conversation(
     conversation_id: int,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """删除对话记录。"""
-    if not chat_memory.delete(x_company_id, conversation_id):
+    if not chat_memory.delete(x_workspace_id, conversation_id):
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"ok": True}
 
@@ -102,11 +102,11 @@ def delete_conversation(
 def rate_conversation(
     conversation_id: int,
     payload: ConversationRate,
-    x_company_id: int = Depends(require_company),
+    x_workspace_id: int = Depends(require_workspace),
 ):
     """为对话记录评分（1-5）+ 可选反馈。"""
     result = chat_memory.add_rating(
-        x_company_id, conversation_id, payload.rating, payload.feedback or "",
+        x_workspace_id, conversation_id, payload.rating, payload.feedback or "",
     )
     if not result:
         raise HTTPException(status_code=404, detail="Conversation not found")

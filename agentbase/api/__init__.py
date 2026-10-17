@@ -11,59 +11,59 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from agentbase.api.chat import router as chat_router
-from agentbase.api.companies import router as companies_router
 from agentbase.api.conversations import router as conversations_router
 from agentbase.api.cron import router as cron_router
-from agentbase.api.deps import opt_company, require_company, require_session
+from agentbase.api.deps import opt_workspace, require_session, require_workspace
 from agentbase.api.files import router as files_router
 from agentbase.api.memory import router as memory_router
 from agentbase.api.onboarding import router as onboarding_router
+from agentbase.api.workspaces import router as companies_router
 
 
-def _enforce_company_binding(
+def _enforce_workspace_binding(
     request: Request,
-    x_company_id: str | None = Header(None, alias="X-Company-ID"),
+    x_workspace_id: str | None = Header(None, alias="X-Workspace-ID"),
 ) -> None:
     """session 级活跃公司绑定：防止修改 header 跨公司越权。
 
     作为全局 trade router 的依赖，在每个业务请求前自动执行。
-    首次携带 company_id 的请求自动绑定 session 到该公司；
-    后续请求必须携带匹配的 company_id。
+    首次携带 workspace_id 的请求自动绑定 session 到该公司；
+    后续请求必须携带匹配的 workspace_id。
     """
-    from agentbase.api.deps import _ACTIVE_COMPANY, _company_bind_lock
+    from agentbase.api.deps import _ACTIVE_WORKSPACE, _workspace_bind_lock
 
     token = request.headers.get("X-Hermes-Session-Token", "")
     if not token:
         return  # 无 session token 不检查
 
-    if not x_company_id or not x_company_id.strip():
-        return  # 无 company_id 不检查（由 require_company 端点自行处理）
+    if not x_workspace_id or not x_workspace_id.strip():
+        return  # 无 workspace_id 不检查（由 require_workspace 端点自行处理）
 
     try:
-        cid = int(x_company_id.strip())
+        cid = int(x_workspace_id.strip())
     except ValueError:
-        return  # 无效 ID 由 require_company 处理
+        return  # 无效 ID 由 require_workspace 处理
 
-    # switch 端点允许携带不同于当前绑定的 company_id（因为它的语义就是切换）
+    # switch 端点允许携带不同于当前绑定的 workspace_id（因为它的语义就是切换）
     if "/switch" in request.url.path:
         return
 
-    with _company_bind_lock:
-        bound = _ACTIVE_COMPANY.get(token)
+    with _workspace_bind_lock:
+        bound = _ACTIVE_WORKSPACE.get(token)
         if bound is not None and cid != bound:
             raise HTTPException(
                 status_code=403,
-                detail=f"X-Company-ID {cid} does not match active session. "
-                       f"Use POST /api/agentbase/companies/{cid}/switch to switch.",
+                detail=f"X-Workspace-ID {cid} does not match active session. "
+                       f"Use POST /api/agentbase/workspaces/{cid}/switch to switch.",
             )
         if bound is None:
-            _ACTIVE_COMPANY[token] = cid
+            _ACTIVE_WORKSPACE[token] = cid
 
 
 # 所有 /api/agentbase/* 路由默认要求 session token + 公司绑定
 router = APIRouter(
     tags=["agentbase"],
-    dependencies=[Depends(require_session), Depends(_enforce_company_binding)],
+    dependencies=[Depends(require_session), Depends(_enforce_workspace_binding)],
 )
 
 # 框架域子路由（业务 API 由 skill 包自带，不在此挂载）
@@ -78,7 +78,7 @@ router.include_router(files_router)
 # 便捷导出
 __all__ = [
     "router",
-    "require_company",
-    "opt_company",
+    "require_workspace",
+    "opt_workspace",
     "require_session",
 ]

@@ -118,7 +118,7 @@ class TestImageBlockAlwaysPresent:
 
 
 @pytest.fixture
-def company_env(monkeypatch, tmp_path):
+def workspace_env(monkeypatch, tmp_path):
     """临时库 + 一家公司：只为跑真实 build_query 装配器。"""
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
@@ -128,7 +128,7 @@ def company_env(monkeypatch, tmp_path):
 
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -156,22 +156,22 @@ class TestImageRuleReachesModel:
             result = helpers.build_query(env["id"], query)
         return result
 
-    def test_plain_chat_carrying_an_image_path_gets_the_rule(self, company_env):
+    def test_plain_chat_carrying_an_image_path_gets_the_rule(self, workspace_env):
         """复现 #83 的真实场景：聊天框里直接给图片路径（非拖拽导入）。"""
-        prompt, _ = self._build(company_env, "识别图片 '/Users/rogerlau/Desktop/截屏2026-09-29 08.39.50.png'")
+        prompt, _ = self._build(workspace_env, "识别图片 '/Users/rogerlau/Desktop/截屏2026-09-29 08.39.50.png'")
 
         assert IMAGE_BLOCK_HEADER in prompt
         assert "vision_analyze" in prompt
 
-    def test_later_turns_still_get_the_rule(self, company_env):
+    def test_later_turns_still_get_the_rule(self, workspace_env):
         """非首轮（精简档）也必须带 —— 用户可能是第二句才贴图。"""
-        prompt, _ = self._build(company_env, "再看这张图", calls=2)
+        prompt, _ = self._build(workspace_env, "再看这张图", calls=2)
 
         assert IMAGE_BLOCK_HEADER in prompt
 
-    def test_rule_survives_identity_composition(self, company_env):
+    def test_rule_survives_identity_composition(self, workspace_env):
         """基础规则与公司身份是组合关系，铁律不能被身份文本顶掉。"""
-        prompt, _ = self._build(company_env, "你好")
+        prompt, _ = self._build(workspace_env, "你好")
 
         assert "# Disclaimer" in prompt, "前置条件：基础块确实在"
         assert "当前工作公司" in prompt, "前置条件：身份文本确实在"

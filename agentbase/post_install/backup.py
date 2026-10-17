@@ -3,7 +3,7 @@ Trade AI Assistant — 系统数据备份与还原。
 
 备份范围：
   - ~/.agentbase/data/agentbase.db（SQLite 数据库）
-  - ~/.agentbase/companies/{slug}/（公司数据目录）
+  - ~/.agentbase/workspaces/{slug}/（公司数据目录）
   - ~/.agentbase/prompts/（系统提示词文件）
   - ~/.hermes/memories/（Hermes 记忆文件）
   - ~/.hermes/skills/b2b-*/（B2B skill 定义）
@@ -30,7 +30,7 @@ def backup_trade(output_dir: str | None = None) -> str:
 
     备份内容：
       - SQLite 数据库（仅有该文件即是最小可恢复备份）
-      - 公司数据目录（companies/）
+      - 公司数据目录（workspaces/）
       - 系统提示词（prompts/）
       - Hermes 记忆文件（.md / .json / .txt）
       - B2B skill 定义（SKILL.md）
@@ -48,7 +48,7 @@ def backup_trade(output_dir: str | None = None) -> str:
         # 用 workdir._get_desktop_path()（Windows 走 SHGetFolderPathW 拿真实桌面）——
         # 自己猜 ~/Desktop 在 OneDrive 重定向桌面的机器上会把备份落到
         # `C:\Users\x\`（一个用户根本不会去看的地方），而界面提示的是"已保存到桌面"。
-        from agentbase.company.workdir import _get_desktop_path
+        from agentbase.workspace.workdir import _get_desktop_path
 
         desktop = _get_desktop_path()
         output_dir = str(desktop if desktop.is_dir() else Path.home())
@@ -69,11 +69,11 @@ def backup_trade(output_dir: str | None = None) -> str:
         sources.append((db_path, ".agentbase/data/agentbase.db"))
 
     # 2) 公司数据目录：递归收集所有文件
-    companies_dir = agentbase_home / "companies"
+    companies_dir = agentbase_home / "workspaces"
     if companies_dir.is_dir():
-        for company_dir in companies_dir.iterdir():
-            if company_dir.is_dir():
-                for f in company_dir.rglob("*"):
+        for workspace_dir in companies_dir.iterdir():
+            if workspace_dir.is_dir():
+                for f in workspace_dir.rglob("*"):
                     if f.is_file():
                         rel = str(f.relative_to(agentbase_home))
                         sources.append((f, f".agentbase/{rel}"))
@@ -129,7 +129,7 @@ def restore_trade(backup_file: str = "") -> str:
       1. 解压 tar.gz 到临时目录
       2. SQLite 完整性检查（PRAGMA integrity_check）
       3. 备份当前数据（trade-before-restore-{timestamp}.db）
-      4. 替换 data/ + companies/
+      4. 替换 data/ + workspaces/
       5. 重启 Trade 服务
 
     Args:
@@ -165,7 +165,7 @@ def restore_trade(backup_file: str = "") -> str:
     #
     # 备份写入的 arcname 带 `.agentbase/` 前缀（见本文件 backup_trade 的
     # ".agentbase/data/agentbase.db"、".agentbase/{rel}"）。解压后内容在
-    # `tmp_dir/.agentbase/...`，而历史上还原代码找的是 `tmp_dir/companies`、
+    # `tmp_dir/.agentbase/...`，而历史上还原代码找的是 `tmp_dir/workspaces`、
     # `tmp_dir/data/agentbase.db` —— 永远不存在，于是 if exists() 静默跳过、
     # 不报错，最后照样说"已还原"。公司档案/提示词/记忆全丢，只有 DB 被
     # rglob 兜底碰巧救回，让整条路径看起来是对的。
@@ -221,9 +221,9 @@ def restore_trade(backup_file: str = "") -> str:
     restored: list[str] = ["database"]
     missing: list[str] = []
 
-    # companies/ 与 prompts/ 在 ~/.agentbase 下；memories/ 与 skills/ 在 ~/.hermes 下
+    # workspaces/ 与 prompts/ 在 ~/.agentbase 下；memories/ 与 skills/ 在 ~/.hermes 下
     for rel, dst_root, label in (
-        ("companies", agentbase_home, "companies"),
+        ("workspaces", agentbase_home, "workspaces"),
         ("prompts", agentbase_home, "prompts"),
         ("memories", _get_hermes_home(), "memories"),
         ("skills", _get_hermes_home(), "skills"),
@@ -256,11 +256,11 @@ def _resolve_backup_root(tmp_dir: Path) -> Path:
     新版备份把内容放在 `.agentbase/` 前缀下（`tmp_dir/.agentbase/...`）；也容忍
     没有前缀的备份（早期版本或手工打包），此时根目录就是 tmp_dir 本身。
 
-    判据：目录下是否存在 `data/` 或 `companies/`。
+    判据：目录下是否存在 `data/` 或 `workspaces/`。
     """
     nested = tmp_dir / ".agentbase"
     if nested.is_dir() and any(
-        (nested / sub).exists() for sub in ("data", "companies", "prompts")
+        (nested / sub).exists() for sub in ("data", "workspaces", "prompts")
     ):
         return nested
     return tmp_dir

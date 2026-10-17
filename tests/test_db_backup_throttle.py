@@ -23,7 +23,7 @@ def _fresh_db(tmp_path: Path) -> Path:
     """建一个已是最新 schema 的库（spare 列/context 列齐全）。"""
     db = tmp_path / "agentbase.db"
     conn = sqlite3.connect(db)
-    for table in ("companies", "agentbase_companies", "libraries", "customers",
+    for table in ("workspaces", "agentbase_workspaces", "libraries", "customers",
                   "customer_libraries", "conversations", "orders", "usage_ledger"):
         conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, extra1 TEXT, extra2 TEXT, extra3 TEXT)")
     conn.execute("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT)")
@@ -62,7 +62,7 @@ class TestNeedsSchemaWork:
 
         db = tmp_path / "old.db"
         conn = sqlite3.connect(db)
-        for table in ("companies", "agentbase_companies", "libraries", "customers",
+        for table in ("workspaces", "agentbase_workspaces", "libraries", "customers",
                       "customer_libraries", "conversations", "orders"):
             # 老 schema：没有 spare 列
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY)")

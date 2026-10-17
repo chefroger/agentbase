@@ -616,7 +616,7 @@ def augment_query(
     query: str,
     *,
     skill_name: str | None = None,
-    company_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> str:
     """将 skill injection prompt 注入用户 query。
 
@@ -627,7 +627,7 @@ def augment_query(
     参数：
         query:      用户原始输入
         skill_name: 可选的显式 skill 名称（传入时覆盖自动匹配）
-        company_id: 可选的公司 ID（用于 b2b-data-directory 等需要注入路径的 skill）
+        workspace_id: 可选的公司 ID（用于 b2b-data-directory 等需要注入路径的 skill）
 
     返回：
         注入后的完整 query（含 [SKILL AUGMENTATION] 标记块）。
@@ -674,15 +674,15 @@ def augment_query(
 
     # 路径相关 skill：注入公司数据目录路径
     data_dir_hint = ""
-    if name == "b2b-data-directory" and company_id:
-        from agentbase import company as _co
-        tc = _co.get_trade_company(company_id)
+    if name == "b2b-data-directory" and workspace_id:
+        from agentbase import workspace as _co
+        tc = _co.get_trade_workspace(workspace_id)
         if tc and tc.get("data_dir"):
-            # slug 在 companies 表中，不在 agentbase_companies 表中
-            slug = _co.slug_from_id(company_id) or "unknown"
+            # slug 在 workspaces 表中，不在 agentbase_workspaces 表中
+            slug = _co.slug_from_id(workspace_id) or "unknown"
             data_dir_hint = (
                 f"\n公司数据目录路径：{tc['data_dir']}\n"
-                f"完整路径示例：~/.agentbase/companies/{slug}/"
+                f"完整路径示例：~/.agentbase/workspaces/{slug}/"
             )
 
     # 组装注入块（含 QA 对精准匹配）

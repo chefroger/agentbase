@@ -19,10 +19,10 @@ a = Analysis(
     hiddenimports=[
         'uvicorn.loops.auto', 'uvicorn.protocols.http.auto',
         'agentbase', 'agentbase.api', 'agentbase.api.chat', 'agentbase.api.cron',
-        'agentbase.api.companies', 'agentbase.api.customers', 'agentbase.api.libraries',
+        'agentbase.api.workspaces', 'agentbase.api.customers', 'agentbase.api.libraries',
         'agentbase.api.orders', 'agentbase.api.conversations', 'agentbase.api.memory',
         'agentbase.api.onboarding', 'agentbase.api.license', 'agentbase.api.deps',
-        'agentbase.database', 'agentbase.company', 'agentbase.company.crud', 'agentbase.company.workdir',
+        'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud', 'agentbase.workspace.workdir',
         'agentbase.helpers', 'agentbase.prompts', 'agentbase.prompt',
         'agentbase.skill_router', 'agentbase.skill_registry',
         'agentbase.chat_memory', 'agentbase.memory', 'agentbase.license',

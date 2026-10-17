@@ -295,7 +295,7 @@ def ensure_desktop_shortcut(open_vbs: Path) -> str:
     桌面路径用 workdir._get_desktop_path()（Windows 走 SHGetFolderPathW），
     OneDrive 重定向桌面的机器上也不会放错地方。
     """
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase.workspace.workdir import _get_desktop_path
 
     desktop = _get_desktop_path()
     if not desktop.is_dir():

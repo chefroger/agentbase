@@ -39,7 +39,7 @@ class _AgentRaising:
 
 
 @pytest.fixture
-def company(monkeypatch, tmp_path):
+def workspace(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
 
@@ -48,7 +48,7 @@ def company(monkeypatch, tmp_path):
 
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -61,7 +61,7 @@ def company(monkeypatch, tmp_path):
     return co.create(name="Sync Co", slug="sync-co")
 
 
-async def _call_sync(company: dict, exc: BaseException):
+async def _call_sync(workspace: dict, exc: BaseException):
     """驱动真实的 app（同步端点）。"""
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
@@ -71,32 +71,32 @@ async def _call_sync(company: dict, exc: BaseException):
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
          patch("agentbase.license.check_license", return_value=(True, "")):
         return await chat.app(
-            ChatRequest(query="你好"), company["id"]
+            ChatRequest(query="你好"), workspace["id"]
         )
 
 
 class TestSyncChatSurvivesBaseException:
     """SystemExit 之类的 BaseException 必须被兜住并转成可见回复。"""
 
-    async def test_does_not_propagate(self, company):
+    async def test_does_not_propagate(self, workspace):
         """异常不得穿透出端点 —— 否则可能掀掉整个服务进程。"""
-        result = await _call_sync(company, SystemExit(1))
+        result = await _call_sync(workspace, SystemExit(1))
 
         assert result is not None, "SystemExit 穿透了同步端点（服务进程可能被带崩）"
 
-    async def test_response_mentions_exception_type(self, company):
+    async def test_response_mentions_exception_type(self, workspace):
         """回复要写明异常类型，便于定位（学 stream 侧的措辞）。"""
-        result = await _call_sync(company, SystemExit(1))
+        result = await _call_sync(workspace, SystemExit(1))
         text = result["response"] if isinstance(result, dict) else str(result)
 
         assert "SystemExit" in text, f"回复未标明异常类型：{text!r}"
 
-    async def test_not_retried(self, company):
+    async def test_not_retried(self, workspace):
         """BaseException 不是瞬时故障，不该重试（重试只会拖时间）。"""
         import time
 
         start = time.time()
-        await _call_sync(company, SystemExit(1))
+        await _call_sync(workspace, SystemExit(1))
         elapsed = time.time() - start
 
         assert elapsed < 1.5, f"疑似进入重试循环（耗时 {elapsed:.1f}s）"

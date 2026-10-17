@@ -20,7 +20,7 @@ def env(monkeypatch, tmp_path):
     from agentbase.database import init_db
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -30,7 +30,7 @@ def env(monkeypatch, tmp_path):
         return wd, True
 
     monkeypatch.setattr(co, "_setup_work_directory", _setup)
-    company = co.create(name="Gate Co", slug="gate-co")
+    workspace = co.create(name="Gate Co", slug="gate-co")
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -39,7 +39,7 @@ def env(monkeypatch, tmp_path):
     (data_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
     (data_dir / ".DS_Store").write_bytes(b"\x00\x01")
 
-    return {"cid": company["id"], "dir": data_dir}
+    return {"cid": workspace["id"], "dir": data_dir}
 
 
 @pytest.fixture

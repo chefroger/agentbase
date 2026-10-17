@@ -423,18 +423,6 @@ def check_post_install() -> list[CheckResult]:
     except Exception as e:
         out.append(CheckResult("Hindsight（长期记忆）", STATUS_WARN, f"检查失败：{e}"))
 
-    # sqlite-vec：语义检索（优化路线 P0-2）。缺失时自动降级关键词检索。
-    try:
-        from agentbase.vec_search import vec_available
-        ok = bool(vec_available())
-        out.append(CheckResult(
-            "sqlite-vec（语义检索）",
-            STATUS_OK if ok else STATUS_WARN,
-            "可用：客户/文档支持语义搜索" if ok else "未安装：已降级为关键词检索（pip install sqlite-vec 可启用）",
-        ))
-    except Exception as e:
-        out.append(CheckResult("sqlite-vec（语义检索）", STATUS_WARN, f"检查失败：{e}"))
-
     # sentence-transformers：高质量 embedding（可选）。缺失时用零依赖 TF-IDF。
     try:
         import sentence_transformers  # noqa: F401

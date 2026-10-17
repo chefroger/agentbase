@@ -10,26 +10,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 class TestRequireCompanyInjection:
-    """验证 Depends(require_company) 的依赖注入不会在 chat 端点里崩。"""
+    """验证 Depends(require_workspace) 的依赖注入不会在 chat 端点里崩。"""
 
     def test_cid_directly_injected_not_requiring_strip(self, monkeypatch, tmp_path):
-        """require_company 的返回值是 int，chat 端点应直接当 int 用。
+        """require_workspace 的返回值是 int，chat 端点应直接当 int 用。
 
-        如果代码里写了 cid = require_company(x_company_id)，int 没有 .strip()，
+        如果代码里写了 cid = require_workspace(x_workspace_id)，int 没有 .strip()，
         直接 AttributeError。
         """
-        # Simulate what FastAPI Depends does: require_company returns an int
-        # Mock the company lookup
-        import agentbase.company as co
-        from agentbase.api.deps import require_company
-        monkeypatch.setattr(co, "get_trade_company", lambda cid: {"company_id": cid, "is_active": 1})
+        # Simulate what FastAPI Depends does: require_workspace returns an int
+        # Mock the workspace lookup
+        import agentbase.workspace as co
+        from agentbase.api.deps import require_workspace
+        monkeypatch.setattr(co, "get_trade_workspace", lambda cid: {"workspace_id": cid, "is_active": 1})
 
         # A valid header string should parse to int 1
-        result = require_company("1")
+        result = require_workspace("1")
         assert result == 1
         assert isinstance(result, int)
 
-        # If someone wrote cid = require_company(result) with result=1 (int),
+        # If someone wrote cid = require_workspace(result) with result=1 (int),
         # it would call "1".strip() → AttributeError on int.
         # This is what the bug was. Let's verify int.strip() fails:
         with pytest.raises(AttributeError):
@@ -158,7 +158,7 @@ class TestChatEndpointHTTP:
             def chat(self, q): return "mocked-response"
 
         # 桌面工作目录重定向到 tmp_path
-        import agentbase.company as co
+        import agentbase.workspace as co
         def _mock_setup(cname, slug, suggested_name=""):
             wd = tmp_path / (suggested_name or cname)
             wd.mkdir(parents=True, exist_ok=True)
@@ -171,8 +171,8 @@ class TestChatEndpointHTTP:
             co.create(name="Smoke Test Co", slug="smoke-test")
         except ValueError:
             pass
-        monkeypatch.setattr(co, "get_trade_company",
-                            lambda cid: {"company_id": cid, "data_dir": str(tmp_path), "agent_identity_md": "", "is_active": 1})
+        monkeypatch.setattr(co, "get_trade_workspace",
+                            lambda cid: {"workspace_id": cid, "data_dir": str(tmp_path), "agent_identity_md": "", "is_active": 1})
 
         import agentbase.helpers
         monkeypatch.setattr(agentbase.helpers, "check_provider", lambda: None)
@@ -202,7 +202,7 @@ class TestChatEndpointHTTP:
             r = await client.post(
                 "/api/agentbase/chat",
                 json={"query": "hi"},
-                headers={"X-Hermes-Session-Token": "test-token", "X-Company-ID": "1"},
+                headers={"X-Hermes-Session-Token": "test-token", "X-Workspace-ID": "1"},
             )
             assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
             assert r.json()["response"] == "mocked-response"

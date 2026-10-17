@@ -137,21 +137,21 @@ def _machine_id() -> str:
 _MAX_ACTIVATE_ATTEMPTS = 10  # 每 60 秒最多 10 次激活尝试
 
 
-def _get_activate_attempts(company_id: int | None = None) -> list[float]:
+def _get_activate_attempts(workspace_id: int | None = None) -> list[float]:
     """从 license_data 读取激活尝试时间戳列表。"""
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
     return data.get("_activate_attempts", [])
 
 
-def _save_activate_attempts(attempts: list[float], company_id: int | None = None) -> None:
+def _save_activate_attempts(attempts: list[float], workspace_id: int | None = None) -> None:
     """将激活尝试时间戳持久化到 license_data。"""
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
     data["_activate_attempts"] = attempts
-    _save_license_data(data, company_id)
+    _save_license_data(data, workspace_id)
 
 
 # ── 数据读写 ──────────────────────────────────────────────────────────────────
-# license 数据全局存储（一台电脑一份 license，非 per-company）
+# license 数据全局存储（一台电脑一份 license，非 per-workspace）
 
 _LICENSE_FILE: Path | None = None
 
@@ -174,10 +174,10 @@ def _license_file_path() -> Path:
     return _LICENSE_FILE
 
 
-def _get_license_data(company_id: int | None = None) -> dict:
+def _get_license_data(workspace_id: int | None = None) -> dict:
     """读取全局 license 数据（一台电脑一份，所有公司共享）。
 
-    company_id 参数保留向后兼容，实际被忽略。
+    workspace_id 参数保留向后兼容，实际被忽略。
     """
     path = _license_file_path()
     try:
@@ -188,10 +188,10 @@ def _get_license_data(company_id: int | None = None) -> dict:
     return {}
 
 
-def _save_license_data(data: dict, company_id: int | None = None) -> None:
+def _save_license_data(data: dict, workspace_id: int | None = None) -> None:
     """写入全局 license 数据。
 
-    company_id 参数保留向后兼容，实际被忽略。
+    workspace_id 参数保留向后兼容，实际被忽略。
     """
     path = _license_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,17 +203,17 @@ def _save_license_data(data: dict, company_id: int | None = None) -> None:
 # ── 许可证检查 ────────────────────────────────────────────────────────────────
 
 
-def check_license(company_id: int | None = None) -> tuple[bool, str]:
+def check_license(workspace_id: int | None = None) -> tuple[bool, str]:
     """检查许可证状态。
 
     Args:
-        company_id: 要检查的公司 ID。None 时检查第一个激活的公司。
+        workspace_id: 要检查的公司 ID。None 时检查第一个激活的公司。
 
     Returns:
         (is_valid, message): is_valid=True 表示可以继续使用。
         到期时 is_valid=False，message 包含提示信息。
     """
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
 
     now = datetime.now(UTC)
 
@@ -221,7 +221,7 @@ def check_license(company_id: int | None = None) -> tuple[bool, str]:
     if "first_launch_at" not in data:
         data["first_launch_at"] = now.isoformat()
         try:
-            _save_license_data(data, company_id)
+            _save_license_data(data, workspace_id)
         except Exception:
             # 写入失败（权限不足/磁盘满等）→ 不应静默通过，否则每次启动都重置试用
             return False, "License 状态持久化失败，请检查 ~/.agentbase/ 目录权限"
@@ -236,7 +236,7 @@ def check_license(company_id: int | None = None) -> tuple[bool, str]:
             # 签名无效 → 尝试从原始激活码自恢复（升级后签名格式可能不匹配）
             if data.get("code") and _recover_signature_from_code(data):
                 # 自恢复成功，重新加载数据
-                data = _get_license_data(company_id)
+                data = _get_license_data(workspace_id)
             else:
                 return False, "许可证数据异常，请使用激活码重新激活。"
         expires = datetime.fromisoformat(data["expires_at"]).replace(tzinfo=UTC)
@@ -256,9 +256,9 @@ def check_license(company_id: int | None = None) -> tuple[bool, str]:
     return False, f"试用期（{_TRIAL_DAYS}天）已到期。请联系 lauroge@gmail.com 获取激活码。"
 
 
-def days_remaining(company_id: int | None = None) -> int:
+def days_remaining(workspace_id: int | None = None) -> int:
     """返回剩余可用天数（到期日当天仍有效，返回 0 而非 -1）。"""
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
     now = datetime.now(UTC)
 
     if data.get("activated") and data.get("expires_at"):
@@ -283,13 +283,13 @@ def _make_request_code() -> str:
     return f"TRADE-REQ-{'-'.join(groups)}"
 
 
-def status(company_id: int | None = None) -> dict:
+def status(workspace_id: int | None = None) -> dict:
     """返回许可证状态，供前端展示。到期时自动包含 request_code。"""
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
     now = datetime.now(UTC)
 
     result: dict = {
-        "days_remaining": days_remaining(company_id),
+        "days_remaining": days_remaining(workspace_id),
         "activated": data.get("activated", False),
         "expires_at": data.get("expires_at"),
         "trial_used": 0,
@@ -416,29 +416,29 @@ def _recover_signature_from_code(data: dict) -> bool:
 # ── 激活码验证 ────────────────────────────────────────────────────────────────
 
 
-def _check_activate_rate_limit(company_id: int | None = None) -> bool:
+def _check_activate_rate_limit(workspace_id: int | None = None) -> bool:
     """检查激活尝试是否超过限流阈值。返回 True 表示允许继续。
 
     限流状态持久化到 license_data，进程重启不清零。
     """
     now = time.time()
-    attempts = _get_activate_attempts(company_id)
+    attempts = _get_activate_attempts(workspace_id)
     # 清理 60 秒之前的时间戳
     attempts = [t for t in attempts if now - t < 60]
     if len(attempts) >= _MAX_ACTIVATE_ATTEMPTS:
-        _save_activate_attempts(attempts, company_id)
+        _save_activate_attempts(attempts, workspace_id)
         return False
     attempts.append(now)
-    _save_activate_attempts(attempts, company_id)
+    _save_activate_attempts(attempts, workspace_id)
     return True
 
 
-def activate(code: str, company_id: int | None = None) -> tuple[bool, str]:
+def activate(code: str, workspace_id: int | None = None) -> tuple[bool, str]:
     """验证激活码并激活。
 
     Args:
         code: 激活码字符串
-        company_id: 要激活的公司 ID。None 时激活第一个激活的公司。
+        workspace_id: 要激活的公司 ID。None 时激活第一个激活的公司。
 
     Returns:
         (success, message): success=True 表示激活成功。
@@ -484,13 +484,13 @@ def activate(code: str, company_id: int | None = None) -> tuple[bool, str]:
 
     # 写入激活信息（含 Ed25519 签名用于运行时防篡改验签）
     # 签名直接从激活码中提取，无需作者私钥（用户端无私钥）
-    data = _get_license_data(company_id)
+    data = _get_license_data(workspace_id)
     data["activated"] = True
     data["code"] = code
     data["expires_at"] = expires_at
     data["activated_at"] = now.isoformat()
     data["signature"] = base64.urlsafe_b64encode(decoded["signature"]).decode()
-    _save_license_data(data, company_id)
+    _save_license_data(data, workspace_id)
 
     return True, f"激活成功，有效期至 {expires_at[:10]}"
 

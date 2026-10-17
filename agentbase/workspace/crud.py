@@ -2,8 +2,8 @@
 Trade AI Assistant — 公司数据层 CRUD。
 
 管理两张表：
-  - companies: 公司基本信息（名称、slug、联系方式、激活状态）
-  - agentbase_companies: Trade 业务扩展信息（数据目录、Agent 身份、会话状态）
+  - workspaces: 公司基本信息（名称、slug、联系方式、激活状态）
+  - agentbase_workspaces: Trade 业务扩展信息（数据目录、Agent 身份、会话状态）
 """
 
 from __future__ import annotations
@@ -47,8 +47,8 @@ def _db_get_one(sql: str, args: tuple = ()) -> tuple | None:
         conn.close()
 
 
-def _row_to_company(row) -> dict:
-    """将 companies 表的数据库行转换为业务字典。
+def _row_to_workspace(row) -> dict:
+    """将 workspaces 表的数据库行转换为业务字典。
 
     所有字段一一映射，is_active 转为 Python bool 类型。
     """
@@ -68,12 +68,12 @@ def _row_to_company(row) -> dict:
 
 
 def _row_to_tc(row) -> dict:
-    """将 agentbase_companies 表的数据库行转换为业务字典。
+    """将 agentbase_workspaces 表的数据库行转换为业务字典。
 
     is_active 转为 Python bool，其余字段原样返回。
     """
     return {
-        "company_id": row["company_id"],
+        "workspace_id": row["workspace_id"],
         "data_dir": row["data_dir"],
         "agent_identity_md": row["agent_identity_md"],
         "is_active": bool(row["is_active"]),
@@ -81,7 +81,7 @@ def _row_to_tc(row) -> dict:
     }
 
 
-# ── companies 表 CRUD ─────────────────────────────────────────────────────────
+# ── workspaces 表 CRUD ─────────────────────────────────────────────────────────
 
 def list_all(include_inactive: bool = False) -> list[dict]:
     """返回未软删除的公司列表（脱敏版），按名称排序。
@@ -96,12 +96,12 @@ def list_all(include_inactive: bool = False) -> list[dict]:
     try:
         if include_inactive:
             # 包含所有公司（管理员视图）
-            sql = "SELECT id, name, slug, is_active FROM companies ORDER BY name"
+            sql = "SELECT id, name, slug, is_active FROM workspaces ORDER BY name"
             rows = conn.execute(sql).fetchall()
         else:
             # 默认仅返回活跃公司（用户视图），软删除的公司不出现
             sql = (
-                "SELECT id, name, slug, is_active FROM companies "
+                "SELECT id, name, slug, is_active FROM workspaces "
                 "WHERE is_active = 1 ORDER BY name"
             )
             rows = conn.execute(sql).fetchall()
@@ -118,15 +118,15 @@ def list_all(include_inactive: bool = False) -> list[dict]:
         conn.close()
 
 
-def get(company_id: int) -> dict | None:
+def get(workspace_id: int) -> dict | None:
     """返回公司完整字典（含所有字段），未找到时返回 None。"""
-    row = _db_get_one("SELECT * FROM companies WHERE id = ?", (company_id,))
-    return _row_to_company(row) if row else None
+    row = _db_get_one("SELECT * FROM workspaces WHERE id = ?", (workspace_id,))
+    return _row_to_workspace(row) if row else None
 
 
-def slug_from_id(company_id: int) -> str | None:
+def slug_from_id(workspace_id: int) -> str | None:
     """根据公司 ID 返回 slug（用于 prompt 文件路径解析 / 数据目录查找）。"""
-    row = _db_get_one("SELECT slug FROM companies WHERE id = ?", (company_id,))
+    row = _db_get_one("SELECT slug FROM workspaces WHERE id = ?", (workspace_id,))
     return row[0] if row else None
 
 
@@ -140,10 +140,10 @@ def get_by_slug(slug: str) -> dict | None:
         row = conn.execute(
             "SELECT id, name, slug, logo_url, website, contact_name, "
             "contact_email, address, is_active, created_at, updated_at "
-            "FROM companies WHERE slug = ?",
+            "FROM workspaces WHERE slug = ?",
             (slug,),
         ).fetchone()
-        return _row_to_company(row) if row else None
+        return _row_to_workspace(row) if row else None
     finally:
         conn.close()
 
@@ -159,7 +159,7 @@ def create(
     *,
     work_dir_name: str = "",
 ) -> dict:
-    """创建新公司，同时创建 agentbase_companies 记录 + 桌面工作目录 + 文档库。
+    """创建新公司，同时创建 agentbase_workspaces 记录 + 桌面工作目录 + 文档库。
 
     事务保护：任何步骤失败都会回滚数据库并清理已创建的目录。
 
@@ -171,7 +171,7 @@ def create(
     Returns:
         完整公司字典 + work_dir / work_dir_is_new / libraries 扩展字段
     """
-    from agentbase.company.workdir import (
+    from agentbase.workspace.workdir import (
         _ensure_data_dir,
         _setup_work_directory,
         _slugify,
@@ -179,7 +179,7 @@ def create(
     )
 
     if not name or not name.strip():
-        raise ValueError("Company name cannot be empty")
+        raise ValueError("Workspace name cannot be empty")
 
     if not slug:
         slug = _slugify(name)  # 从公司名自动生成 slug
@@ -187,7 +187,7 @@ def create(
 
     data_dir = None
     work_dir = None
-    company_id = None  # 哨兵：失败补偿时据此判断「本次是否真的插入过公司」
+    workspace_id = None  # 哨兵：失败补偿时据此判断「本次是否真的插入过公司」
     is_new = True  # 标记工作目录是否为新创建（回滚时据此决定是否清理）
     conn = get_connection()
 
@@ -197,7 +197,7 @@ def create(
         counter = 1
         while True:
             existing = conn.execute(
-                "SELECT id FROM companies WHERE slug = ?", (slug,)
+                "SELECT id FROM workspaces WHERE slug = ?", (slug,)
             ).fetchone()
             if not existing:
                 break
@@ -212,25 +212,25 @@ def create(
             name, slug, suggested_name=work_dir_name
         )
 
-        # 3) 写入 companies 表
+        # 3) 写入 workspaces 表
         cursor = conn.execute(
-            "INSERT INTO companies (name, slug, logo_url, website, "
+            "INSERT INTO workspaces (name, slug, logo_url, website, "
             "contact_name, contact_email, address) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (name, slug, logo_url, website, contact_name, contact_email, address),
         )
-        company_id = cursor.lastrowid
+        workspace_id = cursor.lastrowid
 
-        # 4) 写入 agentbase_companies 表（工作目录路径存入 extra1 JSON）
+        # 4) 写入 agentbase_workspaces 表（工作目录路径存入 extra1 JSON）
         _extra1 = _json.dumps({"work_dir": str(work_dir)})
         conn.execute(
-            "INSERT INTO agentbase_companies (company_id, data_dir, extra1) "
+            "INSERT INTO agentbase_workspaces (workspace_id, data_dir, extra1) "
             "VALUES (?, ?, ?)",
-            (company_id, data_dir, _extra1),
+            (workspace_id, data_dir, _extra1),
         )
         conn.commit()
 
-        result = get(company_id)
+        result = get(workspace_id)
         if result:
             result["work_dir"] = str(work_dir)
             result["work_dir_is_new"] = is_new
@@ -241,12 +241,12 @@ def create(
         # 补偿删除：公司在「注册文档库」之前就已经 commit（不能把 commit 后移 ——
         # library.create 走独立连接，而 PRAGMA foreign_keys=ON，未提交的公司行对它
         # 不可见，会触发外键失败），所以 rollback 覆盖不到这一段，必须显式删掉，
-        # 否则用户重试会立刻撞 `UNIQUE constraint failed: companies.slug`。
-        if company_id is not None:
+        # 否则用户重试会立刻撞 `UNIQUE constraint failed: workspaces.slug`。
+        if workspace_id is not None:
             try:
-                conn.execute("DELETE FROM libraries WHERE company_id = ?", (company_id,))
-                conn.execute("DELETE FROM agentbase_companies WHERE company_id = ?", (company_id,))
-                conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+                conn.execute("DELETE FROM libraries WHERE workspace_id = ?", (workspace_id,))
+                conn.execute("DELETE FROM agentbase_workspaces WHERE workspace_id = ?", (workspace_id,))
+                conn.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
                 conn.commit()
             except Exception:
                 pass  # 补偿失败不掩盖原始异常
@@ -271,7 +271,7 @@ def create(
 
 
 def update(
-    company_id: int,
+    workspace_id: int,
     name: str | None = None,
     logo_url: str | None = None,
     website: str | None = None,
@@ -287,7 +287,7 @@ def update(
     conn = get_connection()
     try:
         if not conn.execute(
-            "SELECT 1 FROM companies WHERE id = ?", (company_id,)
+            "SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)
         ).fetchone():
             return None  # 公司不存在
 
@@ -312,18 +312,18 @@ def update(
         if fields:
             # 仅当有字段需要更新时才执行 SQL
             fields.append("updated_at = datetime('now', 'localtime')")
-            vals.append(company_id)
+            vals.append(workspace_id)
             conn.execute(
-                f"UPDATE companies SET {', '.join(fields)} WHERE id = ?", vals
+                f"UPDATE workspaces SET {', '.join(fields)} WHERE id = ?", vals
             )
             conn.commit()
 
-        return get(company_id)
+        return get(workspace_id)
     finally:
         conn.close()
 
 
-def delete(company_id: int) -> bool:
+def delete(workspace_id: int) -> bool:
     """软删除公司：设置 is_active=0 + 记录 deleted_at 时间戳。
 
     数据保留 30 天后由 purge() 执行物理清理。
@@ -332,29 +332,29 @@ def delete(company_id: int) -> bool:
     conn = get_connection()
     try:
         n = conn.execute(
-            "UPDATE companies SET is_active = 0, "
+            "UPDATE workspaces SET is_active = 0, "
             "updated_at = datetime('now','localtime') "
             "WHERE id = ? AND is_active = 1",
-            (company_id,),
+            (workspace_id,),
         ).rowcount
         conn.commit()
         if n > 0:
             # 写入审计日志（用于后续 30 天倒计时清理）
-            _write_audit_log(company_id, "soft_delete", "公司已软删除，数据保留 30 天")
+            _write_audit_log(workspace_id, "soft_delete", "公司已软删除，数据保留 30 天")
         return n > 0
     finally:
         conn.close()
 
 
-def purge(company_id: int) -> bool:
+def purge(workspace_id: int) -> bool:
     """物理删除公司及其所有关联数据 + 清理文件系统数据目录。
 
     仅管理员调用。不可逆操作。执行前先写入审计日志。
     返回 True 表示删除成功。
     """
-    tc = get_trade_company(company_id)
-    company = get(company_id)
-    slug = company["slug"] if company else None
+    tc = get_trade_workspace(workspace_id)
+    workspace = get(workspace_id)
+    slug = workspace["slug"] if workspace else None
     data_dir_str = tc["data_dir"] if tc else None
 
     # 提取桌面工作目录路径（存于 extra1 JSON）
@@ -362,8 +362,8 @@ def purge(company_id: int) -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT extra1 FROM agentbase_companies WHERE company_id = ?",
-            (company_id,),
+            "SELECT extra1 FROM agentbase_workspaces WHERE workspace_id = ?",
+            (workspace_id,),
         ).fetchone()
         if row and row["extra1"]:
             try:
@@ -374,16 +374,16 @@ def purge(company_id: int) -> bool:
         conn.close()
 
     # 写入审计日志（不可逆操作前的最终记录）
-    _write_audit_log(company_id, "purge", "物理删除公司及所有数据")
+    _write_audit_log(workspace_id, "purge", "物理删除公司及所有数据")
 
     conn = get_connection()
     try:
         n = conn.execute(
-            "DELETE FROM companies WHERE id = ?", (company_id,)
+            "DELETE FROM workspaces WHERE id = ?", (workspace_id,)
         ).rowcount
         conn.commit()
         if n > 0:
-            # 清理文件系统：agentbase_companies.data_dir（仅当目录在 AGENT_HOME 下）
+            # 清理文件系统：agentbase_workspaces.data_dir（仅当目录在 AGENT_HOME 下）
             if data_dir_str:
                 data_path = Path(data_dir_str)
                 if data_path.exists():
@@ -410,7 +410,7 @@ def purge(company_id: int) -> bool:
                 work_path = Path(work_dir_str)
                 if work_path.exists():
                     try:
-                        from agentbase.company.workdir import _get_desktop_path
+                        from agentbase.workspace.workdir import _get_desktop_path
                         desktop = _get_desktop_path().resolve()
                         work_path.resolve().relative_to(desktop)
                     except ValueError:
@@ -425,42 +425,42 @@ def purge(company_id: int) -> bool:
         conn.close()
 
 
-# ── agentbase_companies 表 CRUD ────────────────────────────────────────────────────
+# ── agentbase_workspaces 表 CRUD ────────────────────────────────────────────────────
 
-def get_trade_company(company_id: int) -> dict | None:
-    """返回公司对应的 agentbase_companies 记录，未找到时返回 None。
+def get_trade_workspace(workspace_id: int) -> dict | None:
+    """返回公司对应的 agentbase_workspaces 记录，未找到时返回 None。
 
-    agentbase_companies 表存储 Trade 业务扩展数据：data_dir、agent_identity_md 等。
+    agentbase_workspaces 表存储 Trade 业务扩展数据：data_dir、agent_identity_md 等。
     """
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT company_id, data_dir, agent_identity_md, is_active, created_at "
-            "FROM agentbase_companies WHERE company_id = ?",
-            (company_id,),
+            "SELECT workspace_id, data_dir, agent_identity_md, is_active, created_at "
+            "FROM agentbase_workspaces WHERE workspace_id = ?",
+            (workspace_id,),
         ).fetchone()
         return _row_to_tc(row) if row else None
     finally:
         conn.close()
 
 
-def update_trade_company(
-    company_id: int,
+def update_trade_workspace(
+    workspace_id: int,
     data_dir: str | None = None,
     agent_identity_md: str | None = None,
     is_active: bool | None = None,
     extra1: str | None = None,
 ) -> dict | None:
-    """更新 agentbase_companies 字段（部分更新）。
+    """更新 agentbase_workspaces 字段（部分更新）。
 
     仅更新传入的非 None 字段。extra1 字段存储 JSON（工作目录路径等元数据）。
     """
     conn = get_connection()
     try:
         if not conn.execute(
-            "SELECT 1 FROM agentbase_companies WHERE company_id = ?", (company_id,)
+            "SELECT 1 FROM agentbase_workspaces WHERE workspace_id = ?", (workspace_id,)
         ).fetchone():
-            return None  # agentbase_companies 记录不存在
+            return None  # agentbase_workspaces 记录不存在
 
         fields, vals = [], []
         if data_dir is not None:
@@ -477,33 +477,33 @@ def update_trade_company(
             vals.append(extra1)
 
         if fields:
-            vals.append(company_id)
+            vals.append(workspace_id)
             conn.execute(
-                f"UPDATE agentbase_companies SET {', '.join(fields)} "
-                "WHERE company_id = ?",
+                f"UPDATE agentbase_workspaces SET {', '.join(fields)} "
+                "WHERE workspace_id = ?",
                 vals,
             )
             conn.commit()
 
-        return get_trade_company(company_id)
+        return get_trade_workspace(workspace_id)
     finally:
         conn.close()
 
 
-def get_agent_identity(company_id: int) -> str:
+def get_agent_identity(workspace_id: int) -> str:
     """返回公司的 Agent 身份标识文本。
 
     优先级链（高到低）：
-      1. agentbase_companies.agent_identity_md 数据库字段（在线编辑 / 首次引导写入）
-      2. ~/.agentbase/{slug}/companies/{slug}/agent-identity.md 磁盘文件（用户手动编辑）
+      1. agentbase_workspaces.agent_identity_md 数据库字段（在线编辑 / 首次引导写入）
+      2. ~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md 磁盘文件（用户手动编辑）
       3. '' 空字符串 → 回退到通用 AGENTBASE_SYSTEM_PROMPT
 
-    注意：磁盘路径必须与工作目录/模板布局（_ensure_data_dir → {data_dir}/companies/{slug}/）
-    及 agentbase.prompts._company_identity_path 保持一致，否则文件回退永远命中不了。
+    注意：磁盘路径必须与工作目录/模板布局（_ensure_data_dir → {data_dir}/workspaces/{slug}/）
+    及 agentbase.prompts._workspace_identity_path 保持一致，否则文件回退永远命中不了。
 
     Agent 身份文本会被注入到系统提示词中，让 AI 知道自己在为哪家公司服务。
     """
-    tc = get_trade_company(company_id)
+    tc = get_trade_workspace(workspace_id)
     if not tc:
         return ""
 
@@ -513,9 +513,9 @@ def get_agent_identity(company_id: int) -> str:
 
     # 其次检查磁盘文件（用户可能手动编辑了文件）
     data_dir = Path(tc["data_dir"]) if tc.get("data_dir") else None
-    slug = slug_from_id(company_id)
+    slug = slug_from_id(workspace_id)
     if data_dir and slug:
-        identity_file = data_dir / "companies" / slug / "agent-identity.md"
+        identity_file = data_dir / "workspaces" / slug / "agent-identity.md"
         if identity_file.exists():
             return identity_file.read_text(encoding="utf-8")
 
@@ -534,13 +534,13 @@ def _audit_dir() -> Path:
     return d
 
 
-def _write_audit_log(company_id: int, action: str, detail: str) -> None:
+def _write_audit_log(workspace_id: int, action: str, detail: str) -> None:
     """追加一行 JSON 审计日志到当天的审计文件中。
 
     审计日志记录所有敏感操作（创建、软删除、物理删除），用于追溯。
 
     Args:
-        company_id: 操作的数据库公司 ID
+        workspace_id: 操作的数据库公司 ID
         action: 操作类型（如 "soft_delete"、"purge"）
         detail: 操作详情的自然语言描述
     """
@@ -548,7 +548,7 @@ def _write_audit_log(company_id: int, action: str, detail: str) -> None:
     entry = _json.dumps(
         {
             "ts": _dt.now().isoformat(),
-            "company_id": company_id,
+            "workspace_id": workspace_id,
             "action": action,
             "detail": detail,
         },

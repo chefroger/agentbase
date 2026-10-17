@@ -66,7 +66,7 @@ def _install_cors(app: FastAPI, port: int) -> None:
             f"http://localhost:{port}",
         ],
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["X-Hermes-Session-Token", "X-Company-ID", "Content-Type"],
+        allow_headers=["X-Hermes-Session-Token", "X-Workspace-ID", "Content-Type"],
     )
 
 
@@ -618,7 +618,7 @@ def _create_system_router() -> APIRouter:
 
     # ── Hermes 共存 / 升级端点 ──────────────────────────────────────────────
     # 为什么放在系统路由：这些是「修好软件本身」的动作，不属于任何公司的业务数据，
-    # 因此不需要 X-Company-ID，只需要 session token（与 update/restart 同级）。
+    # 因此不需要 X-Workspace-ID，只需要 session token（与 update/restart 同级）。
 
     @router.get("/system/hermes-compat")
     def api_hermes_compat():

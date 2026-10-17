@@ -3,13 +3,13 @@
 
 背景：身份文件是「文件优先」提示词链的最高优先级来源（prompts.resolve 第 1 步），
 但历史上三处路径两两不同：
-  - prompts.py 读 ~/.agentbase/companies/{slug}/agent_identity.md（下划线，基准目录少一层）
-  - onboarding.py 写 ~/.agentbase/{slug}/companies/{slug}/agent-identity.md
-  - company/crud.py 读 ~/.agentbase/{slug}/agent-identity.md
+  - prompts.py 读 ~/.agentbase/workspaces/{slug}/agent_identity.md（下划线，基准目录少一层）
+  - onboarding.py 写 ~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md
+  - workspace/crud.py 读 ~/.agentbase/{slug}/agent-identity.md
 结果读取方永远读不到写入方写的文件，整层「改文件即生效」是死的，
 身份实际只靠 DB 的 agent_identity_md 兜底。
 
-约定（以模板/工作目录为准）：~/.agentbase/{slug}/companies/{slug}/agent-identity.md
+约定（以模板/工作目录为准）：~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ class TestAgentIdentityPath:
     """身份文件路径必须与模板/工作目录布局一致。"""
 
     def test_path_matches_workdir_layout(self, agentbase_home):
-        """解析出的路径必须落在 {data_dir}/companies/{slug}/agent-identity.md。"""
-        from agentbase.prompts import _company_identity_path
+        """解析出的路径必须落在 {data_dir}/workspaces/{slug}/agent-identity.md。"""
+        from agentbase.prompts import _workspace_identity_path
 
-        assert _company_identity_path("acme") == (
-            agentbase_home / "acme" / "companies" / "acme" / "agent-identity.md"
+        assert _workspace_identity_path("acme") == (
+            agentbase_home / "acme" / "workspaces" / "acme" / "agent-identity.md"
         )
 
     def test_identity_file_readable_after_template_copy(self, agentbase_home):
@@ -45,12 +45,12 @@ class TestAgentIdentityPath:
 
         这是端到端断言：只要路径约定与 _ensure_data_dir 不一致，这里就会读不到内容。
         """
-        from agentbase.company.workdir import _ensure_data_dir
         from agentbase.prompts import get_agent_identity_by_slug
+        from agentbase.workspace.workdir import _ensure_data_dir
 
         _ensure_data_dir("acme", agentbase_home)
 
-        copied = agentbase_home / "acme" / "companies" / "acme" / "agent-identity.md"
+        copied = agentbase_home / "acme" / "workspaces" / "acme" / "agent-identity.md"
         assert copied.is_file(), "模板中的身份文件应被复制到该公司目录下"
 
         content = get_agent_identity_by_slug("acme")
@@ -73,7 +73,7 @@ class TestAgentIdentityPath:
 
         write_agent_identity("acme", "文件里的身份")
 
-        resolved = resolve_system_prompt(company_slug="acme", db_identity="DB 里的身份")
+        resolved = resolve_system_prompt(workspace_slug="acme", db_identity="DB 里的身份")
 
         assert "文件里的身份" in resolved, "文件优先级最高，不应被 DB 值顶替"
         assert "DB 里的身份" not in resolved
@@ -84,8 +84,8 @@ class TestAgentIdentityPath:
 class TestLegacyIdentityPathCompatibility:
     """历史遗留路径的一次性兼容读取。
 
-    统一路径之前，「读取方」曾指向 ~/.agentbase/companies/{slug}/agent_identity.md
-    （下划线、少一层 companies/{slug}）。用户可能已经手动编辑过那个文件，
+    统一路径之前，「读取方」曾指向 ~/.agentbase/workspaces/{slug}/agent_identity.md
+    （下划线、少一层 workspaces/{slug}）。用户可能已经手动编辑过那个文件，
     直接弃用会让改动凭空消失 —— 所以保留一次性兼容读取，规范路径优先。
     """
 
@@ -93,7 +93,7 @@ class TestLegacyIdentityPathCompatibility:
         """规范路径没有文件时，回退读历史遗留路径。"""
         from agentbase.prompts import get_agent_identity_by_slug
 
-        legacy = agentbase_home / "companies" / "acme" / "agent_identity.md"
+        legacy = agentbase_home / "workspaces" / "acme" / "agent_identity.md"
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text("遗留路径里的身份", encoding="utf-8")
 
@@ -104,7 +104,7 @@ class TestLegacyIdentityPathCompatibility:
         from agentbase.prompts import get_agent_identity_by_slug, write_agent_identity
 
         write_agent_identity("acme", "规范路径里的身份")
-        legacy = agentbase_home / "companies" / "acme" / "agent_identity.md"
+        legacy = agentbase_home / "workspaces" / "acme" / "agent_identity.md"
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text("遗留路径里的身份", encoding="utf-8")
 
@@ -118,19 +118,19 @@ class TestLegacyIdentityPathCompatibility:
 
 
 class TestCrudIdentityReaderFileFallback:
-    """第二个读取方 company/crud.get_agent_identity 的文件回退必须用同一路径。
+    """第二个读取方 workspace/crud.get_agent_identity 的文件回退必须用同一路径。
 
-    它被 api/companies.py 与 helpers.py 调用（helpers 拿它当 resolve 的 db_identity 入参），
-    历史实现读 {data_dir}/agent-identity.md（少一层 companies/{slug}），文件回退永远命中不了。
+    它被 api/workspaces.py 与 helpers.py 调用（helpers 拿它当 resolve 的 db_identity 入参），
+    历史实现读 {data_dir}/agent-identity.md（少一层 workspaces/{slug}），文件回退永远命中不了。
     """
 
     def test_file_fallback_reads_canonical_path(self, tmp_path, monkeypatch):
         """DB 字段为空时应能读回规范路径下的身份文件。"""
-        import agentbase.company as co
-        from agentbase.company import crud
+        import agentbase.workspace as co
+        from agentbase.workspace import crud
 
         # create() 会创建真实桌面工作目录，必须重定向到临时目录。
-        # 注意 create() 里是函数内 `from agentbase.company.workdir import _setup_work_directory`，
+        # 注意 create() 里是函数内 `from agentbase.workspace.workdir import _setup_work_directory`，
         # 所以 patch 源模块而不是 crud 命名空间。
         def _mock_setup(cname, slug, suggested_name=""):
             wd = tmp_path / "workdir" / (suggested_name or cname)
@@ -139,21 +139,21 @@ class TestCrudIdentityReaderFileFallback:
                 (wd / cat_name).mkdir(parents=True, exist_ok=True)
             return wd, True
 
-        monkeypatch.setattr("agentbase.company.workdir._setup_work_directory", _mock_setup)
+        monkeypatch.setattr("agentbase.workspace.workdir._setup_work_directory", _mock_setup)
 
         # 建表（AGENT_HOME 已由 conftest 指向临时目录，不碰真实数据）
         from agentbase.database import init_db
         init_db()
 
-        company = crud.create(name="Acme Identity Co", slug="acme-identity")
-        cid = company["id"]
-        slug = company["slug"]
+        workspace = crud.create(name="Acme Identity Co", slug="acme-identity")
+        cid = workspace["id"]
+        slug = workspace["slug"]
 
         # 清空 DB 身份字段，逼它走文件回退
-        crud.update_trade_company(cid, agent_identity_md="")
+        crud.update_trade_workspace(cid, agent_identity_md="")
 
         # 在规范位置（模板/工作目录布局）写文件
-        identity_file = crud.AGENT_HOME / slug / "companies" / slug / "agent-identity.md"
+        identity_file = crud.AGENT_HOME / slug / "workspaces" / slug / "agent-identity.md"
         identity_file.parent.mkdir(parents=True, exist_ok=True)
         identity_file.write_text("文件里的身份", encoding="utf-8")
 

@@ -377,14 +377,14 @@ log_step "Step 5/5: 初始化数据目录"
 
 AGENT_HOME="${AGENT_HOME:-$HOME/.agentbase}"
 mkdir -p "$AGENT_HOME/data"
-mkdir -p "$AGENT_HOME/companies"
+mkdir -p "$AGENT_HOME/workspaces"
 
 "$PY" -c "from agentbase.database import init_db; init_db()" 2>/dev/null && \
     log_ok "数据库初始化完成 ($AGENT_HOME/data/agentbase.db)" || \
     log_info "数据库将在首次启动时自动初始化"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 导出 trade 命令到 ~/.local/bin（放 PATH 里）
+# 导出 agentbase 命令到 ~/.local/bin（放 PATH 里）
 # ─────────────────────────────────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/agentbase" << LAUNCHER

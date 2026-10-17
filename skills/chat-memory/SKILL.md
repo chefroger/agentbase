@@ -72,7 +72,7 @@ injection_prompt: |
   你是 chat-memory 技能。当用户需要查询历史对话时，主动调用以下工具。
   不要等到用户说"查历史"才行动——只要用户的问题涉及过去讨论过的内容，就立即查询。
 
-  **company_id 必填**，必须从 system prompt 的 Trade Context 段读取；**不要**让用户输入或自己编。
+  **workspace_id 必填**，必须从 system prompt 的 Trade Context 段读取；**不要**让用户输入或自己编。
 
   **触发词 → time_range 映射（必须严格按这张表传）**：
   - 今天 / today           → time_range=today
@@ -92,8 +92,8 @@ injection_prompt: |
 
   **recent_days 与 recent_months 互斥**（与 time_range 也互斥，二选一）。
 
-  调用方式：chat_memory_list(company_id=<从 Trade Context 段读>, time_range="all", limit=20)
-  最近模式：chat_memory_list(company_id=N, recent_days=14, limit=20)
+  调用方式：chat_memory_list(workspace_id=<从 Trade Context 段读>, time_range="all", limit=20)
+  最近模式：chat_memory_list(workspace_id=N, recent_days=14, limit=20)
   结果格式：[{created_at, query, response}, ...]
   每次对话只能调用一次此工具。
 ---
@@ -101,7 +101,7 @@ injection_prompt: |
 
 ## 功能定位
 
-查询本公司（company_id）下的历史对话记录。
+查询本公司（workspace_id）下的历史对话记录。
 
 ## 工具
 
@@ -111,7 +111,7 @@ injection_prompt: |
 或询问过去讨论过的内容时使用此工具。
 
 **参数**：
-- `company_id` (**必填**): 当前会话的公司 ID。从 system prompt 的 Trade Context 段读取；不要让用户输入。
+- `workspace_id` (**必填**): 当前会话的公司 ID。从 system prompt 的 Trade Context 段读取；不要让用户输入。
 - `time_range`: 时间范围枚举值（与 `recent_days`/`recent_months` 互斥）
   - `"today"` — 今天（00:00 → 现在）
   - `"yesterday"` — 昨天（昨天 00:00 → 今天 00:00）
@@ -129,7 +129,7 @@ injection_prompt: |
 **返回值**：
 ```json
 {
-  "company_id": 1,
+  "workspace_id": 1,
   "time_range": "last_week",
   "recent_days": null,
   "recent_months": null,
@@ -144,22 +144,22 @@ injection_prompt: |
 
 **用户**："你上次推荐的那个供应商叫什么名字？"
 
-→ 调用 `chat_memory_list(company_id=1, time_range="all", limit=20)`
+→ 调用 `chat_memory_list(workspace_id=1, time_range="all", limit=20)`
 → 从结果中找到与供应商相关的对话
 → 回答用户问题
 
 **用户**："我们这周谈过哪些客户？"
 
-→ 调用 `chat_memory_list(company_id=1, time_range="this_week", limit=20)`
+→ 调用 `chat_memory_list(workspace_id=1, time_range="this_week", limit=20)`
 → 汇总结果中涉及客户的对话
 → 回答用户问题
 
 **用户**："上礼拜三跟你说过那个德国客户叫什么来着？"
 
 → 枚举表达不了，用 `recent_days=14`（覆盖"上上周三"到今天）：
-→ `chat_memory_list(company_id=1, recent_days=14, limit=20)`
+→ `chat_memory_list(workspace_id=1, recent_days=14, limit=20)`
 
 **用户**："前几个月有没有谈到 XXX？"
 
 → 模糊时间词，用 `recent_months=3`：
-→ `chat_memory_list(company_id=1, recent_months=3, limit=20)`
+→ `chat_memory_list(workspace_id=1, recent_months=3, limit=20)`

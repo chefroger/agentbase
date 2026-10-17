@@ -77,9 +77,9 @@ def test_db(monkeypatch, tmp_path, setup_mocks):
     conn.close()
 
     # 桌面工作目录重定向到 tmp_path
-    import agentbase.company as _co
-    def _mock_setup(company_name, slug, suggested_name=""):
-        wd = tmp_path / (suggested_name or company_name)
+    import agentbase.workspace as _co
+    def _mock_setup(workspace_name, slug, suggested_name=""):
+        wd = tmp_path / (suggested_name or workspace_name)
         wd.mkdir(parents=True, exist_ok=True)
         for cat_name, _ in _co._WORK_DIR_CATEGORIES:
             (wd / cat_name).mkdir(parents=True, exist_ok=True)
@@ -92,10 +92,10 @@ def test_db(monkeypatch, tmp_path, setup_mocks):
 
 
 @pytest.fixture
-def company_id(test_db):
+def workspace_id(test_db):
     """创建测试公司并返回 ID。"""
-    from agentbase import company
-    c = company.create(name="API Test Company", slug="api-test-company")
+    from agentbase import workspace
+    c = workspace.create(name="API Test Workspace", slug="api-test-workspace")
     return c["id"]
 
 
@@ -105,36 +105,36 @@ def company_id(test_db):
 class TestDeps:
     """测试 API 依赖函数。"""
 
-    def test_require_company_valid(self, company_id, setup_mocks):
-        """有效的 X-Company-ID 返回 company_id。"""
-        from agentbase.api.deps import require_company
+    def test_require_workspace_valid(self, workspace_id, setup_mocks):
+        """有效的 X-Workspace-ID 返回 workspace_id。"""
+        from agentbase.api.deps import require_workspace
         # 直接调用函数（绕过 FastAPI Header 依赖注入）
-        result = require_company(str(company_id))
-        assert result == company_id
+        result = require_workspace(str(workspace_id))
+        assert result == workspace_id
 
-    def test_require_company_missing(self, setup_mocks):
+    def test_require_workspace_missing(self, setup_mocks):
         """缺失 header → 401。"""
         from fastapi import HTTPException
 
-        from agentbase.api.deps import require_company
+        from agentbase.api.deps import require_workspace
         with pytest.raises(HTTPException) as exc_info:
-            require_company("")
+            require_workspace("")
         assert exc_info.value.status_code == 401
 
-    def test_require_company_invalid(self, setup_mocks):
+    def test_require_workspace_invalid(self, setup_mocks):
         """无效 header → 401。"""
         from fastapi import HTTPException
 
-        from agentbase.api.deps import require_company
+        from agentbase.api.deps import require_workspace
         with pytest.raises(HTTPException) as exc_info:
-            require_company("not-an-int")
+            require_workspace("not-an-int")
         assert exc_info.value.status_code == 401
 
-    def test_opt_company_missing(self, setup_mocks):
+    def test_opt_workspace_missing(self, setup_mocks):
         """缺失 header → None。"""
-        from agentbase.api.deps import opt_company
-        assert opt_company("") is None
-        assert opt_company(None) is None
+        from agentbase.api.deps import opt_workspace
+        assert opt_workspace("") is None
+        assert opt_workspace(None) is None
 
 
 class TestCronIsMachineLevel:
@@ -163,7 +163,7 @@ class TestCronIsMachineLevel:
         )
         return cron_mod
 
-    def test_today_cron_identical_across_companies(self, cron_with_jobs):
+    def test_today_cron_identical_across_workspaces(self, cron_with_jobs):
         """不同公司的今日任务清单必须一致（cron 无公司维度）。"""
         # 位置传参：函数签名是 _cid（故意不使用），这里就是要证明它被忽略
         a = cron_with_jobs.get_today_cron(1)
@@ -171,7 +171,7 @@ class TestCronIsMachineLevel:
 
         assert a == b, "cron 是机器级资源，不应随公司变化；若要按公司隔离需先改数据模型"
 
-    def test_active_jobs_identical_across_companies(self, cron_with_jobs):
+    def test_active_jobs_identical_across_workspaces(self, cron_with_jobs):
         """不同公司的活跃任务必须一致。"""
         a = cron_with_jobs.get_active_jobs(1)
         b = cron_with_jobs.get_active_jobs(999)
@@ -273,12 +273,12 @@ class TestRouterAssembly:
         for route in all_routes:
             if hasattr(route, 'path'):
                 p = route.path
-                for keyword in ['companies', 'files', 'conversations',
+                for keyword in ['workspaces', 'files', 'conversations',
                                 'chat', 'memory', 'onboarding', 'models']:
                     if keyword in p:
                         key_routes.add(keyword)
 
-        assert 'companies' in key_routes
+        assert 'workspaces' in key_routes
         assert 'files' in key_routes
         assert 'chat' in key_routes
 
@@ -303,26 +303,26 @@ class TestRouterAssembly:
 class TestCompanyEndpoints:
     """测试公司端点函数。"""
 
-    def test_create_company(self, test_db, setup_mocks):
-        from agentbase import company
-        c = company.create(name="Endpoint Co", slug="endpoint-co")
+    def test_create_workspace(self, test_db, setup_mocks):
+        from agentbase import workspace
+        c = workspace.create(name="Endpoint Co", slug="endpoint-co")
         assert c["name"] == "Endpoint Co"
         assert c["slug"] == "endpoint-co"
         assert c["is_active"] is True
 
-    def test_list_companies(self, test_db, company_id, setup_mocks):
-        from agentbase import company
-        companies = company.list_all()
-        assert any(c["id"] == company_id for c in companies)
+    def test_list_workspaces(self, test_db, workspace_id, setup_mocks):
+        from agentbase import workspace
+        workspaces = workspace.list_all()
+        assert any(c["id"] == workspace_id for c in workspaces)
 
-    def test_agent_identity(self, test_db, company_id, setup_mocks):
-        from agentbase import company
-        identity = company.get_agent_identity(company_id)
+    def test_agent_identity(self, test_db, workspace_id, setup_mocks):
+        from agentbase import workspace
+        identity = workspace.get_agent_identity(workspace_id)
         assert isinstance(identity, str)  # may be empty, but should be a string
 
-    def test_update_agent_identity(self, test_db, company_id, setup_mocks):
-        from agentbase import company
-        result = company.update_trade_company(company_id, agent_identity_md="Test identity")
+    def test_update_agent_identity(self, test_db, workspace_id, setup_mocks):
+        from agentbase import workspace
+        result = workspace.update_trade_workspace(workspace_id, agent_identity_md="Test identity")
         assert result["agent_identity_md"] == "Test identity"
 
 
@@ -336,7 +336,7 @@ class TestWorkDirUpload:
     def _run(coro):
         return asyncio.run(coro)
 
-    def test_upload_single_file(self, test_db, company_id, setup_mocks, monkeypatch):
+    def test_upload_single_file(self, test_db, workspace_id, setup_mocks, monkeypatch):
         """上传单个文件到指定子目录"""
         import io
         import tempfile
@@ -344,27 +344,27 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
-        monkeypatch.setattr("agentbase.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.workspace._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("agentbase.company.get",
+        monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.company.get_trade_company",
+        # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
+        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.company.update_trade_company",
+        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"hello world"))
         result = self._run(upload_to_work_dir(
-            subdir="合同", files=[f], x_company_id=company_id,
+            subdir="合同", files=[f], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 1
         assert "test.txt" in result["files"][0]
         assert (work_dir / "合同" / "test.txt").read_text() == "hello world"
 
-    def test_upload_preserves_subdirs(self, test_db, company_id, setup_mocks, monkeypatch):
+    def test_upload_preserves_subdirs(self, test_db, workspace_id, setup_mocks, monkeypatch):
         """上传带子路径结构的文件"""
         import io
         import tempfile
@@ -372,14 +372,14 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
-        monkeypatch.setattr("agentbase.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.workspace._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("agentbase.company.get",
+        monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.company.get_trade_company",
+        # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
+        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.company.update_trade_company",
+        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir
@@ -387,14 +387,14 @@ class TestWorkDirUpload:
         f1 = UploadFile(filename="sub/a.txt", file=io.BytesIO(b"aaa"))
         f2 = UploadFile(filename="sub/deep/b.txt", file=io.BytesIO(b"bbb"))
         result = self._run(upload_to_work_dir(
-            subdir="客户资料", files=[f1, f2], x_company_id=company_id,
+            subdir="客户资料", files=[f1, f2], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 2
         # result["files"] 的路径是相对于 work_dir 的，包含子目录前缀
         assert (work_dir / "客户资料" / "sub" / "a.txt").read_text() == "aaa"
         assert (work_dir / "客户资料" / "sub" / "deep" / "b.txt").read_text() == "bbb"
 
-    def test_invalid_subdir_rejected(self, test_db, company_id, setup_mocks):
+    def test_invalid_subdir_rejected(self, test_db, workspace_id, setup_mocks):
         """非法的子目录名应返回 400"""
         import io
 
@@ -405,11 +405,11 @@ class TestWorkDirUpload:
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"test"))
         with pytest.raises(Exception) as exc:
             self._run(upload_to_work_dir(
-                subdir="../../../etc", files=[f], x_company_id=company_id,
+                subdir="../../../etc", files=[f], x_workspace_id=workspace_id,
             ))
         assert "400" in str(exc.value) or "无效" in str(exc.value)
 
-    def test_path_traversal_sanitized(self, test_db, company_id, setup_mocks, monkeypatch):
+    def test_path_traversal_sanitized(self, test_db, workspace_id, setup_mocks, monkeypatch):
         """含 ../ 的文件名应被 sanitize"""
         import io
         import tempfile
@@ -417,21 +417,21 @@ class TestWorkDirUpload:
         from fastapi import UploadFile
 
         work_dir = Path(tempfile.mkdtemp(prefix="agentbase-work-test-"))
-        monkeypatch.setattr("agentbase.company._setup_work_directory",
+        monkeypatch.setattr("agentbase.workspace._setup_work_directory",
                            lambda name, slug, suggested_name="": (work_dir, True))
-        monkeypatch.setattr("agentbase.company.get",
+        monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
-        # 上传端点会读 agentbase_companies.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.company.get_trade_company",
+        # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
+        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.company.update_trade_company",
+        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir
 
         f = UploadFile(filename="../escape.txt", file=io.BytesIO(b"bad"))
         result = self._run(upload_to_work_dir(
-            subdir="报价单", files=[f], x_company_id=company_id,
+            subdir="报价单", files=[f], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 1
         assert "escape.txt" in result["files"][0]
@@ -445,17 +445,17 @@ class TestWorkDirUpload:
 class TestConversationEndpoints:
     """测试对话端点函数。"""
 
-    def test_save_conversation(self, test_db, company_id, setup_mocks):
+    def test_save_conversation(self, test_db, workspace_id, setup_mocks):
         from agentbase import chat_memory
-        conv = chat_memory.save(company_id, "Query", "Response",
+        conv = chat_memory.save(workspace_id, "Query", "Response",
                                  files_read=[{"file": "test.pdf", "pages": [1]}])
         assert conv["query"] == "Query"
         assert len(conv["files_read"]) == 1
 
-    def test_list_conversations(self, test_db, company_id, setup_mocks):
+    def test_list_conversations(self, test_db, workspace_id, setup_mocks):
         from agentbase import chat_memory
-        chat_memory.save(company_id, "Q1", "A1")
-        convs = chat_memory.list_by_company(company_id)
+        chat_memory.save(workspace_id, "Q1", "A1")
+        convs = chat_memory.list_by_workspace(workspace_id)
         assert len(convs) >= 1
 
 
@@ -470,12 +470,12 @@ class TestOnboardingFlow:
         onboarding.reset_onboarding_flag()
         assert onboarding.is_onboarding_done() is False
 
-    def test_create_first_company(self, test_db, setup_mocks):
+    def test_create_first_workspace(self, test_db, setup_mocks):
         from agentbase import onboarding
         onboarding.reset_onboarding_flag()
 
-        result = onboarding.create_first_company(
-            company_name="Flow Test Co",
+        result = onboarding.create_first_workspace(
+            workspace_name="Flow Test Co",
             contact_name="Alice",
             identity_data={
                 "products": "Electronics",
@@ -483,11 +483,11 @@ class TestOnboardingFlow:
                 "target_region": "Europe",
             },
         )
-        assert result["company"]["name"] == "Flow Test Co"
-        assert "Electronics" in result["agentbase_company"]["agent_identity_md"]
+        assert result["workspace"]["name"] == "Flow Test Co"
+        assert "Electronics" in result["agentbase_workspace"]["agent_identity_md"]
         assert onboarding.is_onboarding_done() is True
 
-    def test_create_first_company_duplicate(self, test_db, company_id, setup_mocks):
+    def test_create_first_workspace_duplicate(self, test_db, workspace_id, setup_mocks):
         from agentbase import onboarding
         assert onboarding.is_onboarding_done() is True
 

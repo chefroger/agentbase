@@ -11,9 +11,9 @@ import re
 from pathlib import Path
 
 from agentbase import chat_memory as _cm
-from agentbase import company as _company
 from agentbase import prompts as _prompts
 from agentbase import skill_router as _skill_router
+from agentbase import workspace as _workspace
 
 # ── 一致性温度分流 ────────────────────────────────────────────────────────────
 # 创作类 skill 豁免清单：输出需要多样性（A/B 变体、内容创意），保持 provider 默认温度。
@@ -372,14 +372,14 @@ def _estimate_tokens(text: str) -> int:
     return int(cjk_chars / 1.5 + other_chars / 4.0)
 
 
-def _get_history_block(company_id: int | None, total_prompt_chars: int) -> tuple[str, int]:
+def _get_history_block(workspace_id: int | None, total_prompt_chars: int) -> tuple[str, int]:
     """根据 prompt 总大小构造历史对话注入块。
 
     上下文越长，注入的历史条数越少，防止超出 token 预算。
     返回 (history_block, history_token_count)。
-    当 company_id 为 None 或 0 时 history_block 为空字符串。
+    当 workspace_id 为 None 或 0 时 history_block 为空字符串。
     """
-    if not company_id:  # None, 0, 空 — company_id 从 1 开始自增，0 不可能有效
+    if not workspace_id:  # None, 0, 空 — workspace_id 从 1 开始自增，0 不可能有效
         return "", 0
 
     # Token thresholds (hard-coded, not user-visible)
@@ -393,7 +393,7 @@ def _get_history_block(company_id: int | None, total_prompt_chars: int) -> tuple
             "可用 time_range：today / yesterday / this_week / last_week / "
             "this_month / last_month / this_year / last_year / all；"
             "或 recent_days / recent_months 表达上上周三/前几个月等。"
-            "company_id 从 system prompt 的 Trade Context 段读取。"
+            "workspace_id 从 system prompt 的 Trade Context 段读取。"
         )
     else:                                # >= 50k tokens — 上下文紧张，仅注入 5 条
         limit = 5
@@ -402,7 +402,7 @@ def _get_history_block(company_id: int | None, total_prompt_chars: int) -> tuple
             "如需查询更早内容，请调用 chat_memory_list 工具（参数同 50k 档提示）。"
         )
 
-    rows = _cm.get_recent(company_id, limit=limit)
+    rows = _cm.get_recent(workspace_id, limit=limit)
     if not rows:
         # 数据库中无历史记录
         return "", 0
@@ -462,7 +462,7 @@ def _extract_explicit_paths(query: str) -> list[str]:
 
 
 def build_query(
-    company_id: int,
+    workspace_id: int,
     query: str,
     *,
     last_skill_name: str | None = None,
@@ -474,7 +474,7 @@ def build_query(
     独立 system 层指令的 skill 用的（无则为 None），由 chat.py 通过
     agent.run_conversation(system_message=...) 传入。
 
-    company_id 决定注入哪个 workspace 的身份。
+    workspace_id 决定注入哪个 workspace 的身份。
     last_skill_name 上次使用的 skill 名称，连续同 skill 时跳过重复注入。
 
     业务上下文（客户简报 / 订单 / 文档库）不在这里注入 —— 它们属于 skill 包的能力。
@@ -497,15 +497,15 @@ def build_query(
         )
     else:
         augmented_query = _skill_router.augment_query(
-            query, company_id=company_id
+            query, workspace_id=workspace_id
         )
 
-    # 1. Company identity — 根据场景选择不同深度的 system prompt
-    company_slug = _company.slug_from_id(company_id) if company_id else None
-    db_identity = _company.get_agent_identity(company_id) if company_id else None
+    # 1. Workspace identity — 根据场景选择不同深度的 system prompt
+    workspace_slug = _workspace.slug_from_id(workspace_id) if workspace_id else None
+    db_identity = _workspace.get_agent_identity(workspace_id) if workspace_id else None
 
     # 检查是否有历史对话记录，用于判断是否首轮
-    has_history = bool(company_id and _cm.get_recent(company_id, limit=1))
+    has_history = bool(workspace_id and _cm.get_recent(workspace_id, limit=1))
 
     # 问题里点名的文件/目录（文档类任务判定要用，后面 doc_context 复用同一份）
     explicit_paths = _extract_explicit_paths(query)
@@ -526,7 +526,7 @@ def build_query(
         from agentbase.prompt import AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
         code_fallback = AGENTBASE_SYSTEM_PROMPT_FIRST_TURN
     system_prompt = _prompts.resolve_system_prompt(
-        company_slug=company_slug,
+        workspace_slug=workspace_slug,
         db_identity=db_identity,
         code_fallback=code_fallback,
     )
@@ -537,11 +537,11 @@ def build_query(
         system_prompt = system_prompt.replace(LANGUAGE_POLICY_BLOCK, LANGUAGE_POLICY_BLOCK_EN)
 
     # 1.5 注入当前公司信息 — Agent 需要明确知道自己为哪家公司工作。
-    # 公司 ID 这条**特别重要**：chat_memory_list 等公司隔离工具要带 company_id 参数
-    # （conversations 表按 company_id 严格隔离，搜错会读到别人的数据），
+    # 公司 ID 这条**特别重要**：chat_memory_list 等公司隔离工具要带 workspace_id 参数
+    # （conversations 表按 workspace_id 严格隔离，搜错会读到别人的数据），
     # 而 LLM 自身没有"当前是哪个公司"的可靠来源 —— 没有这一行就只能瞎填。
-    if company_id:
-        co = _company.get(company_id)
+    if workspace_id:
+        co = _workspace.get(workspace_id)
         if co:
             # 用户输入字段清理：去除换行、控制字符、prompt 注入标记，限制长度
             def _sanitize_identity(s: str, max_len: int = 200) -> str:
@@ -560,15 +560,15 @@ def build_query(
                 f"- 公司 ID：{co['id']}\n"
                 f"- Slug：「{slug}」\n\n"
                 "**所有数据操作（记忆读取、客户查询、文档搜索）必须限定在上述公司范围内。**"
-                # 紧跟其后**强绑定**"带 company_id 参数的 trade 工具必须传这个数字"——
+                # 紧跟其后**强绑定**"带 workspace_id 参数的 trade 工具必须传这个数字"——
                 # 不然 LLM 看到 ID 也未必会联想到工具调用。文案来源：
                 # agentbase/prompts._build_trade_context_block，**共用同一段文案**避免漂移。
                 + _prompts._build_trade_context_block(co['id'])
             )
 
     # 1.6 品牌安全护栏 — 所有对外内容生成都需遵守
-    if company_slug:
-        brand_safety = _prompts.get_brand_safety(company_slug)
+    if workspace_slug:
+        brand_safety = _prompts.get_brand_safety(workspace_slug)
         if brand_safety:
             system_prompt += f"\n\n{brand_safety}"
 
@@ -594,10 +594,10 @@ def build_query(
             f"4. 全部读取完成后，综合所有文件内容回答用户问题\n\n"
         )
 
-    if company_id:
+    if workspace_id:
         # 收集工作目录 + 所有文档库，告知 Agent 可用目录，Agent 自行判断是否需要读取
         dirs_to_scan: list[str] = []
-        tc = _company.get_trade_company(company_id)
+        tc = _workspace.get_trade_workspace(workspace_id)
         if tc:
             data_dir = tc.get("data_dir", "")
             if data_dir and Path(data_dir).is_dir():
@@ -634,7 +634,7 @@ def build_query(
         len(system_prompt) + len(doc_context) +
         len(augmented_query) + 200
     )
-    history_block, _ = _get_history_block(company_id, pre_history_chars)
+    history_block, _ = _get_history_block(workspace_id, pre_history_chars)
 
     # 8. Assemble final user message：system → 客户 → 订单 → 文档库 → 历史 → 查询
     final_prompt = system_prompt + doc_context

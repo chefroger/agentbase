@@ -42,14 +42,14 @@ if _template_dir.is_dir():
 
 # hidden imports that PyInstaller may miss
 _hidden_imports = [
-    "agentbase", "agentbase.api", "agentbase.api.companies", "agentbase.api.onboarding",
+    "agentbase", "agentbase.api", "agentbase.api.workspaces", "agentbase.api.onboarding",
     "agentbase.api.libraries", "agentbase.api.customers", "agentbase.api.conversations",
     "agentbase.api.chat", "agentbase.api.memory", "agentbase.api.deps",
     "agentbase.osint", "agentbase.osint.constants", "agentbase.osint.whois",
     "agentbase.osint.email_verify", "agentbase.osint.sanctions",
     "agentbase.osint.tech_stack", "agentbase.osint.linkedin_verify",
     "agentbase.osint.scoring", "agentbase.osint.orchestrator",
-    "agentbase.database", "agentbase.company", "agentbase.library",
+    "agentbase.database", "agentbase.workspace", "agentbase.library",
     "agentbase.customer", "agentbase.chat_memory", "agentbase.memory",
     "agentbase.helpers", "agentbase.prompt", "agentbase.prompts",
     "agentbase.skill_router", "agentbase.skill_registry",

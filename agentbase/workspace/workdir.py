@@ -41,11 +41,11 @@ def _slugify(name: str) -> str:
 
     slug = name.lower().strip()
     if not slug:
-        return f"company-{uuid.uuid4().hex[:6]}"  # 空输入 → 唯一后备值
+        return f"workspace-{uuid.uuid4().hex[:6]}"  # 空输入 → 唯一后备值
     slug = re.sub(r"[^\w\s-]", "", slug)   # 移除非单词字符（Unicode 模式下 \w 含 CJK）
     slug = re.sub(r"[_\s]+", "-", slug)    # 下划线/空格 → 连字符
     slug = re.sub(r"--+", "-", slug)       # 合并连续连字符
-    return slug.strip("-") or f"company-{uuid.uuid4().hex[:6]}"  # 兜底 → 唯一后缀
+    return slug.strip("-") or f"workspace-{uuid.uuid4().hex[:6]}"  # 兜底 → 唯一后缀
 
 
 def _validate_slug(slug: str) -> str:
@@ -77,10 +77,10 @@ def _validate_slug(slug: str) -> str:
 def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
     """创建并返回公司 slug 对应的数据目录（~/.agentbase/{slug}/）。
 
-    复制 .agentbase-template 模板骨架，将内部的 'company-slug' 占位目录
+    复制 .agentbase-template 模板骨架，将内部的 'workspace-slug' 占位目录
     重命名为真实的 slug。模板目录结构：
       ~/.agentbase/{slug}/
-        companies/{slug}/   ← 从 'company-slug' 重命名
+        workspaces/{slug}/   ← 从 'workspace-slug' 重命名
         libraries/{slug}/
         clients/{slug}/
 
@@ -111,10 +111,10 @@ def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
     if template_src.exists():
         # 从源码目录复制模板骨架到用户数据目录
         shutil.copytree(template_src, target, dirs_exist_ok=False)
-        # 将 companies/ 内部的占位目录 'company-slug' 重命名为真实 slug
-        _rename_company_placeholder(target / "companies", slug)
+        # 将 workspaces/ 内部的占位目录 'workspace-slug' 重命名为真实 slug
+        _rename_workspace_placeholder(target / "workspaces", slug)
         # 递归重命名嵌套的 'library-slug' / 'client-slug' 占位目录
-        _rename_template_placeholders(target / "companies" / slug, slug)
+        _rename_template_placeholders(target / "workspaces" / slug, slug)
     else:
         # 无模板可用时，直接创建空目录
         target.mkdir(parents=True, exist_ok=True)
@@ -122,9 +122,9 @@ def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
     return target
 
 
-def _rename_company_placeholder(companies_dir: Path, slug: str) -> None:
-    """将 companies/ 内部的 'company-slug' 目录重命名为真实 slug。"""
-    src = companies_dir / "company-slug"
+def _rename_workspace_placeholder(companies_dir: Path, slug: str) -> None:
+    """将 workspaces/ 内部的 'workspace-slug' 目录重命名为真实 slug。"""
+    src = companies_dir / "workspace-slug"
     dst = companies_dir / slug
     if src.exists() and not dst.exists():
         src.rename(dst)
@@ -184,7 +184,7 @@ def _get_desktop_path() -> Path:
 # ── 桌面工作目录创建 ──────────────────────────────────────────────────────
 
 def _setup_work_directory(
-    company_name: str, slug: str, suggested_name: str = ""
+    workspace_name: str, slug: str, suggested_name: str = ""
 ) -> tuple[Path, bool]:
     """在用户桌面创建公司工作目录，包含外贸业务流程分类子目录。
 
@@ -192,7 +192,7 @@ def _setup_work_directory(
     在 pytest 测试环境中将目录写到临时位置而非桌面。
 
     Args:
-        company_name: 公司名称（用作默认目录名）
+        workspace_name: 公司名称（用作默认目录名）
         slug: 公司 slug（用于路径穿越校验）
         suggested_name: 用户指定的替代目录名（重命名场景），为空则用公司名
 
@@ -213,7 +213,7 @@ def _setup_work_directory(
 
     # 确定目录名（用户指定优先，否则用公司名）
     dir_name = (suggested_name.strip() if suggested_name.strip()
-                else company_name.strip())
+                else workspace_name.strip())
 
     # 路径穿越防护：目录名不能包含 .. 或 NUL
     if ".." in dir_name or "\0" in dir_name:

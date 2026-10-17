@@ -1,4 +1,4 @@
-"""`trade company` —— 作者用的公司清理命令。
+"""`trade workspace` —— 作者用的公司清理命令。
 
 ## 为什么需要它
 
@@ -29,7 +29,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from agentbase import company_admin
+from agentbase import workspace_admin
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def env(monkeypatch, tmp_path):
 
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = desktop / (suggested_name or name)
@@ -56,31 +56,31 @@ def env(monkeypatch, tmp_path):
         return wd, True
 
     # 必须打在 **workdir 模块**上：crud.create() 是
-    # `from agentbase.company.workdir import _setup_work_directory`，在模块上查这个名字；
-    # 打在包级 re-export（agentbase.company._setup_work_directory）不会生效 ——
+    # `from agentbase.workspace.workdir import _setup_work_directory`，在模块上查这个名字；
+    # 打在包级 re-export（agentbase.workspace._setup_work_directory）不会生效 ——
     # 那样真实函数会跑，建出的是不含分类子目录的空壳，测试就在错误的现场上断言。
     monkeypatch.setattr(co.workdir, "_setup_work_directory", _setup)
     monkeypatch.setattr(co.workdir, "_get_desktop_path", lambda: desktop)
 
-    company = co.create(name="错误公司", slug="wrong-co")
-    return {"company": company, "desktop": desktop, "tmp": tmp_path}
+    workspace = co.create(name="错误公司", slug="wrong-co")
+    return {"workspace": workspace, "desktop": desktop, "tmp": tmp_path}
 
 
 class TestList:
-    def test_lists_company_with_dirs(self, env):
-        out = company_admin.list_companies()
+    def test_lists_workspace_with_dirs(self, env):
+        out = workspace_admin.list_workspaces()
 
         assert "错误公司" in out
         assert "wrong-co" in out
         assert "启用" in out
 
-    def test_lists_soft_deleted_companies_too(self, env):
+    def test_lists_soft_deleted_workspaces_too(self, env):
         """软删除的必须也列出来 —— 否则用户以为已经删干净了。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        crud.delete(env["company"]["id"])
+        crud.delete(env["workspace"]["id"])
 
-        out = company_admin.list_companies()
+        out = workspace_admin.list_workspaces()
 
         assert "错误公司" in out, "软删除后从 list 里消失了，用户就看不到残留"
         assert "已软删除" in out
@@ -90,7 +90,7 @@ class TestList:
 
         shutil.rmtree(env["desktop"] / "错误公司")
 
-        out = company_admin.list_companies()
+        out = workspace_admin.list_workspaces()
 
         assert "不存在" in out
 
@@ -98,18 +98,18 @@ class TestList:
 class TestPurgeRequiresConfirmation:
     def test_without_yes_only_previews(self, env):
         """不带 --yes 只打印计划、退出码 1，什么都不删。"""
-        text, code = company_admin.purge_company("wrong-co")
+        text, code = workspace_admin.purge_workspace("wrong-co")
 
         assert code == 1
         assert "--yes" in text, "要告诉用户怎么真正执行"
         # 数据库与目录都必须原封不动
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        assert crud.get(env["company"]["id"]) is not None
+        assert crud.get(env["workspace"]["id"]) is not None
         assert (env["desktop"] / "错误公司").is_dir()
 
     def test_preview_shows_what_will_be_deleted(self, env):
-        text, _ = company_admin.purge_company("wrong-co")
+        text, _ = workspace_admin.purge_workspace("wrong-co")
 
         assert "错误公司" in text
         assert "桌面目录" in text
@@ -119,7 +119,7 @@ class TestPurgeRequiresConfirmation:
         """目录里有几个文件要如实报 —— 用户据此判断是否真有资料在里面。"""
         (env["desktop"] / "错误公司" / "合同" / "客户合同.txt").write_text("x", encoding="utf-8")
 
-        text, _ = company_admin.purge_company("wrong-co")
+        text, _ = workspace_admin.purge_workspace("wrong-co")
 
         assert "个文件" in text
 
@@ -127,42 +127,42 @@ class TestPurgeRequiresConfirmation:
 class TestPurgeExecutes:
     def test_purges_db_and_both_dirs(self, env):
         """--yes 之后：数据库行、数据目录（~/.agentbase/{slug}/）、桌面目录都要真没了。"""
-        cid = env["company"]["id"]
+        cid = env["workspace"]["id"]
         # 数据目录是 AGENT_HOME/{slug}。AGENT_HOME 是 crud 模块**导入时**定下的常量
         # （conftest 设的临时目录），不是夹具里 monkeypatch 的那个 env —— 必须从
         # 常量取值，否则会去错地方找。
-        from agentbase.company.crud import AGENT_HOME
+        from agentbase.workspace.crud import AGENT_HOME
 
         data_dir = AGENT_HOME / "wrong-co"
         assert data_dir.is_dir(), f"前置条件：数据目录应先存在（{data_dir}）"
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 0, text
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
         assert crud.get(cid) is None, "数据库行没删掉"
         assert not (env["desktop"] / "错误公司").exists(), "桌面文件夹没删掉 —— 这正是用户抱怨的残留"
         assert not data_dir.exists(), "数据目录没删掉"
 
     def test_purge_by_numeric_id(self, env):
-        cid = env["company"]["id"]
+        cid = env["workspace"]["id"]
 
-        text, code = company_admin.purge_company(str(cid), yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace(str(cid), yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 0
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
         assert crud.get(cid) is None
 
     def test_unknown_target_is_reported(self, env):
-        text, code = company_admin.purge_company("no-such-company", yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("no-such-workspace", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 1
         assert "找不到" in text
 
     def test_reports_verified_deletion(self, env):
         """删完要复核并说出来，不能只说"已执行"。"""
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert "已删除" in text
 
@@ -170,15 +170,15 @@ class TestPurgeExecutes:
 class TestDirGuard:
     def test_refuses_dir_outside_protected_roots(self, env, tmp_path):
         """工作目录若在保护区外（用户搬走了），不能删，且要如实告知。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
         outside = tmp_path / "elsewhere" / "错误公司"
         (outside / "合同").mkdir(parents=True)
-        crud.update_trade_company(
-            env["company"]["id"], extra1=json.dumps({"work_dir": str(outside)})
+        crud.update_trade_workspace(
+            env["workspace"]["id"], extra1=json.dumps({"work_dir": str(outside)})
         )
 
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 0
         assert "保护范围" in text, "要说明这个目录没被删"
@@ -190,16 +190,16 @@ class TestOrphanWorkDirs:
 
     def test_detects_orphan_folder(self, env):
         orphan = env["desktop"] / "孤儿公司"
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
 
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert orphan in found
 
-    def test_does_not_flag_known_company(self, env):
+    def test_does_not_flag_known_workspace(self, env):
         """数据库里有记录的不算孤儿。"""
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert env["desktop"] / "错误公司" not in found
 
@@ -207,14 +207,14 @@ class TestOrphanWorkDirs:
         (env["desktop"] / "我的照片").mkdir()
         (env["desktop"] / "随便一个文件夹").mkdir()
 
-        assert company_admin.find_orphan_work_dirs() == []
+        assert workspace_admin.find_orphan_work_dirs() == []
 
     def test_list_surfaces_orphans(self, env):
         orphan = env["desktop"] / "孤儿公司"
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
 
-        out = company_admin.list_companies()
+        out = workspace_admin.list_workspaces()
 
         assert "孤儿公司" in out
         assert "purge-dir" in out, "要告诉用户怎么清它"
@@ -223,14 +223,14 @@ class TestOrphanWorkDirs:
 class TestPurgeDir:
     def _make_orphan(self, env, name="孤儿公司"):
         orphan = env["desktop"] / name
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (orphan / cat).mkdir(parents=True)
         return orphan
 
     def test_requires_yes(self, env):
         orphan = self._make_orphan(env)
 
-        text, code = company_admin.purge_dir(str(orphan))
+        text, code = workspace_admin.purge_dir(str(orphan))
 
         assert code == 1
         assert orphan.is_dir(), "不带 --yes 就删了"
@@ -238,7 +238,7 @@ class TestPurgeDir:
     def test_deletes_orphan(self, env):
         orphan = self._make_orphan(env)
 
-        text, code = company_admin.purge_dir(str(orphan), yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 0
         assert not orphan.exists()
@@ -249,31 +249,31 @@ class TestPurgeDir:
         plain.mkdir()
         (plain / "报价单.xlsx").write_text("x", encoding="utf-8")
 
-        text, code = company_admin.purge_dir(str(plain), yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(plain), yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 1
         assert plain.is_dir(), "普通目录被删了 —— 这条命令太危险"
 
     def test_refuses_dir_outside_desktop(self, env, tmp_path):
         outside = tmp_path / "other" / "像公司的目录"
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (outside / cat).mkdir(parents=True)
 
-        text, code = company_admin.purge_dir(str(outside), yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_dir(str(outside), yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 1
         assert outside.is_dir()
 
 
 class TestDispatch:
-    def test_company_subcommand_dispatched(self, monkeypatch, env):
-        """`trade company list` 要被 bootstrap 认出来并退出，不起服务。"""
+    def test_workspace_subcommand_dispatched(self, monkeypatch, env):
+        """`trade workspace list` 要被 bootstrap 认出来并退出，不起服务。"""
         from agentbase import bootstrap
 
-        monkeypatch.setattr(sys, "argv", ["agentbase", "company", "list"])
+        monkeypatch.setattr(sys, "argv", ["agentbase", "workspace", "list"])
         ran = {}
         monkeypatch.setattr(
-            "agentbase.company_admin.main", lambda argv: ran.setdefault("argv", argv) or 0
+            "agentbase.workspace_admin.main", lambda argv: ran.setdefault("argv", argv) or 0
         )
 
         with pytest.raises(SystemExit):
@@ -294,7 +294,7 @@ class TestOrphanMustNotFlagLiveCompanies:
     但桌面文件夹真实存在且在**使用中**。
 
     实测现场（本机）：
-        company_id=4 「万花筒」  extra1 = {}
+        workspace_id=4 「万花筒」  extra1 = {}
         ~/Desktop/万花筒/        9 个分类目录齐全
 
     旧判定只看「记录的 work_dir」，于是把在用公司的文件夹判成孤儿 ——
@@ -304,38 +304,38 @@ class TestOrphanMustNotFlagLiveCompanies:
 
     def _make_trade_dir(self, parent, name):
         d = parent / name
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         return d
 
-    def test_folder_matching_live_company_name_is_not_orphan(self, env, monkeypatch):
+    def test_folder_matching_live_workspace_name_is_not_orphan(self, env, monkeypatch):
         """公司 A 有桌面文件夹、但 extra1 为空（老数据）→ 不是孤儿。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
         # 模拟老数据：清掉 work_dir 记录（公司本身仍在用）
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
         # 清掉记录后重建同名文件夹（模拟现场）
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
         self._make_trade_dir(env["desktop"], "错误公司")
 
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert (env["desktop"] / "错误公司") not in found, (
             "在用公司的桌面文件夹被判成孤儿 —— purge-dir 会删掉它的真实文件"
         )
 
     def test_folder_matching_slug_is_not_orphan(self, env):
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
         d = self._make_trade_dir(env["desktop"], "wrong-co")
 
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert d not in found
 
@@ -343,7 +343,7 @@ class TestOrphanMustNotFlagLiveCompanies:
         """没有任何公司叫这个名字、也没记录过路径 → 仍是孤儿。"""
         d = self._make_trade_dir(env["desktop"], "谁都不是的公司")
 
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert d in found
 
@@ -351,43 +351,43 @@ class TestOrphanMustNotFlagLiveCompanies:
 class TestPurgeDirRefusesLiveCompanyFolder:
     """即便用户手动指定，也不该删在用公司的文件夹。"""
 
-    def test_refuses_folder_matching_live_company(self, env):
-        text, code = company_admin.purge_dir(
+    def test_refuses_folder_matching_live_workspace(self, env):
+        text, code = workspace_admin.purge_dir(
             str(env["desktop"] / "错误公司"), yes=True
         )
 
         assert code == 1, "删掉了在用公司的桌面文件夹"
         assert (env["desktop"] / "错误公司").is_dir()
-        assert "purge" in text, "要告诉用户先删公司（trade company purge）"
+        assert "purge" in text, "要告诉用户先删公司（trade workspace purge）"
 
 
 class TestPurgeFindsUnrecordedWorkDir:
     """**真机发现的缺口**：老数据没记 work_dir，purge 会把桌面文件夹留在原地。
 
-    实测现场：company_id=4「万花筒」`extra1={}`，`~/Desktop/万花筒/` 真实存在。
+    实测现场：workspace_id=4「万花筒」`extra1={}`，`~/Desktop/万花筒/` 真实存在。
     `crud.purge()` 只删它从 extra1 读到的路径 —— 读不到就什么都不删，
     于是 purge 完桌面上仍留着那个文件夹（正是用户抱怨的残留）。
     """
 
     def test_preview_includes_name_matched_dir(self, env):
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
         # 模拟老数据：清掉 work_dir 记录，文件夹仍在
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
 
-        text, _ = company_admin.purge_company("wrong-co")
+        text, _ = workspace_admin.purge_workspace("wrong-co")
 
         assert "桌面目录" in text, "没把桌面文件夹列进计划 —— 用户以为删干净了"
         assert "按公司名找到" in text, "要说明这个路径是回找来的，不是记录里的"
 
     def test_purge_actually_deletes_name_matched_dir(self, env):
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
         desktop_dir = env["desktop"] / "错误公司"
         assert desktop_dir.is_dir(), "前置条件：桌面文件夹存在"
 
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert code == 0, text
         assert not desktop_dir.exists(), (
@@ -396,9 +396,9 @@ class TestPurgeFindsUnrecordedWorkDir:
 
     def test_does_not_match_unrelated_same_name_dir(self, env, tmp_path):
         """同名但没有 Trade 目录结构 → 不是它的工作目录，不能删。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
@@ -406,15 +406,15 @@ class TestPurgeFindsUnrecordedWorkDir:
         plain.mkdir()
         (plain / "我的笔记.txt").write_text("x", encoding="utf-8")
 
-        text, _ = company_admin.purge_company("wrong-co")
+        text, _ = workspace_admin.purge_workspace("wrong-co")
 
         assert "我的笔记" not in text, "把同名普通文件夹当成了工作目录"
 
     def test_purge_keeps_unrelated_same_name_dir(self, env):
         """确实删公司时，同名普通文件夹不能跟着消失。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        crud.update_trade_company(env["company"]["id"], extra1="{}")
+        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
@@ -422,7 +422,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         plain.mkdir()
         (plain / "我的笔记.txt").write_text("x", encoding="utf-8")
 
-        company_admin.purge_company("wrong-co", yes=True, password=company_admin._PURGE_PASSWORD)
+        workspace_admin.purge_workspace("wrong-co", yes=True, password=workspace_admin._PURGE_PASSWORD)
 
         assert (plain / "我的笔记.txt").is_file(), "误删了同名的普通文件夹"
 
@@ -434,28 +434,28 @@ class TestPurgePasswordGate:
     与许可证私钥同一性质，作者已知情。
     """
 
-    PW = company_admin._PURGE_PASSWORD
+    PW = workspace_admin._PURGE_PASSWORD
 
     def test_correct_password_deletes(self, env):
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=self.PW)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=self.PW)
 
         assert code == 0, text
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        assert crud.get(env["company"]["id"]) is None
+        assert crud.get(env["workspace"]["id"]) is None
 
     def test_wrong_password_deletes_nothing(self, env):
         """口令错了必须什么都不删 —— 数据库、数据目录、桌面目录全都原封不动。"""
-        from agentbase.company.crud import AGENT_HOME
+        from agentbase.workspace.crud import AGENT_HOME
 
         data_dir = AGENT_HOME / "wrong-co"
-        text, code = company_admin.purge_company("wrong-co", yes=True, password="猜的")
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password="猜的")
 
         assert code == 1
         assert "口令错误" in text
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        assert crud.get(env["company"]["id"]) is not None, "口令错误却删了数据库行"
+        assert crud.get(env["workspace"]["id"]) is not None, "口令错误却删了数据库行"
         assert data_dir.is_dir(), "口令错误却删了数据目录"
         assert (env["desktop"] / "错误公司").is_dir(), "口令错误却删了桌面目录"
 
@@ -466,13 +466,13 @@ class TestPurgePasswordGate:
 
         monkeypatch.setattr(_sys, "stdin", io.StringIO(""))  # isatty() 为 False
 
-        text, code = company_admin.purge_company("wrong-co", yes=True, password=None)
+        text, code = workspace_admin.purge_workspace("wrong-co", yes=True, password=None)
 
         assert code == 1
         assert "--password" in text, "要告诉用户怎么把口令传进来"
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        assert crud.get(env["company"]["id"]) is not None
+        assert crud.get(env["workspace"]["id"]) is not None
 
     def test_preview_shown_before_asking_password(self, env, monkeypatch):
         """先看到「将要删什么」，再输口令 —— 顺序反了等于盲签。"""
@@ -481,14 +481,14 @@ class TestPurgePasswordGate:
 
         monkeypatch.setattr(_sys, "stdin", io.StringIO(""))
 
-        text, _ = company_admin.purge_company("wrong-co", yes=True, password=None)
+        text, _ = workspace_admin.purge_workspace("wrong-co", yes=True, password=None)
 
         assert "将要删除" in text, "预览没了"
         assert text.index("将要删除") < text.index("口令"), "口令闸门在预览之前"
 
     def test_preview_mode_needs_no_password(self, env):
         """只看预览不需要口令（--yes 才过闸门）。"""
-        text, code = company_admin.purge_company("wrong-co")
+        text, code = workspace_admin.purge_workspace("wrong-co")
 
         assert code == 1
         assert "将要删除" in text
@@ -496,7 +496,7 @@ class TestPurgePasswordGate:
 
     def test_list_needs_no_password(self, env):
         """列表是只读诊断，不加口令 —— 否则自己排查时反而麻烦。"""
-        out = company_admin.list_companies()
+        out = workspace_admin.list_workspaces()
 
         assert "错误公司" in out
 
@@ -504,14 +504,14 @@ class TestPurgePasswordGate:
 class TestPurgeDirPasswordGate:
     def _make_orphan(self, env, name="孤儿公司"):
         d = env["desktop"] / name
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         return d
 
     def test_wrong_password_keeps_dir(self, env):
         orphan = self._make_orphan(env)
 
-        text, code = company_admin.purge_dir(str(orphan), yes=True, password="猜的")
+        text, code = workspace_admin.purge_dir(str(orphan), yes=True, password="猜的")
 
         assert code == 1
         assert orphan.is_dir()
@@ -519,8 +519,8 @@ class TestPurgeDirPasswordGate:
     def test_correct_password_deletes_dir(self, env):
         orphan = self._make_orphan(env)
 
-        text, code = company_admin.purge_dir(
-            str(orphan), yes=True, password=company_admin._PURGE_PASSWORD
+        text, code = workspace_admin.purge_dir(
+            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert code == 0
@@ -533,7 +533,7 @@ class TestPurgeDirPasswordGate:
         monkeypatch.setattr(_sys, "stdin", io.StringIO(""))
         orphan = self._make_orphan(env)
 
-        text, code = company_admin.purge_dir(str(orphan), yes=True, password=None)
+        text, code = workspace_admin.purge_dir(str(orphan), yes=True, password=None)
 
         assert code == 1
         assert orphan.is_dir()
@@ -541,18 +541,18 @@ class TestPurgeDirPasswordGate:
 
 class TestFlagParsing:
     def test_parses_yes_and_password(self):
-        yes, pw = company_admin._parse_flags(["--yes", "--password", "abc"])
+        yes, pw = workspace_admin._parse_flags(["--yes", "--password", "abc"])
 
         assert yes is True and pw == "abc"
 
     def test_password_absent_is_none(self):
-        yes, pw = company_admin._parse_flags(["--yes"])
+        yes, pw = workspace_admin._parse_flags(["--yes"])
 
         assert yes is True and pw is None
 
     def test_password_flag_without_value_is_none(self):
         """`--password` 后面没跟值 → 当作没提供，走交互/拒绝分支，不能崩。"""
-        _yes, pw = company_admin._parse_flags(["--yes", "--password"])
+        _yes, pw = workspace_admin._parse_flags(["--yes", "--password"])
 
         assert pw is None
 
@@ -567,7 +567,7 @@ class TestOrphanPurgeLeavesAuditTrail:
 
     def _make_orphan(self, env, name="孤儿公司"):
         d = env["desktop"] / name
-        for cat, _ in __import__("agentbase.company.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
+        for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
         (d / "合同" / "某合同.txt").write_text("x", encoding="utf-8")
         return d
@@ -575,11 +575,11 @@ class TestOrphanPurgeLeavesAuditTrail:
     def test_writes_audit_entry(self, env):
         orphan = self._make_orphan(env)
 
-        company_admin.purge_dir(
-            str(orphan), yes=True, password=company_admin._PURGE_PASSWORD
+        workspace_admin.purge_dir(
+            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
-        from agentbase.company.crud import _audit_dir
+        from agentbase.workspace.crud import _audit_dir
 
         files = list(_audit_dir().glob("*.jsonl"))
         assert files, "删了东西却没写审计日志"
@@ -592,13 +592,13 @@ class TestOrphanPurgeLeavesAuditTrail:
         """删完目录里不能还需要有文件残留 —— 那种"凭据"必然随目录一起消失。"""
         orphan = self._make_orphan(env)
 
-        company_admin.purge_dir(
-            str(orphan), yes=True, password=company_admin._PURGE_PASSWORD
+        workspace_admin.purge_dir(
+            str(orphan), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert not orphan.exists()
         # 若实现靠"目录内的凭据文件"，这里就是它消失的证据 —— 审计必须写在目录之外
-        from agentbase.company.crud import _audit_dir
+        from agentbase.workspace.crud import _audit_dir
 
         assert any(_audit_dir().glob("*.jsonl")), "痕迹必须落在被删目录之外"
 
@@ -615,12 +615,12 @@ class TestWindowsPathCaseInsensitivity:
     """
 
     def _simulate_windows(self, monkeypatch):
-        monkeypatch.setattr(company_admin.os.path, "normcase", lambda s: s.lower())
+        monkeypatch.setattr(workspace_admin.os.path, "normcase", lambda s: s.lower())
 
-    def _live_company_with_odd_dir_name(self, env):
+    def _live_workspace_with_odd_dir_name(self, env):
         """建一家公司，其桌面目录名与**公司名/slug 都不相符**。
 
-        为什么必须这样构造：`_known_company_paths_and_names()` 有**两路**保护 ——
+        为什么必须这样构造：`_known_workspace_paths_and_names()` 有**两路**保护 ——
         记录路径、以及公司名/slug（后者是为老数据兜底的，见 §孤儿判定）。
         如果目录名恰好等于公司名，那么即使路径比较失效，名字那一路也会把它救下来，
         测试就**测不到** `_path_key` 的修复（我第一版就是这么写的，mutation 检验
@@ -628,30 +628,30 @@ class TestWindowsPathCaseInsensitivity:
 
         目录名与名字脱钩后，唯一能救它的只剩记录路径这一路。
         """
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        company = crud.create(name="甲", slug="jia", work_dir_name="acme-co-b")
+        workspace = crud.create(name="甲", slug="jia", work_dir_name="acme-co-b")
         desktop_dir = env["desktop"] / "acme-co-b"
 
         # 先确认构造有效：名字这一路确实救不了它（否则测试又是空转）
-        _, known_names = company_admin._known_company_paths_and_names()
+        _, known_names = workspace_admin._known_workspace_paths_and_names()
         assert desktop_dir.name.lower() not in known_names, "目录名不该撞上公司名/slug"
 
-        return company, desktop_dir
+        return workspace, desktop_dir
 
     def test_case_differing_record_is_not_orphan(self, env, monkeypatch):
         """记录里是大写路径、实际是小写（或反之）→ 同一目录，不算孤儿。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        company, desktop_dir = self._live_company_with_odd_dir_name(env)
+        workspace, desktop_dir = self._live_workspace_with_odd_dir_name(env)
         # 模拟记录里存的是另一种大小写的路径
-        crud.update_trade_company(
-            company["id"],
+        crud.update_trade_workspace(
+            workspace["id"],
             extra1=json.dumps({"work_dir": str(desktop_dir).upper()}),
         )
         self._simulate_windows(monkeypatch)
 
-        found = company_admin.find_orphan_work_dirs()
+        found = workspace_admin.find_orphan_work_dirs()
 
         assert desktop_dir not in found, (
             "大小写不同就判成孤儿 —— Windows 上会把在用公司的文件夹当残留"
@@ -659,17 +659,17 @@ class TestWindowsPathCaseInsensitivity:
 
     def test_purge_dir_refuses_case_differing_live_folder(self, env, monkeypatch):
         """purge-dir 也必须认得出「大小写不同但同一个目录」。"""
-        from agentbase.company import crud
+        from agentbase.workspace import crud
 
-        company, desktop_dir = self._live_company_with_odd_dir_name(env)
-        crud.update_trade_company(
-            company["id"],
+        workspace, desktop_dir = self._live_workspace_with_odd_dir_name(env)
+        crud.update_trade_workspace(
+            workspace["id"],
             extra1=json.dumps({"work_dir": str(desktop_dir).upper()}),
         )
         self._simulate_windows(monkeypatch)
 
-        text, code = company_admin.purge_dir(
-            str(desktop_dir), yes=True, password=company_admin._PURGE_PASSWORD
+        text, code = workspace_admin.purge_dir(
+            str(desktop_dir), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert code == 1, "大小写不同就放行删除 —— 会删掉在用公司的真实文件"
@@ -678,11 +678,11 @@ class TestWindowsPathCaseInsensitivity:
     def test_path_key_normalizes_case(self, monkeypatch):
         self._simulate_windows(monkeypatch)
 
-        assert company_admin._path_key("/tmp/Acme") == company_admin._path_key("/tmp/acme")
+        assert workspace_admin._path_key("/tmp/Acme") == workspace_admin._path_key("/tmp/acme")
 
     def test_path_key_never_raises_on_odd_input(self):
         """路径解析失败（过长/权限）时退回原串，不能让判断崩掉。"""
-        assert isinstance(company_admin._path_key("C:\\不存在的\\很长\\路径" * 20), str)
+        assert isinstance(workspace_admin._path_key("C:\\不存在的\\很长\\路径" * 20), str)
 
     def test_path_key_never_raises_on_symlink_loop(self, tmp_path):
         """符号链接成环时 `resolve()` 会抛错（3.12 及以前是 RuntimeError，之后是
@@ -694,7 +694,7 @@ class TestWindowsPathCaseInsensitivity:
         (tmp_path / "a").symlink_to(tmp_path / "b")
         (tmp_path / "b").symlink_to(tmp_path / "a")
 
-        assert isinstance(company_admin._path_key(tmp_path / "a"), str)
+        assert isinstance(workspace_admin._path_key(tmp_path / "a"), str)
 
 
 class TestWindowsRobustness:
@@ -708,7 +708,7 @@ class TestWindowsRobustness:
 
     def _orphan_dir(self, env) -> Path:
         """造一个带 Trade 指纹的孤儿目录（数据库里没有的公司）。"""
-        from agentbase.company.workdir import _WORK_DIR_CATEGORIES
+        from agentbase.workspace.workdir import _WORK_DIR_CATEGORIES
 
         d = env["desktop"] / "残留公司"
         d.mkdir()
@@ -721,9 +721,9 @@ class TestWindowsRobustness:
         import io
 
         stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
-        monkeypatch.setattr(company_admin.sys, "stdout", stream)
+        monkeypatch.setattr(workspace_admin.sys, "stdout", stream)
 
-        code = company_admin.main(["list"])
+        code = workspace_admin.main(["list"])
 
         assert code == 0, "编码不兼容时 list 崩了 —— 报告要能打出来"
 
@@ -746,10 +746,10 @@ class TestWindowsRobustness:
                 raise PermissionError(5, "Access is denied")
             real_rmtree(p, *a, **kw)
 
-        monkeypatch.setattr(company_admin.shutil, "rmtree", fake_rmtree)
+        monkeypatch.setattr(workspace_admin.shutil, "rmtree", fake_rmtree)
 
-        text, code = company_admin.purge_dir(
-            str(d), yes=True, password=company_admin._PURGE_PASSWORD
+        text, code = workspace_admin.purge_dir(
+            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert code == 0, f"只读文件把删除卡死了：{text}"
@@ -769,10 +769,10 @@ class TestWindowsRobustness:
                 raise PermissionError(32, "The process cannot access the file")
             real_rmtree(p, *a, **kw)
 
-        monkeypatch.setattr(company_admin.shutil, "rmtree", flaky_rmtree)
+        monkeypatch.setattr(workspace_admin.shutil, "rmtree", flaky_rmtree)
 
-        text, code = company_admin.purge_dir(
-            str(d), yes=True, password=company_admin._PURGE_PASSWORD
+        text, code = workspace_admin.purge_dir(
+            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert code == 0, f"瞬时占用没有重试：{text}"
@@ -786,10 +786,10 @@ class TestWindowsRobustness:
         def always_fail(p, *a, **kw):
             raise PermissionError(32, "locked")
 
-        monkeypatch.setattr(company_admin.shutil, "rmtree", always_fail)
+        monkeypatch.setattr(workspace_admin.shutil, "rmtree", always_fail)
 
-        text, code = company_admin.purge_dir(
-            str(d), yes=True, password=company_admin._PURGE_PASSWORD
+        text, code = workspace_admin.purge_dir(
+            str(d), yes=True, password=workspace_admin._PURGE_PASSWORD
         )
 
         assert code == 1
@@ -799,10 +799,10 @@ class TestWindowsRobustness:
     def test_no_stdin_is_treated_as_no_tty(self, env, monkeypatch):
         """Windows 上 sys.stdin 可能是 None（pythonw/无控制台）→ 不能崩，
         要按「没有 TTY」拒绝，并提示改用 --password。"""
-        monkeypatch.setattr(company_admin.sys, "stdin", None)
+        monkeypatch.setattr(workspace_admin.sys, "stdin", None)
 
-        text, code = company_admin.purge_company(
-            env["company"]["slug"], yes=True, password=None
+        text, code = workspace_admin.purge_workspace(
+            env["workspace"]["slug"], yes=True, password=None
         )
 
         assert code == 1

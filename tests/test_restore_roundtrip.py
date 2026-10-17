@@ -5,7 +5,7 @@
 1. **路径前缀错配**：备份时 arcname 带 `.agentbase/` 前缀
    （`backup.py:68` 写 `.agentbase/data/agentbase.db`、`:78` 写 `.agentbase/{rel}`），
    解压到 tmp_dir 后文件落在 `tmp_dir/.agentbase/...`，可还原代码找的是
-   `tmp_dir/"data"/"agentbase.db"` 与 `tmp_dir/"companies"` —— **永远不存在**，
+   `tmp_dir/"data"/"agentbase.db"` 与 `tmp_dir/"workspaces"` —— **永远不存在**，
    于是 `if exists()` 静默跳过，**不报错、不警告**，最后打印「✓ 已还原」。
    公司档案 / 提示词 / 记忆 / skills 全都没回来，只有 DB 因为
    `rglob("agentbase.db")` 兜底被碰巧救回 —— 这让整条路径"看起来是对的"。
@@ -48,7 +48,7 @@ def agentbase_env(monkeypatch, tmp_path):
     agentbase_home = tmp_path / "agentbase"
     hermes_home = tmp_path / "hermes"
     (agentbase_home / "data").mkdir(parents=True)
-    (agentbase_home / "companies" / "acme").mkdir(parents=True)
+    (agentbase_home / "workspaces" / "acme").mkdir(parents=True)
     (agentbase_home / "prompts").mkdir(parents=True)
     hermes_home.mkdir(parents=True)
 
@@ -61,7 +61,7 @@ def agentbase_env(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
-    (agentbase_home / "companies" / "acme" / "profile.md").write_text(
+    (agentbase_home / "workspaces" / "acme" / "profile.md").write_text(
         "ACME 档案内容", encoding="utf-8"
     )
     (agentbase_home / "prompts" / "system.md").write_text("自定义提示词", encoding="utf-8")
@@ -72,7 +72,7 @@ def agentbase_env(monkeypatch, tmp_path):
 
 
 class TestRoundtripRestoresData:
-    def test_companies_and_prompts_come_back(self, agentbase_env):
+    def test_workspaces_and_prompts_come_back(self, agentbase_env):
         """核心：还原后公司档案与提示词必须真的回来了。"""
         from agentbase.post_install.backup import backup_trade, restore_trade
 
@@ -82,13 +82,13 @@ class TestRoundtripRestoresData:
         th = agentbase_env["agentbase_home"]
         import shutil
 
-        shutil.rmtree(th / "companies")
+        shutil.rmtree(th / "workspaces")
         shutil.rmtree(th / "prompts")
         (th / "data" / "agentbase.db").unlink()
 
         msg = restore_trade(archive)
 
-        assert (th / "companies" / "acme" / "profile.md").is_file(), (
+        assert (th / "workspaces" / "acme" / "profile.md").is_file(), (
             f"公司档案没有还原（restore 返回：{msg!r}）—— "
             "备份的 arcname 带 .agentbase/ 前缀，还原却在不带前缀的路径找"
         )
@@ -116,7 +116,7 @@ class TestRoundtripRestoresData:
         """备份里缺内容时要报出来，不能静默跳过还宣称成功。"""
         from agentbase.post_install import backup as bk
 
-        # 造一个只有 DB 的备份（没有 companies/prompts）
+        # 造一个只有 DB 的备份（没有 workspaces/prompts）
         thin = agentbase_env["tmp"] / "thin.tar.gz"
         with tarfile.open(thin, "w:gz") as tar:
             tar.add(
@@ -126,7 +126,7 @@ class TestRoundtripRestoresData:
 
         msg = bk.restore_trade(str(thin))
 
-        assert "companies" in msg or "未找到" in msg or "部分" in msg, (
+        assert "workspaces" in msg or "未找到" in msg or "部分" in msg, (
             f"备份里没有公司数据却报告成功：{msg!r}"
         )
 

@@ -4,7 +4,7 @@ Trade AI Assistant — 聊天记忆 / 对话记录。
 存储 Agent 会话期间的查询、回复以及读取的文件。
 可选地将对话轮次保留到 Hindsight 长期记忆（需要 hindsight-client 包和 API 密钥）。
 
-所有操作均通过 company_id 隔离，实现多租户数据隔离。
+所有操作均通过 workspace_id 隔离，实现多租户数据隔离。
 """
 
 import json
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _last_purge_date: dict[int, str] = {}
 
 
-def purge_old_conversations(company_id: int, days: int = 365, min_total: int = 30000) -> int:
+def purge_old_conversations(workspace_id: int, days: int = 365, min_total: int = 30000) -> int:
     """删除指定公司 N 天前的对话记录，返回删除行数。
 
     仅在总对话数超过 min_total 时才执行清理——避免对小数据集的过度裁剪。
@@ -29,29 +29,29 @@ def purge_old_conversations(company_id: int, days: int = 365, min_total: int = 3
     try:
         # 先检查总量，小于阈值不清理
         total = conn.execute(
-            "SELECT COUNT(*) FROM conversations WHERE company_id = ?",
-            (company_id,),
+            "SELECT COUNT(*) FROM conversations WHERE workspace_id = ?",
+            (workspace_id,),
         ).fetchone()[0]
         if total < min_total:
             return 0
 
         cur = conn.execute(
             "DELETE FROM conversations "
-            "WHERE company_id = ? AND created_at < datetime('now', 'localtime', ?)",
-            (company_id, f"-{days} days"),
+            "WHERE workspace_id = ? AND created_at < datetime('now', 'localtime', ?)",
+            (workspace_id, f"-{days} days"),
         )
         conn.commit()
         deleted = cur.rowcount
         if deleted:
-            logger.info("Purged %d conversations older than %d days for company %d",
-                        deleted, days, company_id)
+            logger.info("Purged %d conversations older than %d days for workspace %d",
+                        deleted, days, workspace_id)
         return deleted
     finally:
         conn.close()
 
 
 def save(
-    company_id: int,
+    workspace_id: int,
     query: str,
     response: str = "",
     files_read: list[dict] | None = None,
@@ -62,17 +62,17 @@ def save(
 
     skill 参数记录本次查询匹配到的技能名（存入 extra3），供质量统计按技能聚合评分。
     """
-    if company_id is None:
-        raise ValueError("company_id is required for conversation isolation")
+    if workspace_id is None:
+        raise ValueError("workspace_id is required for conversation isolation")
     conn = get_connection()
     try:
         # extra3 记录匹配到的 skill（空则不写，保持旧行为兼容）
         extra3 = json.dumps({"skill": skill}, ensure_ascii=False) if skill else "{}"
         cur = conn.execute(
-            "INSERT INTO conversations (company_id, query, response, files_read, context, extra3) "
+            "INSERT INTO conversations (workspace_id, query, response, files_read, context, extra3) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (
-                company_id,
+                workspace_id,
                 query,
                 response,
                 json.dumps(files_read or [], ensure_ascii=False),
@@ -89,7 +89,7 @@ def save(
             return _row_to_dict(row)
         # 极端兜底：返回最小可用字典（字段类型与 _row_to_dict 输出一致）
         return {
-            "id": new_id, "company_id": company_id,
+            "id": new_id, "workspace_id": workspace_id,
             "query": query, "response": response,
             "files_read": files_read or [], "created_at": None, "context": context,
             "extra1": {}, "extra2": {}, "extra3": {},
@@ -99,7 +99,7 @@ def save(
 
 
 def list_by_context(
-    company_id: int, context: str, limit: int = 50
+    workspace_id: int, context: str, limit: int = 50
 ) -> list[dict]:
     """返回指定公司内某个上下文（如 daily/lead/platform）最近的对话记录。
 
@@ -108,66 +108,66 @@ def list_by_context(
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT * FROM conversations WHERE company_id = ? "
+            "SELECT * FROM conversations WHERE workspace_id = ? "
             "AND (context = ? OR context = '') "
             "ORDER BY id DESC LIMIT ?",
-            (company_id, context, limit),
+            (workspace_id, context, limit),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
     finally:
         conn.close()
 
 
-def list_by_company(company_id: int, limit: int = 50) -> list[dict]:
+def list_by_workspace(workspace_id: int, limit: int = 50) -> list[dict]:
     """返回指定公司最近的对话记录，按最新在前排序。"""
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT * FROM conversations WHERE company_id = ? ORDER BY id DESC LIMIT ?",
-            (company_id, limit),
+            "SELECT * FROM conversations WHERE workspace_id = ? ORDER BY id DESC LIMIT ?",
+            (workspace_id, limit),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
     finally:
         conn.close()
 
 
-def get(company_id: int, conversation_id: int) -> dict | None:
+def get(workspace_id: int, conversation_id: int) -> dict | None:
     """根据 ID 获取单条对话记录，作用域限定到公司。"""
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT * FROM conversations WHERE id = ? AND company_id = ?",
-            (conversation_id, company_id),
+            "SELECT * FROM conversations WHERE id = ? AND workspace_id = ?",
+            (conversation_id, workspace_id),
         ).fetchone()
         return _row_to_dict(row) if row else None
     finally:
         conn.close()
 
 
-def update_response(company_id: int, conversation_id: int, response: str) -> dict | None:
+def update_response(workspace_id: int, conversation_id: int, response: str) -> dict | None:
     """更新一条对话记录的回复字段。"""
     conn = get_connection()
     try:
         n = conn.execute(
-            "UPDATE conversations SET response = ? WHERE id = ? AND company_id = ?",
-            (response, conversation_id, company_id),
+            "UPDATE conversations SET response = ? WHERE id = ? AND workspace_id = ?",
+            (response, conversation_id, workspace_id),
         ).rowcount
         conn.commit()
         if n == 0:
             # 没有行被更新，说明指定 ID 的记录不存在或不属于该公司
             return None
-        return get(company_id, conversation_id)
+        return get(workspace_id, conversation_id)
     finally:
         conn.close()
 
 
-def delete(company_id: int, conversation_id: int) -> bool:
+def delete(workspace_id: int, conversation_id: int) -> bool:
     """删除一条对话记录，作用域限定到公司。"""
     conn = get_connection()
     try:
         cur = conn.execute(
-            "DELETE FROM conversations WHERE id = ? AND company_id = ?",
-            (conversation_id, company_id),
+            "DELETE FROM conversations WHERE id = ? AND workspace_id = ?",
+            (conversation_id, workspace_id),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -176,7 +176,7 @@ def delete(company_id: int, conversation_id: int) -> bool:
 
 
 def add_rating(
-    company_id: int,
+    workspace_id: int,
     conversation_id: int,
     rating: int,
     feedback: str = "",
@@ -193,13 +193,13 @@ def add_rating(
             "UPDATE conversations SET extra2 = json_set("
             "  COALESCE(NULLIF(extra2, ''), '{}'),"
             "  '$.rating', ?, '$.feedback', ?, '$.rated_at', ?"
-            ") WHERE id = ? AND company_id = ?",
-            (rating, feedback, rated_at, conversation_id, company_id),
+            ") WHERE id = ? AND workspace_id = ?",
+            (rating, feedback, rated_at, conversation_id, workspace_id),
         )
         conn.commit()
         if cur.rowcount == 0:
             return None
-        return get(company_id, conversation_id)
+        return get(workspace_id, conversation_id)
     finally:
         conn.close()
 
@@ -210,7 +210,7 @@ def add_rating(
 _LOW_RATING_THRESHOLD = 2
 
 
-def get_quality_stats(company_id: int, days: int = 30) -> dict:
+def get_quality_stats(workspace_id: int, days: int = 30) -> dict:
     """聚合指定公司近 N 天的对话评分，用于发现需要优化的技能/场景。
 
     只统计窗口期内已评分的记录（extra2.rating 非空）。分组维度：
@@ -220,15 +220,15 @@ def get_quality_stats(company_id: int, days: int = 30) -> dict:
 
     days 会被收窄到 1-365，防止异常参数导致全表扫描或空窗口。
     """
-    if company_id is None:
-        raise ValueError("company_id is required for conversation isolation")
+    if workspace_id is None:
+        raise ValueError("workspace_id is required for conversation isolation")
     days = max(1, min(int(days), 365))
     window = f"-{days} days"
 
     # 公共过滤条件：窗口内 + extra2 是合法 JSON 且已有评分
     # （json_valid 保护历史脏数据，避免 json_extract 抛 malformed JSON 错误）
     _WHERE = (
-        "WHERE company_id = ? AND created_at >= datetime('now', 'localtime', ?) "
+        "WHERE workspace_id = ? AND created_at >= datetime('now', 'localtime', ?) "
         "AND json_valid(extra2) AND json_extract(extra2, '$.rating') IS NOT NULL"
     )
     _AGG = (
@@ -243,7 +243,7 @@ def get_quality_stats(company_id: int, days: int = 30) -> dict:
         # 总体：已评分数 / 均分 / 低分数
         total_row = conn.execute(
             f"SELECT {_AGG} FROM conversations {_WHERE}",
-            (_LOW_RATING_THRESHOLD, company_id, window),
+            (_LOW_RATING_THRESHOLD, workspace_id, window),
         ).fetchone()
         total_rated = total_row["rated"] or 0
 
@@ -254,7 +254,7 @@ def get_quality_stats(company_id: int, days: int = 30) -> dict:
             "  '(未匹配技能)') AS grp, "
             f"{_AGG} FROM conversations {_WHERE} "
             f"GROUP BY grp {_ORDER}",
-            (_LOW_RATING_THRESHOLD, company_id, window),
+            (_LOW_RATING_THRESHOLD, workspace_id, window),
         ).fetchall()
 
         # 按聊天入口聚合
@@ -262,7 +262,7 @@ def get_quality_stats(company_id: int, days: int = 30) -> dict:
             "SELECT COALESCE(NULLIF(context, ''), '(未指定)') AS grp, "
             f"{_AGG} FROM conversations {_WHERE} "
             f"GROUP BY grp {_ORDER}",
-            (_LOW_RATING_THRESHOLD, company_id, window),
+            (_LOW_RATING_THRESHOLD, workspace_id, window),
         ).fetchall()
 
         return {
@@ -288,7 +288,7 @@ def get_quality_stats(company_id: int, days: int = 30) -> dict:
 # ── Hindsight 集成 ───────────────────────────────────────────────────
 
 def save_with_context(
-    company_id: int | None,
+    workspace_id: int | None,
     query: str,
     response: str = "",
     files_read: list[dict] | None = None,
@@ -303,12 +303,12 @@ def save_with_context(
     这是对话日志记录推荐使用的入口函数。
     skill 记录本次匹配到的技能名，供质量统计（get_quality_stats）按技能聚合评分。
     """
-    result = save(company_id, query, response, files_read, context=context, skill=skill)
+    result = save(workspace_id, query, response, files_read, context=context, skill=skill)
 
     if retain_to_memory:
         # 只有当调用方要求保留到记忆时才执行，避免不必要的 I/O
         try:
-            from agentbase import company as _company
+            from agentbase import workspace as _workspace
             from agentbase.memory import retain_conversation, retain_to_hermes_memory
 
             # Hindsight 记忆（需要 API 密钥 —— 即发即忘，失败不影响主流程）
@@ -317,7 +317,7 @@ def save_with_context(
                     query=query,
                     response=response,
                     customer_name=customer_name,
-                    company_id=company_id,
+                    workspace_id=workspace_id,
                 )
                 if retained:
                     # 成功保留日志后记录调试信息，便于排查记忆同步问题
@@ -327,16 +327,16 @@ def save_with_context(
 
             # Hermes 原生记忆（始终可用 —— 即发即忘，失败不影响主流程）
             try:
-                company_name = ""
-                if company_id:
+                workspace_name = ""
+                if workspace_id:
                     # 根据公司 ID 查询公司名称，用于在记忆上下文中标识来源
-                    co = _company.get(company_id)
+                    co = _workspace.get(workspace_id)
                     if co:
-                        company_name = co.get("name", "")
+                        workspace_name = co.get("name", "")
                 retain_to_hermes_memory(
                     query=query,
                     response=response,
-                    company_name=company_name,
+                    workspace_name=workspace_name,
                     customer_name=customer_name,
                 )
             except Exception as exc:
@@ -348,14 +348,14 @@ def save_with_context(
             logger.debug("Memory retain skipped: %s", exc)
 
     # 每天运行一次对话清理（每家公司独立节流），删除 365 天前的旧记录（仅当总量超过 30000 条时触发）
-    if company_id:
+    if workspace_id:
         global _last_purge_date
         from datetime import date as _date
         _today = _date.today().isoformat()
-        if _last_purge_date.get(company_id) != _today:
-            _last_purge_date[company_id] = _today
+        if _last_purge_date.get(workspace_id) != _today:
+            _last_purge_date[workspace_id] = _today
             try:
-                purge_old_conversations(company_id, days=365, min_total=30000)
+                purge_old_conversations(workspace_id, days=365, min_total=30000)
             except Exception:
                 logger.debug("Conversation purge skipped", exc_info=True)
 
@@ -365,7 +365,7 @@ def save_with_context(
 def recall_context(query: str, *, bank_id: str = "agentbase") -> str:
     """搜索 Hindsight 长期记忆以获取相关的历史对话记录。
 
-    可按公司隔离（传入 bank_id="agentbase-company-{id}"）。
+    可按公司隔离（传入 bank_id="agentbase-workspace-{id}"）。
 
     如果 Hindsight 不可用或未找到匹配结果，则返回空字符串。
     """
@@ -383,7 +383,7 @@ def recall_context(query: str, *, bank_id: str = "agentbase") -> str:
 # ── 辅助函数 ──────────────────────────────────────────────────────────
 
 
-def get_recent(company_id: int, limit: int = 20) -> list[dict]:
+def get_recent(workspace_id: int, limit: int = 20) -> list[dict]:
     """获取最近的 N 条对话记录，用于上下文注入。
 
     返回字典列表，包含键：id, query, response, created_at。
@@ -392,10 +392,10 @@ def get_recent(company_id: int, limit: int = 20) -> list[dict]:
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT id, company_id, query, response, files_read, created_at "
-            "FROM conversations WHERE company_id = ? AND query IS NOT NULL "
+            "SELECT id, workspace_id, query, response, files_read, created_at "
+            "FROM conversations WHERE workspace_id = ? AND query IS NOT NULL "
             "ORDER BY id DESC LIMIT ?",
-            (company_id, limit),
+            (workspace_id, limit),
         ).fetchall()
         # 反转排序，使得最早的在最前，适合作为对话上下文输入给 LLM
         return [_row_to_dict(r) for r in reversed(rows)]
@@ -495,7 +495,7 @@ _VALID_TIME_RANGES = frozenset(_BOUNDARY_COMPUTERS.keys())
 
 
 def search_history(
-    company_id: int,
+    workspace_id: int,
     time_range: str = "all",
     limit: int = 20,
     *,
@@ -505,7 +505,7 @@ def search_history(
     """按时间范围查询历史对话记录（供 LLM 工具调用使用）。
 
     Args:
-        company_id: 作用域，限定到公司
+        workspace_id: 作用域，限定到公司
         time_range: "today" | "yesterday" | "this_week" | "last_week"
                   | "this_month" | "last_month" | "this_year" | "last_year" | "all"
                   （未知值 → 等同 "all"；fail-safe）
@@ -555,15 +555,15 @@ def search_history(
 
         if start is None and end is None:
             rows = conn.execute(
-                "SELECT id, company_id, query, response, files_read, created_at "
-                "FROM conversations WHERE company_id = ? "
+                "SELECT id, workspace_id, query, response, files_read, created_at "
+                "FROM conversations WHERE workspace_id = ? "
                 "ORDER BY id ASC LIMIT ?",
-                (company_id, limit),
+                (workspace_id, limit),
             ).fetchall()
         else:
             # start / end 都不空 → start <= created_at < end；任一为空 → 该侧不限制
-            clauses = ["company_id = ?"]
-            params: list = [company_id]
+            clauses = ["workspace_id = ?"]
+            params: list = [workspace_id]
             if start is not None:
                 clauses.append("created_at >= ?")
                 params.append(start.strftime("%Y-%m-%d %H:%M:%S"))
@@ -572,7 +572,7 @@ def search_history(
                 params.append(end.strftime("%Y-%m-%d %H:%M:%S"))
             params.append(limit)
             rows = conn.execute(
-                f"SELECT id, company_id, query, response, files_read, created_at "
+                f"SELECT id, workspace_id, query, response, files_read, created_at "
                 f"FROM conversations WHERE {' AND '.join(clauses)} "
                 f"ORDER BY id ASC LIMIT ?",
                 params,
@@ -587,7 +587,7 @@ def _row_to_dict(row) -> dict:
     """将 SQLite 行对象转换为字典，同时将 files_read JSON 字段反序列化。"""
     result = {
         "id": row["id"],
-        "company_id": row["company_id"],
+        "workspace_id": row["workspace_id"],
         "query": row["query"],
         "response": row["response"],
         "files_read": json.loads(row["files_read"]) if row["files_read"] else [],
@@ -615,15 +615,15 @@ if __name__ == "__main__":
     init_db()
 
     conv = save(
-        company_id=1,
+        workspace_id=1,
         query="去年营收怎么样？",
         response="根据2024年度销售额数据...",
         files_read=[{"file": "2024_report.xlsx", "pages": [1, 2]}],
     )
     print("Saved:", json.dumps(conv, indent=2, ensure_ascii=False))
 
-    recent = list_by_company(1, 5)
-    print(f"\nRecent for company 1 ({len(recent)}):")
+    recent = list_by_workspace(1, 5)
+    print(f"\nRecent for workspace 1 ({len(recent)}):")
     for c in recent:
         print(f"  [{c['id']}] {c['query'][:40]}...")
 

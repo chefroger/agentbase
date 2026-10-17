@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-# ── Workspace（当前模块名仍为 company，P3 改名批次统一处理）────────────────
+# ── Workspace（当前模块名仍为 workspace，P3 改名批次统一处理）────────────────
 
 
-class CompanyCreate(BaseModel):
+class WorkspaceCreate(BaseModel):
     name: str = Field(..., description="workspace 名称")
     slug: str | None = Field(None, description="URL 标识（省略时自动生成）")
     logo_url: str = Field("", description="Logo URL")
@@ -22,7 +22,7 @@ class CompanyCreate(BaseModel):
     work_dir_name: str = Field("", description="工作目录名称（目录存在时可用此改名）")
 
 
-class CompanyUpdate(BaseModel):
+class WorkspaceUpdate(BaseModel):
     name: str | None = Field(None, description="workspace 名称")
     logo_url: str | None = Field(None, description="Logo URL")
     website: str | None = Field(None, description="网站")
@@ -36,8 +36,8 @@ class AgentIdentityUpdate(BaseModel):
     agent_identity_md: str = Field("", description="Agent 身份配置 (Markdown)")
 
 
-class OnboardingFirstCompany(BaseModel):
-    company_name: str = Field(..., description="workspace 名称")
+class OnboardingFirstWorkspace(BaseModel):
+    workspace_name: str = Field(..., description="workspace 名称")
     contact_name: str = Field("", description="联系人姓名")
     contact_email: str = Field("", description="联系人邮箱")
     identity_data: dict | None = Field(None, description="Agent 身份配置")

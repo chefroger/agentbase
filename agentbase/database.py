@@ -53,10 +53,10 @@ def get_connection() -> sqlite3.Connection:
 # ── Schema ──────────────────────────────────────────────────────────────────
 
 SCHEMA_SQL = """
--- Companies (multi-tenancy root entity)
+-- Workspaces (multi-tenancy root entity)
 -- Spare columns: extra1/extra2/extra3 为 TEXT 类型，存储 JSON 字符串，
 --                用于未来 schema 扩展，无需 ALTER TABLE
-CREATE TABLE IF NOT EXISTS companies (
+CREATE TABLE IF NOT EXISTS workspaces (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT    NOT NULL,
     slug         TEXT    NOT NULL UNIQUE,
@@ -73,9 +73,9 @@ CREATE TABLE IF NOT EXISTS companies (
     extra3       TEXT    DEFAULT '{}'   -- spare: reserved for future use
 );
 
--- Trade-level company config (links company to Trade system)
-CREATE TABLE IF NOT EXISTS agentbase_companies (
-    company_id        INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+-- Trade-level workspace config (links workspace to Trade system)
+CREATE TABLE IF NOT EXISTS agentbase_workspaces (
+    workspace_id        INTEGER PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
     data_dir          TEXT    NOT NULL,   -- absolute path to ~/.agentbase/{slug}/
     agent_identity_md TEXT    DEFAULT '', -- inline agent identity, overrides data_dir file
     is_active         INTEGER DEFAULT 1,  -- 1=active session
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS agentbase_companies (
 
 CREATE TABLE IF NOT EXISTS conversations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id  INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+    workspace_id  INTEGER REFERENCES workspaces(id) ON DELETE CASCADE,
     query       TEXT    NOT NULL,
     response    TEXT    DEFAULT '',
     files_read  TEXT    DEFAULT '[]',  -- JSON array: [{"file":"...","pages":[1,2]}]
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE TABLE IF NOT EXISTS usage_ledger (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     ts                REAL    NOT NULL,
-    company_id        INTEGER NOT NULL DEFAULT 0,
+    workspace_id        INTEGER NOT NULL DEFAULT 0,
     skill             TEXT    NOT NULL DEFAULT '',
     provider          TEXT    NOT NULL DEFAULT '',
     model             TEXT    NOT NULL DEFAULT '',
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS usage_ledger (
     extra3            TEXT    NOT NULL DEFAULT ''
 );
 
-CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_workspace ON conversations(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_created  ON conversations(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_ts    ON usage_ledger(ts);
 CREATE INDEX IF NOT EXISTS idx_usage_skill ON usage_ledger(skill);
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
-# Migration from v0 (single-company) schema — handled in Python, not SQL
+# Migration from v0 (single-workspace) schema — handled in Python, not SQL
 
 def _add_spare_columns(conn: sqlite3.Connection) -> None:
     """向所有表中添加备用 TEXT 列（extra1/extra2/extra3）（如果缺少的话）。
@@ -143,8 +143,8 @@ def _add_spare_columns(conn: sqlite3.Connection) -> None:
     }
 
     for table, extras in [
-        ("companies",        ["extra1", "extra2", "extra3"]),
-        ("agentbase_companies",  ["extra1", "extra2", "extra3", "license_data"]),
+        ("workspaces",        ["extra1", "extra2", "extra3"]),
+        ("agentbase_workspaces",  ["extra1", "extra2", "extra3", "license_data"]),
         ("conversations",   ["extra1", "extra2", "extra3"]),
         ("usage_ledger",    ["extra1", "extra2", "extra3"]),
     ]:
@@ -177,7 +177,7 @@ def _add_context_column(conn: sqlite3.Connection) -> None:
 
 
 _EXPECTED_TABLES = frozenset({
-    "companies", "agentbase_companies", "conversations", "usage_ledger",
+    "workspaces", "agentbase_workspaces", "conversations", "usage_ledger",
 })
 
 
@@ -203,7 +203,7 @@ def _needs_schema_work(conn: sqlite3.Connection) -> bool:
         if "schema_migrations" not in existing:
             return True
         # 备用列缺失 → ALTER TABLE（清单必须与 _add_spare_columns 保持一致）
-        for table in ("companies", "agentbase_companies", "conversations", "usage_ledger"):
+        for table in ("workspaces", "agentbase_workspaces", "conversations", "usage_ledger"):
             cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             if not {"extra1", "extra2", "extra3"} <= cols:
                 return True

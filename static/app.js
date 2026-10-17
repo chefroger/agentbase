@@ -1,5 +1,5 @@
 // ═════════════════════ STATE ═════════════════════
-let companies = [];
+let workspaces = [];
 let currentCompanyId = null;
 let currentView = 'chat';       // chat | customers | tasks | directory | history
 let currentChatContext = 'daily'; // daily | lead | platform | social | linkedin | customs | docs | docgen | osint
@@ -9,7 +9,7 @@ let currentCustomerId = null;
 let _currentConvId = null;       // 当前 AI 回复的 conversation_id，用于评分
 let editingCustomerData = null; // for customer detail panel
 let _onboardingStep = 1;          // 1 = welcome card, 2 = OSINT input + results
-let _onboardingInputText = '';    // user-entered company name/website
+let _onboardingInputText = '';    // user-entered workspace name/website
 let currentLang = 'zh';           // zh | en
 
 // ═════════════════════ I18N ═════════════════════
@@ -22,8 +22,8 @@ const I18N = {
         'nav.osint':'客户背调','nav.tasks':'定时任务','nav.history':'对话记录',
         'nav.workbench':'📊 工作台','nav.outreach':'🔍 获客引流',
         'nav.sales':'👤 销售转化','nav.tools':'🛠️ 工具','nav.hist':'💬 历史',
-        // company
-        'company.select':'— 选择公司 —','company.add':'添加公司',
+        // workspace
+        'workspace.select':'— 选择公司 —','workspace.add':'添加公司',
         // chat placeholders
         'chat.ph.daily':'输入任何问题，或说「早安简报」开始今天的工作...',
         'chat.ph.lead':'说三个信息：卖什么？卖到哪？找什么客户？',
@@ -40,7 +40,7 @@ const I18N = {
         'footer.update':'更新系统','footer.restart':'重启',
         'footer.skills':'技能帮助','footer.skills_update':'更新技能',
         'footer.upgrade':'升级说明','footer.onboarding':'新手引导',
-        // modals - company
+        // modals - workspace
         'modal.co.title':'🏢 公司设置','modal.co.tab_list':'公司列表','modal.co.tab_identity':'Agent 身份',
         'modal.co.add_title':'添加新公司','modal.co.name':'公司名称 *','modal.co.name_ph':'例如：我的外贸公司',
         'modal.co.slug_ph':'自动生成','modal.co.slug_tt':'由系统根据公司名称自动生成',
@@ -95,7 +95,7 @@ const I18N = {
         // toast
         'toast.copied':'已复制','toast.saved':'已保存','toast.deleted':'已删除',
         'toast.updated':'已更新','toast.error':'操作失败','toast.network':'网络错误',
-        'toast.no_company':'请先选择公司','toast.csv_ok':'成功导入 {n} 个客户',
+        'toast.no_workspace':'请先选择公司','toast.csv_ok':'成功导入 {n} 个客户',
         // customer view
         'customer.title':'客户管理','customer.add':'添加客户',
         'customer.import':'📥 CSV导入','customer.search':'搜索客户...',
@@ -160,7 +160,7 @@ const I18N = {
         'toast.input_required':'请填写库名称和文件夹路径','toast.lib_added':'文档库「{name}」已添加',
         'toast.lib_add_fail':'添加失败','toast.saved':'已保存','toast.deleted':'已删除',
         'toast.cust_product_required':'请选择客户并填写品名','toast.select_library':'请选择文档库',
-        'toast.complete_onboarding':'请先完成新手引导','toast.enter_company':'请输入公司名或网址',
+        'toast.complete_onboarding':'请先完成新手引导','toast.enter_workspace':'请输入公司名或网址',
         'toast.wizard_product':'请先告诉我你卖什么产品','toast.wizard_market':'请告诉我目标市场',
         'toast.activate_fail':'激活失败','toast.network_retry':'网络错误，请重试',
         'toast.request_timeout':'请求超时',
@@ -217,7 +217,7 @@ const I18N = {
         'nav.osint':'Due Diligence','nav.tasks':'Tasks','nav.history':'History',
         'nav.workbench':'📊 Workspace','nav.outreach':'🔍 Outreach',
         'nav.sales':'👤 Sales','nav.tools':'🛠️ Tools','nav.hist':'💬 History',
-        'company.select':'— Select Company —','company.add':'Add',
+        'workspace.select':'— Select Workspace —','workspace.add':'Add',
         'chat.ph.daily':'Ask anything, or say "Morning briefing" to start...',
         'chat.ph.lead':'What do you sell? Where? Who are you looking for?',
         'chat.ph.platform':'Paste any website URL for a full audit...',
@@ -226,22 +226,22 @@ const I18N = {
         'chat.ph.customs':'Upload customs data, then describe your analysis needs...',
         'chat.ph.docs':'Select a library below, or paste file content...',
         'chat.ph.docgen':'Describe the document: e.g. "Create a quotation PPT for EU client"...',
-        'chat.ph.osint':'Enter email/domain/company name for background check...',
+        'chat.ph.osint':'Enter email/domain/workspace name for background check...',
         'chat.clr':'🗑️ Clear','chat.library':'— Select Library —','chat.lib.add':'Add Library',
         'footer.update':'Update','footer.restart':'Restart',
         'footer.skills':'Skills Help','footer.skills_update':'Update Skills',
         'footer.upgrade':'Upgrade Guide','footer.onboarding':'Tutorial',
-        'modal.co.title':'🏢 Company Settings','modal.co.tab_list':'Companies','modal.co.tab_identity':'Agent Identity',
-        'modal.co.add_title':'Add Company','modal.co.name':'Company Name *','modal.co.name_ph':'e.g. My Trading Co.',
-        'modal.co.slug_ph':'Auto-generated','modal.co.slug_tt':'Auto-generated from company name',
+        'modal.co.title':'🏢 Workspace Settings','modal.co.tab_list':'Workspaces','modal.co.tab_identity':'Agent Identity',
+        'modal.co.add_title':'Add Workspace','modal.co.name':'Workspace Name *','modal.co.name_ph':'e.g. My Trading Co.',
+        'modal.co.slug_ph':'Auto-generated','modal.co.slug_tt':'Auto-generated from workspace name',
         'modal.co.contact':'Contact','modal.co.contact_ph':'Name',
         'modal.co.email':'Email','modal.co.website':'Website',
-        'modal.co.identity_desc':'Configure the AI Agent identity for this company. Injected into every conversation.',
+        'modal.co.identity_desc':'Configure the AI Agent identity for this workspace. Injected into every conversation.',
         'modal.co.identity_label':'Agent Identity (Markdown)',
         'modal.co.identity_ph':'Paste agent-identity.md content...',
-        'modal.co.create':'Create Company','modal.co.save':'Save',
+        'modal.co.create':'Create Workspace','modal.co.save':'Save',
         'modal.cust.title':'Add Customer','modal.cust.title_edit':'Edit Customer',
-        'modal.cust.name':'Company Name *','modal.cust.name_ph':'Customer company name',
+        'modal.cust.name':'Workspace Name *','modal.cust.name_ph':'Customer workspace name',
         'modal.cust.contact':'Contact','modal.cust.contact_ph':'Contact name',
         'modal.cust.title_f':'Title','modal.cust.country':'Country','modal.cust.country_ph':'e.g. Italy',
         'modal.cust.email':'Email','modal.cust.phone':'Phone',
@@ -278,7 +278,7 @@ const I18N = {
         'license.activate_btn':'🔑 Enter Activation Code','license.days_left':'{n} days left',
         'toast.copied':'Copied','toast.saved':'Saved','toast.deleted':'Deleted',
         'toast.updated':'Updated','toast.error':'Error','toast.network':'Network Error',
-        'toast.no_company':'Please select a company first','toast.csv_ok':'Imported {n} customers',
+        'toast.no_workspace':'Please select a workspace first','toast.csv_ok':'Imported {n} customers',
         'customer.title':'Customers','customer.add':'Add Customer',
         'customer.import':'📥 Import CSV','customer.search':'Search...',
         'customer.detail.save':'💾 Save',
@@ -306,7 +306,7 @@ const I18N = {
         'onb.start_btn':'🚀 Get Started',
         'onb.step1_done':'✓ About Trade','onb.step2_active':'● Find Customers',
         'onb.step2_title':'Try a background check on a prospect',
-        'onb.step2_desc':'Enter a company name or website — AI will search public info and generate an outreach email',
+        'onb.step2_desc':'Enter a workspace name or website — AI will search public info and generate an outreach email',
         'onb.analyze_btn':'Start Analysis','onb.stop_btn':'🛑 Stop',
         'onb.skip':'Skip tutorial',
         'misc.thinking':'Thinking...','misc.loading':'Loading...',
@@ -333,7 +333,7 @@ const I18N = {
         'toast.input_required':'Please fill in library name and path','toast.lib_added':'Library "{name}" added',
         'toast.lib_add_fail':'Failed to add','toast.saved':'Saved','toast.deleted':'Deleted',
         'toast.cust_product_required':'Please select customer and fill in product name','toast.select_library':'Please select a library',
-        'toast.complete_onboarding':'Please complete the tutorial first','toast.enter_company':'Please enter a company name or URL',
+        'toast.complete_onboarding':'Please complete the tutorial first','toast.enter_workspace':'Please enter a workspace name or URL',
         'toast.wizard_product':'What do you sell?','toast.wizard_market':'Which market?',
         'toast.activate_fail':'Activation failed','toast.network_retry':'Network error, please retry',
         'toast.request_timeout':'Request timeout',
@@ -404,10 +404,10 @@ function _applyLanguage() {
     // 1. 侧边栏
     _updateSidebarLabels();
     // 2. 公司选择器
-    var cs = document.getElementById('company-select');
-    if (cs && cs.options[0]) cs.options[0].text = t('company.select');
+    var cs = document.getElementById('workspace-select');
+    if (cs && cs.options[0]) cs.options[0].text = t('workspace.select');
     var addBtn = document.querySelector('.csel-row button');
-    if (addBtn) { addBtn.title = t('company.add'); addBtn.textContent = '+'; }
+    if (addBtn) { addBtn.title = t('workspace.add'); addBtn.textContent = '+'; }
     // 3. Footer 按钮 —— 图标（textContent）写在 HTML 里，这里只填悬停提示。
     //    早期把图标和文字一起塞进 i18n（'⬆️ 系统更新'），改图标要同步改两份翻译；
     //    现在翻译只管文字。
@@ -460,13 +460,13 @@ function _updateSidebarLabels() {
 }
 
 function _updateStaticModals() {
-    // Company modal
-    var cm = document.getElementById('company-modal');
+    // Workspace modal
+    var cm = document.getElementById('workspace-modal');
     if (cm) {
         var h3 = cm.querySelector('h3'); if (h3) h3.textContent = t('modal.co.title');
-        var tb1 = document.getElementById('tab-btn-companies'); if (tb1) tb1.textContent = t('modal.co.tab_list');
+        var tb1 = document.getElementById('tab-btn-workspaces'); if (tb1) tb1.textContent = t('modal.co.tab_list');
         var tb2 = document.getElementById('tab-btn-identity'); if (tb2) tb2.textContent = t('modal.co.tab_identity');
-        var h4 = cm.querySelector('#tab-companies h4'); if (h4) h4.textContent = t('modal.co.add_title');
+        var h4 = cm.querySelector('#tab-workspaces h4'); if (h4) h4.textContent = t('modal.co.add_title');
         var lbls = cm.querySelectorAll('label');
         lbls.forEach(function(l) {
             var f = l.getAttribute('for');
@@ -791,7 +791,7 @@ let _authRecovering = false;
 function normalizeBody(body) {
     if (!body || typeof body !== 'object') return body;
     var out = {};
-    var idFields = ['library_id', 'customer_id', 'company_id'];
+    var idFields = ['library_id', 'customer_id', 'workspace_id'];
     for (var k in body) {
         if (body[k] === '' && (idFields.indexOf(k) >= 0 || /(^|_)(id|ids)$/i.test(k))) {
             out[k] = null;
@@ -818,12 +818,12 @@ async function recoverAuth(method, path, body) {
                 if (retry !== null) return retry;
             }
         }
-        // token 没变 → 可能是 X-Company-ID 缺失/失效 → 重载公司
+        // token 没变 → 可能是 X-Workspace-ID 缺失/失效 → 重载公司
         var prevCid = currentCompanyId;
         currentCompanyId = null;
         await loadCompanies();
-        if (prevCid && !companies.find(function(c) { return c.id === prevCid; })) {
-            toast(t('toast.no_company'));
+        if (prevCid && !workspaces.find(function(c) { return c.id === prevCid; })) {
+            toast(t('toast.no_workspace'));
             return null;
         }
         if (currentCompanyId) {
@@ -844,7 +844,7 @@ async function recoverAuth(method, path, body) {
 function _buildApiOpts(method, body, token, companyId) {
     const opts = { method: method, headers: {} };
     if (token) opts.headers['X-Hermes-Session-Token'] = token;
-    if (companyId) opts.headers['X-Company-ID'] = String(companyId);
+    if (companyId) opts.headers['X-Workspace-ID'] = String(companyId);
     if (body instanceof FormData) {
         opts.body = body;
     } else if (body) {
@@ -870,7 +870,7 @@ async function api(method, path, body) {
                 // 自动恢复一次：重取 token / 重载公司
                 const recovered = await recoverAuth(method, path, body);
                 if (recovered !== null) return recovered;
-                toast(t('toast.no_company'));
+                toast(t('toast.no_workspace'));
             }
             else if (r.status === 402) showLicenseExpired(msg);
             else if (r.status === 404) toast(msg);
@@ -1296,7 +1296,7 @@ function escJs(s) {
 // #region modal-utils —— 这段被 tests_js/modal.test.js 按标记整体抽取测试，勿删标记
 // 静态模版弹窗白名单：它们在 app.html 里写死，动态清理时必须跳过。
 // 新增静态弹窗要同步加进来，否则会被 _removeDynamicModals 当作动态弹窗删掉。
-const _STATIC_MODAL_IDS = new Set(['company-modal','customer-modal','library-modal','upgrade-help-modal','skills-help-modal']);
+const _STATIC_MODAL_IDS = new Set(['workspace-modal','customer-modal','library-modal','upgrade-help-modal','skills-help-modal']);
 // 安全移除动态弹窗（跳过静态模版弹窗避免误删 HTML 中的 modal-backdrop 骨架）
 function _removeDynamicModals() {
     document.querySelectorAll('.modal-backdrop').forEach(function(e) {
@@ -1304,7 +1304,7 @@ function _removeDynamicModals() {
     });
 }
 // 关闭订单弹窗。必须按 id 精确移除：querySelector('.modal-backdrop') 返回文档序第一个，
-// 那是静态的 #company-modal，会把公司设置弹窗删掉并使后续 showAddCompanyModal 抛 TypeError
+// 那是静态的 #workspace-modal，会把公司设置弹窗删掉并使后续 showAddCompanyModal 抛 TypeError
 function _closeOrderModal() {
     const el = document.getElementById('order-modal-backdrop');
     if (el) el.remove();
@@ -1481,13 +1481,13 @@ function navToView(view, chatCtx, chatName) {
 
 // ═════════════════════ CHAT VIEW ═════════════════════
 function renderChatViewInto(container, ctx, name) {
-    const coName = currentCompanyId ? (companies.find(c => c.id === currentCompanyId)?.name || '') : '';
+    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
 
     container.innerHTML = `
         <div class="chat-topbar">
             <div style="display:flex;align-items:center;gap:8px;">
                 <h2>${esc(name)}</h2>
-                ${coName ? `<span class="company-badge" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 ${esc(coName)}</span>` : ''}
+                ${coName ? `<span class="workspace-badge" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 ${esc(coName)}</span>` : ''}
                 <span class="chat-context-tag" id="chat-context-tag"></span>
             </div>
             <div class="chat-topbar-actions">
@@ -1891,7 +1891,7 @@ async function _collectFilesFromDataTransfer(dt) {
     return files;
 }
 
-// 公司工作目录下的 9 个子目录名 — 与 agentbase/company.py _WORK_DIR_CATEGORIES 同步
+// 公司工作目录下的 9 个子目录名 — 与 agentbase/workspace.py _WORK_DIR_CATEGORIES 同步
 const _WORK_SUBDIRS = ['报价单','合同','客户资料','产品规格','发票','物流单据','认证资质','营销素材','海关数据'];
 
 // 上传文件到后端指定子目录
@@ -2260,7 +2260,7 @@ async function sendMsg() {
     try {
         const r = await fetch('/api/agentbase/chat/stream', {
             method:'POST',
-            headers:{'Content-Type':'application/json','X-Hermes-Session-Token':TOKEN,'X-Company-ID':String(currentCompanyId)},
+            headers:{'Content-Type':'application/json','X-Hermes-Session-Token':TOKEN,'X-Workspace-ID':String(currentCompanyId)},
             body:JSON.stringify({library_id:currentLibraryId,customer_id:currentCustomerId,query,context:currentChatContext,language:currentLang}),
             signal:streamCtl.signal,
         });
@@ -2338,7 +2338,7 @@ async function sendMsg() {
 
 // ═════════════════════ CUSTOMERS VIEW ═════════════════════
 async function renderCustomersViewInto(container) {
-    const coName = currentCompanyId ? (companies.find(c => c.id === currentCompanyId)?.name || '') : '';
+    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
     container.innerHTML = `
         <div class="panel-topbar">
             <h2>👥 ${t('customer.title')}${coName ? '<span style="margin-left:10px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 '+esc(coName)+'</span>' : ''}</h2>
@@ -2504,7 +2504,7 @@ async function showCustomerDetail(cid) {
     const matchScore = extra1['match_score'] || 0;
     const country = extra1['country'] || '';
     const linkedin = extra1['linkedin_url'] || '';
-    const website = extra1['company_website'] || '';
+    const website = extra1['workspace_website'] || '';
     const title = extra2['title'] || '';
     const email = extra2['email'] || '';
     const phone = extra2['phone'] || '';
@@ -2669,7 +2669,7 @@ async function saveCustomerDetail(cid) {
     const followUpNote = $('detail-follow-up-note')?.value?.trim()||'';
 
     await api('PUT', `/api/agentbase/customers/${cid}`, {name, contact, note, country, tier, linkedin_url: linkedin,
-        title, email, phone, whatsapp, company_website: website, backup_email: backupEmail, buyer_type: buyerType, follow_up_note: followUpNote, main_category: mainCategory, match_score: matchScore});
+        title, email, phone, whatsapp, workspace_website: website, backup_email: backupEmail, buyer_type: buyerType, follow_up_note: followUpNote, main_category: mainCategory, match_score: matchScore});
     toast(t('toast.saved'));
     closeCustomerDetail();
     await loadCustomersData();
@@ -2849,7 +2849,7 @@ function showCustomerEditModal(cid) {
         $('cust-whatsapp').value = extra2['whatsapp']||'';
         $('cust-contact').value = c.contact||'';
         $('cust-linkedin').value = extra1['linkedin_url']||'';
-        $('cust-website').value = extra1['company_website']||'';
+        $('cust-website').value = extra1['workspace_website']||'';
         $('cust-tier').value = extra1['tier']||'';
         $('cust-buyer-type').value = extra1['buyer_type']||'';
         $('cust-main-category').value = extra1['main_category']||'';
@@ -2886,7 +2886,7 @@ async function saveCustomer() {
     const followUpNote = $('cust-follow-up-note').value.trim();
 
     const body = {name, contact, note, country, tier, linkedin_url: linkedin,
-        title, email, phone, whatsapp, company_website: website, backup_email: backupEmail, buyer_type: buyerType, follow_up_note: followUpNote, main_category: mainCategory, match_score: matchScore};
+        title, email, phone, whatsapp, workspace_website: website, backup_email: backupEmail, buyer_type: buyerType, follow_up_note: followUpNote, main_category: mainCategory, match_score: matchScore};
     if (editId) {
         await api('PUT', `/api/agentbase/customers/${editId}`, body);
     } else {
@@ -2929,7 +2929,7 @@ async function downloadManagementTables() {
     try {
         const headers = {};
         if (TOKEN) headers['X-Hermes-Session-Token'] = TOKEN;
-        if (currentCompanyId) headers['X-Company-ID'] = String(currentCompanyId);
+        if (currentCompanyId) headers['X-Workspace-ID'] = String(currentCompanyId);
         const resp = await fetch('/api/agentbase/templates/download', { headers });
         if (!resp.ok) { toast('下载管理表格失败'); return; }
         const blob = await resp.blob();
@@ -2948,7 +2948,7 @@ async function downloadCsvTemplate() {
     try {
         const headers = {};
         if (TOKEN) headers['X-Hermes-Session-Token'] = TOKEN;
-        if (currentCompanyId) headers['X-Company-ID'] = String(currentCompanyId);
+        if (currentCompanyId) headers['X-Workspace-ID'] = String(currentCompanyId);
         const resp = await fetch('/api/agentbase/customers/template', { headers });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
@@ -3017,7 +3017,7 @@ function deleteCustomTemplate(id) {
 }
 
 function renderTasksViewInto(container) {
-    const coName = currentCompanyId ? (companies.find(c => c.id === currentCompanyId)?.name || '') : '';
+    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
     const allTemplates = getAllTemplates();
 
     const renderCard = (t) => {
@@ -3421,7 +3421,7 @@ function cronFromTime(timeStr) {
 
 // ═════════════════════ DIRECTORY VIEW ═════════════════════
 function renderDirectoryViewInto(container) {
-    const coName = currentCompanyId ? (companies.find(c => c.id === currentCompanyId)?.name || '') : '';
+    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
     container.innerHTML = `
         <div class="panel-topbar">
             <h2>📂 数据目录${coName ? `<span style="margin-left:10px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 ${esc(coName)}</span>` : ''}</h2>
@@ -3447,11 +3447,11 @@ function renderDirectoryViewInto(container) {
 async function loadDirectoryTree() {
     // Build tree from known structure since we can't browse server filesystem via API
     // Show the standard ~/.agentbase/ layout
-    const co = companies.find(c => c.id === currentCompanyId);
+    const co = workspaces.find(c => c.id === currentCompanyId);
     const slug = co?.slug || 'default';
 
     const tree = [
-        {name:'company-profile.md',icon:'📄',type:'file'},
+        {name:'workspace-profile.md',icon:'📄',type:'file'},
         {name:'products.md',icon:'📄',type:'file'},
         {name:'agent-identity.md',icon:'📄',type:'file'},
         {name:'business-scope.md',icon:'📄',type:'file'},
@@ -3491,7 +3491,7 @@ async function loadDirectoryTree() {
     };
 
     // Also load agent identity preview if available
-    const identity = await api('GET', `/api/agentbase/companies/${currentCompanyId}/agent-identity`);
+    const identity = await api('GET', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`);
     if (identity?.agent_identity_md) {
         $('file-preview').innerHTML = `<div class="file-preview-header"><h3>📄 agent-identity.md</h3></div>
             <div>${DOMPurify.sanitize(marked.parse(identity.agent_identity_md), {ALLOWED_TAGS:['p','br','strong','em','ul','ol','li','h1','h2','h3','blockquote','code','pre','a','table','thead','tbody','tr','th','td','hr','span'],ALLOWED_ATTR:['href','target','class']})}</div>`;
@@ -3517,7 +3517,7 @@ function previewFile(name) {
 
 // ═════════════════════ HISTORY VIEW ═════════════════════
 async function renderHistoryViewInto(container) {
-    const coName = currentCompanyId ? (companies.find(c => c.id === currentCompanyId)?.name || '') : '';
+    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
     container.innerHTML = `
         <div class="panel-topbar">
             <h2>💬 ${t('history.title')}${coName ? '<span style="margin-left:10px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 '+esc(coName)+'</span>' : ''}</h2>
@@ -3671,7 +3671,7 @@ function onboardingGoToStep2() {
 async function onboardingStartOSINT() {
     var input = $('onboarding-osint-input');
     var query = input.value.trim();
-    if (!query) { toast(t('toast.enter_company')); return; }
+    if (!query) { toast(t('toast.enter_workspace')); return; }
     _onboardingInputText = query;
     input.disabled = true;
     $('onboarding-send-btn').disabled = true;
@@ -3732,7 +3732,7 @@ async function onboardingStartOSINT() {
     try {
         var resp = await fetch('/api/agentbase/chat/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Hermes-Session-Token': TOKEN, 'X-Company-ID': String(currentCompanyId) },
+            headers: { 'Content-Type': 'application/json', 'X-Hermes-Session-Token': TOKEN, 'X-Workspace-ID': String(currentCompanyId) },
             body: JSON.stringify({ query: prompt }),
             signal: _onboardingStreamCtl.signal
         });
@@ -3812,7 +3812,7 @@ async function onboardingSaveAndContinue() {
         website = url.hostname;
     } catch(_) {}
     var body = { name: customerName, note: _onboardingOsinResponse };
-    if (website) body.company_website = website;
+    if (website) body.workspace_website = website;
     var r = await api('POST', '/api/agentbase/customers', body);
     if (r?.id) { toast('客户已保存到客户库'); onboardingFinish(); }
     else toast(r?.detail || '保存失败，请重试');
@@ -3836,41 +3836,41 @@ function onboardingSkip(e) {
     navToView('chat', 'daily', '今日简报');
 }
 
-// ═════════════════════ COMPANY MANAGEMENT ═════════════════════
+// ═════════════════════ WORKSPACE MANAGEMENT ═════════════════════
 function showAddCompanyModal() {
-    switchModalTab('tab-companies');
-    showModal('company-modal');
+    switchModalTab('tab-workspaces');
+    showModal('workspace-modal');
     loadCompanyListUI();
 }
 
 function switchModalTab(tab) {
-    $('tab-companies').classList.toggle('hidden', tab !== 'tab-companies');
+    $('tab-workspaces').classList.toggle('hidden', tab !== 'tab-workspaces');
     $('tab-identity').classList.toggle('hidden', tab !== 'tab-identity');
-    $('tab-btn-companies').classList.toggle('active', tab === 'tab-companies');
+    $('tab-btn-workspaces').classList.toggle('active', tab === 'tab-workspaces');
     $('tab-btn-identity').classList.toggle('active', tab === 'tab-identity');
     if (tab === 'tab-identity') loadIdentityForCurrentCompany();
 }
 
 async function loadCompanies() {
     const prev = currentCompanyId;
-    companies = await api('GET', '/api/agentbase/companies') || [];
-    const sel = $('company-select');
+    workspaces = await api('GET', '/api/agentbase/workspaces') || [];
+    const sel = $('workspace-select');
     sel.innerHTML = '<option value="">— 选择公司 —</option>' +
-        companies.map(c => `<option value="${c.id}" ${c.id===prev?'selected':''}>${esc(c.name)}</option>`).join('');
-    if (prev && !companies.find(c=>c.id===prev)) {
-        // Previously selected company was deleted
+        workspaces.map(c => `<option value="${c.id}" ${c.id===prev?'selected':''}>${esc(c.name)}</option>`).join('');
+    if (prev && !workspaces.find(c=>c.id===prev)) {
+        // Previously selected workspace was deleted
         currentCompanyId = null;
         saveState();
     }
 }
 
 function loadCompanyListUI() {
-    const container = $('company-list-ui');
-    if (!companies.length) {
+    const container = $('workspace-list-ui');
+    if (!workspaces.length) {
         container.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">暂无公司，请下方创建。</p>';
         return;
     }
-    container.innerHTML = companies.map(c => `
+    container.innerHTML = workspaces.map(c => `
         <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-light);">
             <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${esc(c.name)}</div>
             <div style="font-size:11px;color:var(--text-muted);">${esc(c.slug)} · ${c.contact_email ? ' · ' + esc(c.contact_email) : ''}</div></div>
@@ -3892,7 +3892,7 @@ function autoSlug() {
         .replace(/[^\w\s-]/g, '')
         .replace(/[\s_]+/g, '-')
         .replace(/--+/g, '-')
-        .replace(/^-|-$/g, '') || 'company';
+        .replace(/^-|-$/g, '') || 'workspace';
     slugEl.value = s;
     slugEl.style.color = '';
 }
@@ -3908,7 +3908,7 @@ async function createCompany() {
         const v = (document.getElementById(elId)?.value || '').trim();
         if (v) body[f] = v;
     });
-    const r = await api('POST', '/api/agentbase/companies', body);
+    const r = await api('POST', '/api/agentbase/workspaces', body);
     if (r?.id) {
         if (r.work_dir_is_new === false) {
             toast(`桌面目录已存在，已创建为：${r.work_dir.split('/').pop()}`);
@@ -3923,7 +3923,7 @@ async function createCompany() {
 
 async function deleteCompany(id) {
     if (!confirm('确定停用该公司？数据将保留 30 天后自动清理。')) return;
-    const r = await api('DELETE', `/api/agentbase/companies/${id}`);
+    const r = await api('DELETE', `/api/agentbase/workspaces/${id}`);
     if (r?.ok) { toast('已删除'); if (currentCompanyId===id) onCompanyChange(''); await loadCompanies(); loadCompanyListUI(); }
     else toast(r?.detail||'删除失败');
 }
@@ -3942,13 +3942,13 @@ async function onCompanyChange(cid) {
     _shownCronOutputs = new Set();
     if (cid) {
         const newCid = parseInt(cid);
-        // 先更新前端状态（让后续 API 调用带上正确的 X-Company-ID header）
+        // 先更新前端状态（让后续 API 调用带上正确的 X-Workspace-ID header）
         currentCompanyId = newCid;
-        // 通知后端切换 session 绑定（旧 cid 会触发 403，因此 _enforce_company_binding 需放行 /switch 端点）
-        try { await api('POST', '/api/agentbase/companies/' + newCid + '/switch'); } catch(_) {}
+        // 通知后端切换 session 绑定（旧 cid 会触发 403，因此 _enforce_workspace_binding 需放行 /switch 端点）
+        try { await api('POST', '/api/agentbase/workspaces/' + newCid + '/switch'); } catch(_) {}
         saveState();
         // 首个公司 + 引导未完成 → 显示新手引导
-        if (companies.length === 1 && !isOnboardingCompleted()) {
+        if (workspaces.length === 1 && !isOnboardingCompleted()) {
             showOnboardingGuide();
             return;
         }
@@ -3962,15 +3962,15 @@ async function onCompanyChange(cid) {
 
 async function loadIdentityForCurrentCompany() {
     if (!currentCompanyId) return;
-    const r = await api('GET', `/api/agentbase/companies/${currentCompanyId}/agent-identity`);
+    const r = await api('GET', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`);
     if (r) $('identity-editor').value = r.agent_identity_md || '';
 }
 
 async function saveCompanyIdentity() {
     if (!currentCompanyId) return;
     const identity = $('identity-editor').value;
-    const r = await api('PUT', `/api/agentbase/companies/${currentCompanyId}/agent-identity`, {agent_identity_md:identity});
-    if (r?.company_id) { toast('身份配置已保存'); hideModal('company-modal'); }
+    const r = await api('PUT', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`, {agent_identity_md:identity});
+    if (r?.workspace_id) { toast('身份配置已保存'); hideModal('workspace-modal'); }
     else toast(r?.detail||'保存失败');
 }
 
@@ -4003,7 +4003,7 @@ let _hermesUpgradeReloading = false;
  * 启动时检查 Hermes 是否过旧；需要升级则显示面板并返回 true。
  * 调用方据此中断常规初始化 —— 此时聊天/公司数据都还用不了。
  *
- * 用裸 fetch 而不是 api()：本检查发生在公司选择之前，api() 会附带 X-Company-ID
+ * 用裸 fetch 而不是 api()：本检查发生在公司选择之前，api() 会附带 X-Workspace-ID
  * 并在失败时弹 toast，两者在这里都不合适。
  */
 async function checkHermesCompatOrShowPanel() {
@@ -4242,10 +4242,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Init loadCompanies failed:', e);
     }
     const savedCid = loadSavedCid();
-    if (savedCid && companies.find(c => c.id === savedCid)) {
+    if (savedCid && workspaces.find(c => c.id === savedCid)) {
         currentCompanyId = savedCid;
-    } else if (companies.length === 1) {
-        currentCompanyId = companies[0].id;
+    } else if (workspaces.length === 1) {
+        currentCompanyId = workspaces[0].id;
     }
 
     // 检测重启前保存的浏览状态（避免 hard reload 丢失阅读位置）
@@ -4253,10 +4253,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (currentCompanyId) {
         saveState();
-        const sel = $('company-select');
+        const sel = $('workspace-select');
         if (sel) sel.value = currentCompanyId;
         // 首个公司 + 引导未完成 → 显示新手引导
-        if (companies.length === 1 && !isOnboardingCompleted()) {
+        if (workspaces.length === 1 && !isOnboardingCompleted()) {
             showOnboardingGuide();
             startCronPolling();
             startVersionCheck();

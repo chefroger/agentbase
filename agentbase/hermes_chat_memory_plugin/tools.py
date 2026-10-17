@@ -50,12 +50,12 @@ _RECENT_MONTHS_DESCRIPTION = (
 
 CHAT_MEMORY_LIST_SCHEMA = _schema(
     "chat_memory_list",
-    "查 trade 用户的对话历史（SQLite，按 company_id 严格隔离）。"
-    "**company_id 必填**——必须传用户在 system prompt 的 Trade Context 段里写明的那个数字，"
+    "查 trade 用户的对话历史（SQLite，按 workspace_id 严格隔离）。"
+    "**workspace_id 必填**——必须传用户在 system prompt 的 Trade Context 段里写明的那个数字，"
     "**不能**从用户消息推断，传错会读到其他公司的数据。"
     "时间范围默认 'all'；给具体枚举值能精确窗口；recent_days/recent_months 用来表达枚举外的相对区间。",
     {
-        "company_id": {
+        "workspace_id": {
             "type": "integer",
             "description": (
                 "当前会话的公司 ID。从 system prompt 的 'Trade Context' 段读取；"
@@ -91,7 +91,7 @@ CHAT_MEMORY_LIST_SCHEMA = _schema(
             "description": "最大返回条数。默认 20。",
         },
     },
-    required=["company_id"],
+    required=["workspace_id"],
 )
 
 
@@ -101,11 +101,11 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
     **_kw 来自 dispatcher 注入**（task_id/session_id 等），signatures 已被 Hermes
     用 inspect 过滤（plugins/AGENTS.md），所以"宽收"是安全的。
     """
-    # company_id 缺失/类型错 → 绝不能静默用别的值（会读到错误公司数据，**最毒**）
-    company_id = args.get("company_id")
-    if not isinstance(company_id, int) or company_id <= 0:
+    # workspace_id 缺失/类型错 → 绝不能静默用别的值（会读到错误公司数据，**最毒**）
+    workspace_id = args.get("workspace_id")
+    if not isinstance(workspace_id, int) or workspace_id <= 0:
         return _err(
-            "company_id is required and must be a positive integer — "
+            "workspace_id is required and must be a positive integer — "
             "read it from the system prompt's 'Trade Context' section, "
             "do not invent a value or read it from the user's message."
         )
@@ -145,7 +145,7 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
 
     try:
         rows = search_history(
-            company_id=company_id,
+            workspace_id=workspace_id,
             time_range=time_range,
             limit=limit,
             recent_days=recent_days,
@@ -157,7 +157,7 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
         return _err(f"search_history failed: {traceback.format_exc(limit=2)}")
 
     return _json({
-        "company_id": company_id,
+        "workspace_id": workspace_id,
         "time_range": time_range,
         "recent_days": recent_days,
         "recent_months": recent_months,

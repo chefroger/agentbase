@@ -211,7 +211,7 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 | LinkedIn Operations | Profile optimization + content strategy + InMail templates |
 | Customs Data | Analyze import/export data, identify high-value buyers |
 | Lead Generation | Google Maps + LinkedIn + Facebook multi-channel customer discovery, one-click save |
-| Cold Outreach | Product promotion emails / cold emails / follow-ups based on company product data |
+| Cold Outreach | Product promotion emails / cold emails / follow-ups based on workspace product data |
 | Email Intelligence | 120+ platform email registration check (holehe), social profile discovery |
 | Client Management | A/B/C grading, detail panel, document library linking |
 | Document Analysis | Complete file-by-file parsing of PDF/Word/Excel/PPT, never skips or truncates |
@@ -222,7 +222,7 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 | Customer Finder | 3-question wizard: what to sell → where to sell → find who, auto search + cold email |
 | Morning Brief | Live FX rates + commodities + market news + client follow-up reminders |
 | Cron Tasks | Workday automations: morning brief / outreach / social posts / daily summary |
-| Chat History | Per-company chat memory, searchable and retraceable |
+| Chat History | Per-workspace chat memory, searchable and retraceable |
 | Email Imitation | Analyze excellent cold email samples → extract AIDA structure and style → generate original emails for your own products |
 | Buyer Persona | Role-based buyer analysis (procurement/technical/executive) with FAB value proposition per role |
 | Market Analysis | Go-to-market war map: certifications, tariffs, keyword arsenal, 3-second hooks, action roadmap |
@@ -237,7 +237,7 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 | Exhibition Manager | Full trade show lifecycle: pre-show invites → on-site records → 48h post-show follow-up |
 | Product Description | FAB method product selling points & sales kits (catalog/website/email embedded) |
 | Decision Coach | Six Thinking Hats methodology for trade decisions (supplier selection, exhibition, payment terms) |
-| Onboarding Wizard | 2-step guided setup: create company → paste customer URL → auto OSINT + cold email |
+| Onboarding Wizard | 2-step guided setup: create workspace → paste customer URL → auto OSINT + cold email |
 | Inquiry Meeting | Weekly inquiry review: per-rep analysis, key inquiry deep-dive, follow-up action plan |
 | Sales Playbook | Turn top sales experience into SOPs / scripts / onboarding path / pitfall checklist |
 | Business Proposal | 3-tier proposal comparison + ROI analysis + implementation roadmap for clients |
@@ -253,7 +253,7 @@ powershell -File scripts/build.ps1  # Windows → dist/Smart Trade AI.exe
 - **Business data is stored locally by default** (`~/.agentbase/`), nothing uploaded to any server
 - With **Ollama or other local models**, full local operation is possible — no data leaves your machine
 - With **DeepSeek or other cloud LLMs**, your input and necessary context are sent to the chosen provider — client identity data is NOT included
-- Multi-company isolation (`X-Company-ID` header)
+- Multi-workspace isolation (`X-Workspace-ID` header)
 - Bound to `127.0.0.1` — only accessible from your local browser; even if you bind another address, session credentials are still handed out to loopback clients only (see Network Exposure Warning below)
 - **Auto-backup before upgrades** → `~/.agentbase/backups/`
 

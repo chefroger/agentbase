@@ -7,9 +7,9 @@ Trade AI Assistant — 首次运行引导模块。
   避免用户分两步操作导致状态不完整。
 
 调用方式：
-  POST /api/agentbase/onboarding/first-company
+  POST /api/agentbase/onboarding/first-workspace
     Body: {
-        "company_name": "ABC Trading Co.",
+        "workspace_name": "ABC Trading Co.",
         "contact_name": "张经理",
         "contact_email": "zhang@example.com",
         "agent_identity": {
@@ -19,12 +19,12 @@ Trade AI Assistant — 首次运行引导模块。
             "target_region": "东南亚、欧洲"
         }
     }
-    Returns: { "company": {...}, "agentbase_company": {...} }
+    Returns: { "workspace": {...}, "agentbase_workspace": {...} }
 """
 
 from __future__ import annotations
 
-from agentbase import company as _company_module
+from agentbase import workspace as _workspace_module
 from agentbase.database import get_connection
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ def is_onboarding_done() -> bool:
     """检查系统是否已完成首次引导（至少有一家活跃公司）。
 
     检测逻辑：
-      1. 查 companies 表是否有 is_active=1 的记录
+      1. 查 workspaces 表是否有 is_active=1 的记录
       2. 如果有 → False（已完成引导，系统已初始化）
       3. 如果没有 → True（需要引导）
     """
@@ -52,7 +52,7 @@ def is_onboarding_done() -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) FROM companies WHERE is_active = 1"
+            "SELECT COUNT(*) FROM workspaces WHERE is_active = 1"
         ).fetchone()
         count = row[0] if row else 0
         _onboarding_done = (count > 0)
@@ -75,7 +75,7 @@ _DEFAULT_AGENT_IDENTITY_TEMPLATE = """# Agent 身份配置 — 高级外贸业�
 
 ## 你是谁
 
-你是 {company_name} 的高级外贸业务经理，负责公司的海外市场开拓和客户关系维护。
+你是 {workspace_name} 的高级外贸业务经理，负责公司的海外市场开拓和客户关系维护。
 
 ## 核心职责
 
@@ -121,7 +121,7 @@ _DEFAULT_AGENT_IDENTITY_TEMPLATE = """# Agent 身份配置 — 高级外贸业�
 """.strip()
 
 
-def _build_agent_identity(company_name: str, identity_data: dict) -> str:
+def _build_agent_identity(workspace_name: str, identity_data: dict) -> str:
     """根据用户输入构建 agent_identity_md 文本。
 
     参数：
@@ -134,7 +134,7 @@ def _build_agent_identity(company_name: str, identity_data: dict) -> str:
         如果任何字段为空，使用默认值。
     """
     return _DEFAULT_AGENT_IDENTITY_TEMPLATE.format(
-        company_name=company_name or "（公司名称未设置）",
+        workspace_name=workspace_name or "（公司名称未设置）",
         products=identity_data.get("products", "各类工业产品"),
         differentiation=identity_data.get("differentiation", "源头工厂，性价比高"),
         target_region=identity_data.get("target_region", "全球市场"),
@@ -145,8 +145,8 @@ def _build_agent_identity(company_name: str, identity_data: dict) -> str:
 # One-step onboarding: 创建公司 + 配置 Agent 身份
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_first_company(
-    company_name: str,
+def create_first_workspace(
+    workspace_name: str,
     contact_name: str = "",
     contact_email: str = "",
     identity_data: dict | None = None,
@@ -156,7 +156,7 @@ def create_first_company(
     """创建第一个公司并配置其 Agent 身份（原子操作）。
 
     参数：
-        company_name: 公司名称（必填）
+        workspace_name: 公司名称（必填）
         contact_name: 联系人姓名（可选）
         contact_email: 联系人邮箱（可选）
         identity_data: Agent 身份配置字典（可选），
@@ -164,38 +164,38 @@ def create_first_company(
         work_dir_name: 桌面工作目录名称（目录已存在时用户指定的新名字）
 
     返回：
-        {"company": {...}, "agentbase_company": {...}}
+        {"workspace": {...}, "agentbase_workspace": {...}}
 
     异常：
-        ValueError: company_name 为空，或公司已存在
+        ValueError: workspace_name 为空，或公司已存在
     """
-    if not company_name or not company_name.strip():
-        raise ValueError("company_name 不能为空")
+    if not workspace_name or not workspace_name.strip():
+        raise ValueError("workspace_name 不能为空")
 
     # 构建 agent_identity_md（用模板 + 用户输入填充）
     agent_identity = _build_agent_identity(
-        company_name.strip(),
+        workspace_name.strip(),
         identity_data or {},
     )
 
     # Step 1: 创建公司记录 + 桌面工作目录 + 文档库
-    company = _company_module.create(
-        name=company_name.strip(),
+    workspace = _workspace_module.create(
+        name=workspace_name.strip(),
         contact_name=contact_name.strip(),
         contact_email=contact_email.strip(),
         work_dir_name=work_dir_name,
     )
 
-    # Step 2: 将 agent_identity_md 写入 agentbase_companies（覆盖空值）
-    agentbase_company = _company_module.update_trade_company(
-        company_id=company["id"],
+    # Step 2: 将 agent_identity_md 写入 agentbase_workspaces（覆盖空值）
+    agentbase_workspace = _workspace_module.update_trade_workspace(
+        workspace_id=workspace["id"],
         agent_identity_md=agent_identity,
     )
 
     # Step 3: 将 agent_identity 写入公司目录下的标准文件
-    # 路径由 agentbase.prompts.write_agent_identity 统一决定（~/.agentbase/{slug}/companies/{slug}/agent-identity.md），
+    # 路径由 agentbase.prompts.write_agent_identity 统一决定（~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md），
     # 这里不自己拼路径 —— 历史上两边各拼一份、拼出不同结果，导致读取方永远读不到写入的文件
-    slug = company.get("slug", "")
+    slug = workspace.get("slug", "")
     if slug:
         from agentbase.prompts import write_agent_identity
         write_agent_identity(slug, agent_identity)
@@ -205,6 +205,6 @@ def create_first_company(
     _onboarding_done = True
 
     return {
-        "company": company,
-        "agentbase_company": agentbase_company,
+        "workspace": workspace,
+        "agentbase_workspace": agentbase_workspace,
     }

@@ -110,16 +110,16 @@ _MIN_HERMES_VERSION = "0.21.6"
 
 
 def dispatch_subcommands() -> bool:
-    """处理子命令（update/backup/skills-update/open/doctor/company），无需启动服务器。
+    """处理子命令（update/backup/skills-update/open/doctor/workspace），无需启动服务器。
 
     `open` 是桌面快捷方式的目标：确保服务在跑，然后打开界面。
     `doctor` 是安装后自检：验 Hermes 运行环境 / vision / Tavily / agentbase 自身。
-    `company` 是 workspace 管理（隐藏功能，不写进用户文档）：见 agentbase.company_admin。
+    `workspace` 是 workspace 管理（隐藏功能，不写进用户文档）：见 agentbase.workspace_admin。
 
     Returns True 表示已处理子命令并应退出进程。
     """
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    if cmd not in ("update", "backup", "skills-update", "open", "doctor", "company"):
+    if cmd not in ("update", "backup", "skills-update", "open", "doctor", "workspace"):
         return False
 
     if cmd == "update":
@@ -131,9 +131,9 @@ def dispatch_subcommands() -> bool:
     elif cmd == "open":
         from agentbase.opener import open_trade
         print(open_trade())
-    elif cmd == "company":
-        from agentbase.company_admin import main as company_main
-        sys.exit(company_main(sys.argv[2:]))
+    elif cmd == "workspace":
+        from agentbase.workspace_admin import main as workspace_main
+        sys.exit(workspace_main(sys.argv[2:]))
     elif cmd == "doctor":
         from agentbase.doctor import (
             format_report,
@@ -416,7 +416,7 @@ def check_native_architecture(auto_repair: bool = True) -> bool:
 def _disable_hermes_lazy_installs() -> None:
     """设置上游的 sealed-venv 开关（无导入、幂等，可重复调用）。
 
-    必须在**任何 Hermes 导入之前**生效 —— 子命令（doctor/osint/company/update）与
+    必须在**任何 Hermes 导入之前**生效 —— 子命令（doctor/osint/workspace/update）与
     版本检查都发生在 `load_env_and_set_yolo()` 之前，而新版本 Hermes 会在 import 时
     发现「当前解释器 ≠ 托管解释器」并重拉进程（runpy 重跑当前命令）；重拉环境里没有
     trade 包，进程直接以 ModuleNotFoundError 崩掉（2026-10-14 实测：本机升级到

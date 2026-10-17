@@ -1,8 +1,8 @@
-"""`trade company` —— 公司管理命令（作者用的隐藏功能，**不写进用户文档**）。
+"""`trade workspace` —— 公司管理命令（作者用的隐藏功能，**不写进用户文档**）。
 
 ## 为什么需要
 
-界面上的「删除」走 `DELETE /companies/{id}` → `crud.delete()`，**只做软删除**
+界面上的「删除」走 `DELETE /workspaces/{id}` → `crud.delete()`，**只做软删除**
 （`is_active=0`）。删完公司从列表里消失，但：
 
   - 桌面上的公司文件夹（`~/Desktop/{公司名}/`）**还在**
@@ -22,9 +22,9 @@
 
 ## 命令
 
-    trade company list                    列出全部公司（含已软删除的）
-    trade company purge <slug|id>         先打印"将要删除什么"，不动手
-    trade company purge <slug|id> --yes   真的删
+    trade workspace list                    列出全部公司（含已软删除的）
+    trade workspace purge <slug|id>         先打印"将要删除什么"，不动手
+    trade workspace purge <slug|id> --yes   真的删
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ import sys
 import time
 from pathlib import Path
 
-from agentbase.company.workdir import _WORK_DIR_CATEGORIES
 from agentbase.console import reconfigure_streams
+from agentbase.workspace.workdir import _WORK_DIR_CATEGORIES
 
 # 桌面目录的识别指纹：工作目录由 _setup_work_directory 建成含这些分类子目录的结构。
 # 用「命中数」而不是「全部命中」判定 —— 用户可能删掉或改名个别分类目录。
@@ -82,7 +82,7 @@ def _check_password(provided: str | None) -> tuple[str, str]:
         return (
             "no_tty",
             "  当前不是交互终端。请改用：\n"
-            "      trade company <子命令> <目标> --yes --password <口令>\n",
+            "      trade workspace <子命令> <目标> --yes --password <口令>\n",
         )
     try:
         entered = getpass.getpass("请输入清理口令：")
@@ -122,7 +122,7 @@ def _parse_flags(args: list[str]) -> tuple[bool, str | None]:
 
 def _resolve(target: str) -> dict | None:
     """按数字 ID 或 slug 找到公司（含已软删除的）。找不到返回 None。"""
-    from agentbase.company import crud
+    from agentbase.workspace import crud
 
     target = (target or "").strip()
     if not target:
@@ -229,8 +229,8 @@ def _delete_guard_ok(path: Path) -> bool:
     与 `crud.purge()` 的护栏一致：只删 AGENT_HOME 下、或桌面下的目录。
     在别处（用户自己搬走了工作目录）一律不动 —— 这里如实标出来给用户看。
     """
-    from agentbase.company.crud import AGENT_HOME
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase.workspace.crud import AGENT_HOME
+    from agentbase.workspace.workdir import _get_desktop_path
 
     try:
         resolved = path.resolve()
@@ -245,7 +245,7 @@ def _delete_guard_ok(path: Path) -> bool:
     return False
 
 
-def _related_counts(company_id: int) -> dict:
+def _related_counts(workspace_id: int) -> dict:
     """统计关联行数（删除前让用户知道影响面）。"""
     from agentbase.database import get_connection
 
@@ -255,7 +255,7 @@ def _related_counts(company_id: int) -> dict:
         for table in ("libraries", "customers", "conversations", "orders"):
             try:
                 out[table] = conn.execute(
-                    f"SELECT COUNT(*) FROM {table} WHERE company_id = ?", (company_id,)
+                    f"SELECT COUNT(*) FROM {table} WHERE workspace_id = ?", (workspace_id,)
                 ).fetchone()[0]
             except Exception:
                 out[table] = 0
@@ -264,26 +264,26 @@ def _related_counts(company_id: int) -> dict:
         conn.close()
 
 
-def _resolve_work_dir(company: dict) -> tuple[Path | None, str]:
+def _resolve_work_dir(workspace: dict) -> tuple[Path | None, str]:
     """找出这家公司的桌面工作目录。返回 (路径, 来源说明)。
 
     优先用 `extra1.work_dir` 里记录的路径；**记录为空时按公司名去桌面找** ——
-    早期版本创建的公司没记这个字段（实测本机 company_id=4「万花筒」就是
+    早期版本创建的公司没记这个字段（实测本机 workspace_id=4「万花筒」就是
     `extra1={}`），而它的桌面文件夹真实存在。不找回来的话，purge 会把那个
     文件夹留在桌面上 —— 正是用户抱怨的那种残留。
 
     只接受带 Trade 目录指纹的目录（≥5 个分类子目录），避免误认同名文件夹。
     """
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase.workspace.workdir import _get_desktop_path
 
-    recorded = company.get("work_dir") or ""
+    recorded = workspace.get("work_dir") or ""
     if recorded:
         return Path(recorded), "记录"
 
     desktop = _get_desktop_path()
     if not desktop.is_dir():
         return None, ""
-    for candidate_name in (company.get("name") or "", company.get("slug") or ""):
+    for candidate_name in (workspace.get("name") or "", workspace.get("slug") or ""):
         candidate_name = candidate_name.strip()
         if not candidate_name:
             continue
@@ -307,13 +307,13 @@ def is_trade_work_dir(path: Path) -> bool:
     return hits >= _ORPHAN_MIN_HITS
 
 
-def _known_company_paths_and_names() -> tuple[set[str], set[str]]:
+def _known_workspace_paths_and_names() -> tuple[set[str], set[str]]:
     """返回 (已知 work_dir 的 resolve 路径集合, 已知公司名/slug 的集合)。
 
     **名字这一路是防误报的关键**：早期版本创建的公司 `extra1` 是空的
     （没记录 work_dir），但桌面文件夹真实存在且在**使用中**。只按路径判定就会
     把在用公司的文件夹当成孤儿 —— 而 purge-dir 会把它删掉。实测本机就有这种
-    （company_id=4「万花筒」extra1={}，`~/Desktop/万花筒/` 却在用）。
+    （workspace_id=4「万花筒」extra1={}，`~/Desktop/万花筒/` 却在用）。
     """
     import json as _json
 
@@ -323,13 +323,13 @@ def _known_company_paths_and_names() -> tuple[set[str], set[str]]:
     names: set[str] = set()
     conn = get_connection()
     try:
-        for row in conn.execute("SELECT name, slug FROM companies"):
+        for row in conn.execute("SELECT name, slug FROM workspaces"):
             if row[0]:
                 names.add(str(row[0]).strip().lower())
             if row[1]:
                 names.add(str(row[1]).strip().lower())
         for row in conn.execute(
-            "SELECT extra1 FROM agentbase_companies WHERE extra1 IS NOT NULL AND extra1 != ''"
+            "SELECT extra1 FROM agentbase_workspaces WHERE extra1 IS NOT NULL AND extra1 != ''"
         ):
             try:
                 wd = _json.loads(row[0]).get("work_dir", "")
@@ -351,13 +351,13 @@ def find_orphan_work_dirs() -> list[Path]:
     判定保守：与任一公司的 **work_dir 路径**或**名字/slug** 相符就不算孤儿 ——
     宁可漏报（用户还能手动 purge-dir），绝不能误报（会删掉在用公司的真实文件）。
     """
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase.workspace.workdir import _get_desktop_path
 
     desktop = _get_desktop_path()
     if not desktop.is_dir():
         return []
 
-    known_paths, known_names = _known_company_paths_and_names()
+    known_paths, known_names = _known_workspace_paths_and_names()
 
     orphans = []
     for child in desktop.iterdir():
@@ -376,19 +376,19 @@ def find_orphan_work_dirs() -> list[Path]:
 
 # ── 命令：list ────────────────────────────────────────────────────────────
 
-def list_companies() -> str:
-    """`trade company list` 的实现。"""
-    from agentbase.company.crud import AGENT_HOME
+def list_workspaces() -> str:
+    """`trade workspace list` 的实现。"""
     from agentbase.database import get_connection
+    from agentbase.workspace.crud import AGENT_HOME
 
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT id, name, slug, is_active, created_at FROM companies ORDER BY id"
+            "SELECT id, name, slug, is_active, created_at FROM workspaces ORDER BY id"
         ).fetchall()
         extra = {}
         for r in conn.execute(
-            "SELECT company_id, data_dir, extra1 FROM agentbase_companies"
+            "SELECT workspace_id, data_dir, extra1 FROM agentbase_workspaces"
         ):
             work_dir = ""
             try:
@@ -426,7 +426,7 @@ def list_companies() -> str:
         for p in orphans:
             st = _dir_stat(p)
             lines.append(f"      {p}  [{st['files']} 个文件 / {_fmt_size(st['bytes'])}]")
-        lines.append("      清理：trade company purge-dir \"<上面的路径>\"")
+        lines.append("      清理：trade workspace purge-dir \"<上面的路径>\"")
     lines.append("")
     lines.append(f"  数据根目录: {AGENT_HOME}")
     lines.append("")
@@ -435,20 +435,20 @@ def list_companies() -> str:
 
 # ── 命令：purge ───────────────────────────────────────────────────────────
 
-def purge_company(target: str, *, yes: bool = False, password: str | None = None) -> tuple[str, int]:
-    """`trade company purge` 的实现。返回 (报告文本, 退出码)。
+def purge_workspace(target: str, *, yes: bool = False, password: str | None = None) -> tuple[str, int]:
+    """`trade workspace purge` 的实现。返回 (报告文本, 退出码)。
 
     不加 `--yes` 时只打印计划并返回 1 —— 不用交互式确认，因为这条命令主要在
     远程 shell 里用，交互式提示容易踩到没有 TTY 的坑；强制两步更可靠。
     """
-    from agentbase.company import crud
+    from agentbase.workspace import crud
 
-    company = _resolve(target)
-    if not company:
-        return f"✗ 找不到公司：{target!r}（用 trade company list 看有哪些）", 1
+    workspace = _resolve(target)
+    if not workspace:
+        return f"✗ 找不到公司：{target!r}（用 trade workspace list 看有哪些）", 1
 
-    cid = company["id"]
-    tc = crud.get_trade_company(cid) or {}
+    cid = workspace["id"]
+    tc = crud.get_trade_workspace(cid) or {}
     data_dir = Path(tc["data_dir"]) if tc.get("data_dir") else None
 
     work_dir = None
@@ -458,28 +458,28 @@ def purge_company(target: str, *, yes: bool = False, password: str | None = None
 
         conn = get_connection()
         row = conn.execute(
-            "SELECT extra1 FROM agentbase_companies WHERE company_id = ?", (cid,)
+            "SELECT extra1 FROM agentbase_workspaces WHERE workspace_id = ?", (cid,)
         ).fetchone()
         if row and row[0]:
             import json as _json
 
             wd = _json.loads(row[0]).get("work_dir", "")
-            company["work_dir"] = wd or ""
+            workspace["work_dir"] = wd or ""
     except Exception:
-        company["work_dir"] = ""
+        workspace["work_dir"] = ""
     finally:
         if conn is not None:
             conn.close()
 
     # 记录为空时按名字回找（老数据），否则 purge 会把桌面文件夹留在原地
-    work_dir, work_dir_src = _resolve_work_dir(company)
+    work_dir, work_dir_src = _resolve_work_dir(workspace)
 
     counts = _related_counts(cid)
     lines = [
         "",
         "══ 将要删除 ══",
-        f"  公司      [{cid}] {company['name']}  (slug: {company['slug']})",
-        f"  状态      {'启用' if company['is_active'] else '已软删除'}",
+        f"  公司      [{cid}] {workspace['name']}  (slug: {workspace['slug']})",
+        f"  状态      {'启用' if workspace['is_active'] else '已软删除'}",
         f"  数据库行  1 家公司 + {counts['libraries']} 个文档库 + "
         f"{counts['customers']} 个客户 + {counts['conversations']} 条对话 + "
         f"{counts['orders']} 个订单（级联删除）",
@@ -507,7 +507,7 @@ def purge_company(target: str, *, yes: bool = False, password: str | None = None
     if not yes:
         lines.append("")
         lines.append("  以上是预览。确认无误后加 --yes 执行：")
-        lines.append(f"      trade company purge {target} --yes")
+        lines.append(f"      trade workspace purge {target} --yes")
         lines.append("")
         return "\n".join(lines), 1
 
@@ -551,7 +551,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
     只接受通过 `is_trade_work_dir()` 指纹校验、且在桌面下的目录 ——
     避免这条命令被当成任意删除工具使用。
     """
-    from agentbase.company.workdir import _get_desktop_path
+    from agentbase.workspace.workdir import _get_desktop_path
 
     path = Path(path_str).expanduser()
     if not path.is_dir():
@@ -569,7 +569,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
 
     # 属于在用公司的文件夹一律不碰 —— 即便用户手动指定。
     # 这类文件夹（老数据没记 work_dir）里有该公司的真实业务文件，删了不可恢复。
-    known_paths, known_names = _known_company_paths_and_names()
+    known_paths, known_names = _known_workspace_paths_and_names()
     looks_live = path.name.strip().lower() in known_names
     if not looks_live:
         try:
@@ -581,7 +581,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
             f"✗ 这个文件夹属于一个**在用中的公司**，不能按残留目录删除：{path}\n"
             "  它里面可能有该公司的真实业务文件。\n"
             f"  若确实要清理，请先删除那家公司（会连文件夹一起清）：\n"
-            f"      trade company purge <slug 或 ID>\n",
+            f"      trade workspace purge <slug 或 ID>\n",
             1,
         )
 
@@ -594,7 +594,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
         return (
             preview
             + f"\n  确认无误后加 --yes 执行：\n"
-            f"      trade company purge-dir \"{path}\" --yes\n",
+            f"      trade workspace purge-dir \"{path}\" --yes\n",
             1,
         )
 
@@ -603,13 +603,13 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
     if not _password_gate(password, gate_lines):
         return preview + "\n".join(gate_lines), 1
 
-    # 删除前先落审计（`crud.purge` 同样先写审计再动手）。公司场景传 company_id=0,
+    # 删除前先落审计（`crud.purge` 同样先写审计再动手）。公司场景传 workspace_id=0,
     # 因为孤儿目录本来就没有对应公司记录。
     #
     # 注意**不要**往被删的目录里写"凭据"文件 —— 那个文件会随 rmtree 一起消失,
     # 等于什么痕迹都没留（我第一版就是这么写的，纯属自欺）。
     try:
-        from agentbase.company.crud import _write_audit_log
+        from agentbase.workspace.crud import _write_audit_log
 
         _write_audit_log(
             0,
@@ -629,27 +629,27 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
 # ── 命令分发 ──────────────────────────────────────────────────────────────
 
 def main(argv: list[str]) -> int:
-    """`trade company <子命令>` 的入口。返回退出码。"""
+    """`trade workspace <子命令>` 的入口。返回退出码。"""
     reconfigure_streams()  # 报告里带 ✓/✗/⚠，Windows 管道输出要先降级编码错误
     sub = argv[0] if argv else ""
     rest = argv[1:]
 
     if sub in ("", "list"):
-        print(list_companies())
+        print(list_workspaces())
         return 0
 
     if sub == "purge":
         if not rest:
-            print("用法：trade company purge <slug 或 ID> [--yes [--password <口令>]]")
+            print("用法：trade workspace purge <slug 或 ID> [--yes [--password <口令>]]")
             return 1
         yes, password = _parse_flags(rest[1:])
-        text, code = purge_company(rest[0], yes=yes, password=password)
+        text, code = purge_workspace(rest[0], yes=yes, password=password)
         print(text)
         return code
 
     if sub == "purge-dir":
         if not rest:
-            print('用法：trade company purge-dir "<桌面目录路径>" [--yes [--password <口令>]]')
+            print('用法：trade workspace purge-dir "<桌面目录路径>" [--yes [--password <口令>]]')
             return 1
         yes, password = _parse_flags(rest[1:])
         text, code = purge_dir(rest[0], yes=yes, password=password)

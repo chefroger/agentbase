@@ -25,7 +25,7 @@ test('带上会话与公司鉴权头', () => {
     const opts = build('GET', null, 'tok-123', 7);
 
     assert.strictEqual(opts.headers['X-Hermes-Session-Token'], 'tok-123');
-    assert.strictEqual(opts.headers['X-Company-ID'], '7');
+    assert.strictEqual(opts.headers['X-Workspace-ID'], '7');
     assert.strictEqual(opts.method, 'GET');
 });
 
@@ -35,7 +35,7 @@ test('token / 公司为空时不写该头（避免发出空鉴权头）', () => 
     const opts = build('GET', null, '', null);
 
     assert.ok(!('X-Hermes-Session-Token' in opts.headers));
-    assert.ok(!('X-Company-ID' in opts.headers));
+    assert.ok(!('X-Workspace-ID' in opts.headers));
 });
 
 test('JSON body：设置 Content-Type 并序列化', () => {

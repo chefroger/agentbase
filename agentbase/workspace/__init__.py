@@ -2,34 +2,34 @@
 Trade AI Assistant — 公司数据层。
 
 三模块结构：
-  - crud: companies + agentbase_companies 表的增删改查 + 审计日志
+  - crud: workspaces + agentbase_workspaces 表的增删改查 + 审计日志
   - workdir: 桌面工作目录管理 + .agentbase-template 模板复制
 
-从 agentbase.company import xxx 的方式保持不变，所有公开 API 通过本 __init__ 重导出。
+从 agentbase.workspace import xxx 的方式保持不变，所有公开 API 通过本 __init__ 重导出。
 """
 
 # 从 crud 模块导出所有公开的数据库操作函数
-from agentbase.company.crud import (
+from agentbase.workspace.crud import (
     AGENT_HOME,
     _db_get_one,
-    _row_to_company,
     _row_to_tc,
+    _row_to_workspace,
     _write_audit_log,
     create,
     delete,
     get,
     get_agent_identity,
     get_by_slug,
-    get_trade_company,
+    get_trade_workspace,
     list_all,
     purge,
     slug_from_id,
     update,
-    update_trade_company,
+    update_trade_workspace,
 )
 
 # 从 workdir 模块导出工作目录管理的公开函数和常量
-from agentbase.company.workdir import (
+from agentbase.workspace.workdir import (
     _WORK_DIR_CATEGORIES,
     _ensure_data_dir,
     _setup_work_directory,
@@ -41,7 +41,7 @@ from agentbase.company.workdir import (
 __all__ = [
     # 数据目录常量
     "AGENT_HOME",
-    # companies 表 CRUD
+    # workspaces 表 CRUD
     "create",
     "get",
     "get_by_slug",
@@ -50,9 +50,9 @@ __all__ = [
     "update",
     "delete",
     "purge",
-    # agentbase_companies 表 CRUD
-    "get_trade_company",
-    "update_trade_company",
+    # agentbase_workspaces 表 CRUD
+    "get_trade_workspace",
+    "update_trade_workspace",
     "get_agent_identity",
     # 工作目录管理
     "_WORK_DIR_CATEGORIES",

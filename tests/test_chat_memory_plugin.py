@@ -5,7 +5,7 @@
 - search_history 端到端：含 end 上界、recent_days/recent_months 互斥、未知枚举 fail-safe
 - ensure_chat_memory_plugin_enabled：仅追加 plugins.enabled 与 enabled_toolsets 两键，原子性
 - sync_chat_memory_plugin：幂等（hash 比对不变就不写）
-- 插件端到端：register + handler 拒缺 company_id + handler 互斥校验
+- 插件端到端：register + handler 拒缺 workspace_id + handler 互斥校验
 """
 
 from __future__ import annotations
@@ -111,14 +111,14 @@ class TestSearchHistoryE2E:
         import agentbase.database as db
         db.init_db()
         con = db.get_connection()
-        con.execute("INSERT INTO companies (id, name, slug) VALUES (1, '测试', 'test')")
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (1, '测试', 'test')")
 
         from datetime import timedelta as _td
 
         def insert(days_ago, q, r):
             ts = (datetime.now() - _td(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")
             con.execute(
-                "INSERT INTO conversations (company_id, query, response, created_at) "
+                "INSERT INTO conversations (workspace_id, query, response, created_at) "
                 "VALUES (1, ?, ?, ?)", (q, r, ts),
             )
 
@@ -196,21 +196,21 @@ class TestSearchHistoryE2E:
         r = search_history(1, time_range="完全不存在的枚举")
         assert len(r) == 4  # fail-safe → all
 
-    def test_company_id_isolation(self, db_with_rows):
+    def test_workspace_id_isolation(self, db_with_rows):
         import agentbase.database as db
         from agentbase.chat_memory import search_history
 
         con = db.get_connection()
-        con.execute("INSERT INTO companies (id, name, slug) VALUES (2, '另一家', 'other')")
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (2, '另一家', 'other')")
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         con.execute(
-            "INSERT INTO conversations (company_id, query, response, created_at) "
+            "INSERT INTO conversations (workspace_id, query, response, created_at) "
             "VALUES (2, '另一家的问题', '另一家的回复', ?)", (ts,),
         )
         con.commit()
 
         r1 = search_history(1, time_range="all")
-        assert all(row["company_id"] == 1 for row in r1)
+        assert all(row["workspace_id"] == 1 for row in r1)
         assert not any("另一家" in row["query"] for row in r1)
 
 
@@ -433,24 +433,24 @@ class TestChatMemoryPluginE2E:
         assert calls[0]["toolset"] == "chat-memory"
         assert "schema" in calls[0] and "handler" in calls[0]
 
-    def test_handler_rejects_missing_company_id(self, tmp_path, monkeypatch):
+    def test_handler_rejects_missing_workspace_id(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({"time_range": "all"}))
         assert "error" in res
-        assert "company_id" in res["error"]
+        assert "workspace_id" in res["error"]
 
-    def test_handler_rejects_non_int_company_id(self, tmp_path, monkeypatch):
+    def test_handler_rejects_non_int_workspace_id(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({"company_id": "1", "time_range": "all"}))
-        assert "company_id" in res["error"]
+        res = json.loads(plugin.handle_chat_memory_list({"workspace_id": "1", "time_range": "all"}))
+        assert "workspace_id" in res["error"]
 
     def test_handler_rejects_recent_days_and_months_together(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({
-            "company_id": 1, "recent_days": 7, "recent_months": 2,
+            "workspace_id": 1, "recent_days": 7, "recent_months": 2,
         }))
         assert "mutually exclusive" in res["error"]
 
@@ -458,7 +458,7 @@ class TestChatMemoryPluginE2E:
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({
-            "company_id": 1, "recent_days": 0,
+            "workspace_id": 1, "recent_days": 0,
         }))
         assert "recent_days" in res["error"]
 
@@ -470,16 +470,16 @@ class TestChatMemoryPluginE2E:
         import agentbase.database as db
         db.init_db()
         con = db.get_connection()
-        con.execute("INSERT INTO companies (id, name, slug) VALUES (1, 't', 't')")
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (1, 't', 't')")
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         con.execute(
-            "INSERT INTO conversations (company_id, query, response, created_at) "
+            "INSERT INTO conversations (workspace_id, query, response, created_at) "
             "VALUES (1, '今天', '今天回', ?)", (ts,),
         )
         con.commit()
 
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({"company_id": 1, "time_range": "today"}))
+        res = json.loads(plugin.handle_chat_memory_list({"workspace_id": 1, "time_range": "today"}))
         assert "error" not in res
         assert res["count"] == 1
         assert res["rows"][0]["query"] == "今天"
@@ -566,9 +566,9 @@ class TestRecentMonthsAtMonthEnd:
         ts = _dt(2026, 2, 15, 10, 0, 0).strftime("%Y-%m-%d %H:%M:%S")
         with_ts = _dt(2026, 1, 15, 10, 0, 0).strftime("%Y-%m-%d %H:%M:%S")
         con = db.get_connection()
-        con.execute("INSERT INTO companies (id, name, slug) VALUES (1,'t','t')")
-        con.execute("INSERT INTO conversations (company_id,query,response,created_at) VALUES (1,'2月中','r',?)", (ts,))
-        con.execute("INSERT INTO conversations (company_id,query,response,created_at) VALUES (1,'1月中','r',?)", (with_ts,))
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (1,'t','t')")
+        con.execute("INSERT INTO conversations (workspace_id,query,response,created_at) VALUES (1,'2月中','r',?)", (ts,))
+        con.execute("INSERT INTO conversations (workspace_id,query,response,created_at) VALUES (1,'1月中','r',?)", (with_ts,))
         con.commit()
 
         rows = search_history(1, time_range="all", recent_months=2)

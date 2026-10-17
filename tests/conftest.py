@@ -9,7 +9,7 @@ import tempfile
 import pytest
 
 # 在第 0 步：在所有 import 之前设置 AGENT_HOME
-# 这样 agentbase.company 模块级别的 AGENT_HOME 常量就会指向临时路径
+# 这样 agentbase.workspace 模块级别的 AGENT_HOME 常量就会指向临时路径
 if "AGENT_HOME" not in os.environ:
     os.environ["AGENT_HOME"] = tempfile.mkdtemp(prefix="agentbase-test-")
 
@@ -41,7 +41,7 @@ def _isolate_process_globals():
     chat = _sys.modules.get("agentbase.api.chat")
     # 未加载的模块不碰：保持「fixture 不引入额外 import」这条原则
     _deps_state = (
-        (deps._SESSION_TOKEN, dict(deps._ACTIVE_COMPANY)) if deps is not None else None
+        (deps._SESSION_TOKEN, dict(deps._ACTIVE_WORKSPACE)) if deps is not None else None
     )
 
     yield
@@ -49,11 +49,11 @@ def _isolate_process_globals():
     if _deps_state is not None:
         token, bindings = _deps_state
         deps._SESSION_TOKEN = token
-        deps._ACTIVE_COMPANY.clear()
-        deps._ACTIVE_COMPANY.update(bindings)
+        deps._ACTIVE_WORKSPACE.clear()
+        deps._ACTIVE_WORKSPACE.update(bindings)
     if chat is not None:
         chat._chat_timestamps.clear()
-        chat._last_skill_per_company.clear()
+        chat._last_skill_per_workspace.clear()
 
 
 @pytest.fixture

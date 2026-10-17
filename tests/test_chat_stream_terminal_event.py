@@ -51,7 +51,7 @@ class _AgentRaising:
 
 
 @pytest.fixture
-def company(monkeypatch, tmp_path):
+def workspace(monkeypatch, tmp_path):
     """临时库 + 一家公司（建目录的过程照 document_rules 那套 harness）。"""
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
@@ -61,7 +61,7 @@ def company(monkeypatch, tmp_path):
 
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -74,7 +74,7 @@ def company(monkeypatch, tmp_path):
     return co.create(name="SSE Co", slug="sse-co")
 
 
-async def _collect_stream(company: dict, exc: BaseException) -> str:
+async def _collect_stream(workspace: dict, exc: BaseException) -> str:
     """驱动真实的 chat_stream，把 SSE 响应体收成一个字符串。"""
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
@@ -84,7 +84,7 @@ async def _collect_stream(company: dict, exc: BaseException) -> str:
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}), \
          patch("agentbase.license.check_license", return_value=(True, "")):
         resp = await chat.chat_stream(
-            ChatRequest(query="帮我做一下公司网站诊断"), company["id"]
+            ChatRequest(query="帮我做一下公司网站诊断"), workspace["id"]
         )
         chunks = []
         async for chunk in resp.body_iterator:
@@ -95,8 +95,8 @@ async def _collect_stream(company: dict, exc: BaseException) -> str:
 class TestStreamEndsWithTerminalEvent:
     """agent 以 BaseException 结束时，必须下发 error 事件。"""
 
-    async def test_base_exception_produces_error_event(self, company):
-        body = await _collect_stream(company, SystemExit(1))
+    async def test_base_exception_produces_error_event(self, workspace):
+        body = await _collect_stream(workspace, SystemExit(1))
 
         assert "event: error" in body, (
             "agent 以 SystemExit(1) 结束时流里没有 error 事件 —— "
@@ -104,13 +104,13 @@ class TestStreamEndsWithTerminalEvent:
             f"\n实际流内容：{body!r}"
         )
 
-    async def test_error_event_names_the_exception_type(self, company):
+    async def test_error_event_names_the_exception_type(self, workspace):
         """错误信息要带上异常类型，否则等于没说。"""
-        body = await _collect_stream(company, SystemExit(1))
+        body = await _collect_stream(workspace, SystemExit(1))
 
         assert "SystemExit" in body, f"错误事件未标明异常类型：{body!r}"
 
-    async def test_not_retried(self, company):
+    async def test_not_retried(self, workspace):
         """BaseException 不是瞬时故障，不该进重试循环（重试只会拖时间）。
 
         断言方式：整个过程必须很快返回。若进了重试循环，会 sleep 1+2 秒。
@@ -118,13 +118,13 @@ class TestStreamEndsWithTerminalEvent:
         import time
 
         start = time.time()
-        await _collect_stream(company, SystemExit(1))
+        await _collect_stream(workspace, SystemExit(1))
         elapsed = time.time() - start
 
         assert elapsed < 1.5, f"疑似进入了重试循环（耗时 {elapsed:.1f}s）"
 
-    async def test_stream_always_carries_done(self, company):
+    async def test_stream_always_carries_done(self, workspace):
         """无论成败，`done` 都要在（前端的流结束判据）。"""
-        body = await _collect_stream(company, SystemExit(1))
+        body = await _collect_stream(workspace, SystemExit(1))
 
         assert "event: done" in body

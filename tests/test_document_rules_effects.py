@@ -71,7 +71,7 @@ def env(monkeypatch, tmp_path):
     from agentbase.database import init_db
     init_db()
 
-    import agentbase.company as co
+    import agentbase.workspace as co
 
     def _setup(name, slug, suggested_name=""):
         wd = tmp_path / (suggested_name or name)
@@ -81,14 +81,14 @@ def env(monkeypatch, tmp_path):
         return wd, True
 
     monkeypatch.setattr(co, "_setup_work_directory", _setup)
-    company = co.create(name="Rules Co", slug="rules-co")
+    workspace = co.create(name="Rules Co", slug="rules-co")
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     (data_dir / "合同.txt").write_text("甲\n乙\n丙\n", encoding="utf-8")
     (data_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
 
-    return {"cid": company["id"], "dir": data_dir}
+    return {"cid": workspace["id"], "dir": data_dir}
 
 
 async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, gate=True):

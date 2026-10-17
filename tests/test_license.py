@@ -172,7 +172,7 @@ class TestLicenseCheck:
         monkeypatch.setattr("agentbase.license._save_license_data", mock_save)
 
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert ok
         assert "first_launch_at" in saved.get(1, {})
 
@@ -183,7 +183,7 @@ class TestLicenseCheck:
                            lambda cid=None: {"first_launch_at": ten_days_ago})
 
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert ok
 
     def test_trial_expired(self, monkeypatch):
@@ -193,7 +193,7 @@ class TestLicenseCheck:
                            lambda cid=None: {"first_launch_at": forty_days_ago})
 
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert not ok
         assert "到期" in msg
 
@@ -210,7 +210,7 @@ class TestLicenseCheck:
         monkeypatch.setattr("agentbase.license._verify_license", lambda data: True)
 
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert ok
 
     def test_activated_expired(self, monkeypatch):
@@ -225,7 +225,7 @@ class TestLicenseCheck:
         monkeypatch.setattr("agentbase.license._verify_license", lambda data: True)
 
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert not ok
         assert "到期" in msg
 
@@ -239,7 +239,7 @@ class TestDaysRemaining:
                            lambda cid=None: {"first_launch_at": ten_days_ago})
 
         from agentbase.license import days_remaining
-        remaining = days_remaining(company_id=1)
+        remaining = days_remaining(workspace_id=1)
         assert 19 <= remaining <= 20
 
     def test_expired_returns_zero(self, monkeypatch):
@@ -248,7 +248,7 @@ class TestDaysRemaining:
                            lambda cid=None: {"first_launch_at": forty_days_ago})
 
         from agentbase.license import days_remaining
-        assert days_remaining(company_id=1) == 0
+        assert days_remaining(workspace_id=1) == 0
 
     def test_active_returns_remaining(self, monkeypatch):
         future = (datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=100)).isoformat()
@@ -260,13 +260,13 @@ class TestDaysRemaining:
                            })
 
         from agentbase.license import days_remaining
-        remaining = days_remaining(company_id=1)
+        remaining = days_remaining(workspace_id=1)
         assert 95 <= remaining <= 100
 
     def test_no_data_returns_trial_max(self, monkeypatch):
         monkeypatch.setattr("agentbase.license._get_license_data", lambda cid=None: {})
         from agentbase.license import days_remaining
-        assert days_remaining(company_id=1) == 30
+        assert days_remaining(workspace_id=1) == 30
 
 
 class TestLicenseStatus:
@@ -275,7 +275,7 @@ class TestLicenseStatus:
     def test_trial_status(self, monkeypatch):
         monkeypatch.setattr("agentbase.license._get_license_data", lambda cid=None: {})
         from agentbase.license import status
-        s = status(company_id=1)
+        s = status(workspace_id=1)
         assert s["status"] == "trial"
         assert s["activated"] is False
         # 未激活状态下始终返回申请码（方便用户在试用期内提前申请激活）
@@ -287,7 +287,7 @@ class TestLicenseStatus:
                            lambda cid=None: {"first_launch_at": forty_days_ago})
 
         from agentbase.license import status
-        s = status(company_id=1)
+        s = status(workspace_id=1)
         assert s["status"] == "expired"
         assert s["request_code"].startswith("TRADE-REQ-")
 
@@ -305,7 +305,7 @@ class TestLicenseStatus:
                                "signature": sig,
                            })
 
-        s = status(company_id=1)
+        s = status(workspace_id=1)
         assert s["status"] == "active"
         assert s["activated"] is True
 
@@ -407,7 +407,7 @@ class TestLicenseSignature:
                                "signature": sig,
                            })
         from agentbase.license import check_license
-        ok, msg = check_license(company_id=1)
+        ok, msg = check_license(workspace_id=1)
         assert not ok
         assert "异常" in msg or "重新激活" in msg
 

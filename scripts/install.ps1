@@ -342,7 +342,7 @@ Write-Host "Step 5/5: 初始化数据目录" -ForegroundColor White
 
 $DataDir = "$AgentHome\data"
 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
-New-Item -ItemType Directory -Path "$AgentHome\companies" -Force | Out-Null
+New-Item -ItemType Directory -Path "$AgentHome\workspaces" -Force | Out-Null
 
 try {
     & $PyCmd -c "from agentbase.database import init_db; init_db()" 2>$null
@@ -352,7 +352,7 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 导出 trade 命令
+# 导出 agentbase 命令
 # ─────────────────────────────────────────────────────────────────────────────
 $LocalBin = "$env:LOCALAPPDATA\local\bin"
 New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
@@ -371,7 +371,7 @@ set HERMES_DISABLE_LAZY_INSTALLS=1
 $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
 if ($currentPath -notlike "*$LocalBin*") {
     [Environment]::SetEnvironmentVariable("PATH", "$LocalBin;$currentPath", "User")
-    Write-Host "  ✓ 已将 trade 命令加入 PATH（新终端生效）" -ForegroundColor Green
+    Write-Host "  ✓ 已将 agentbase 命令加入 PATH（新终端生效）" -ForegroundColor Green
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

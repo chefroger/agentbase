@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from agentbase import chat_memory
-from agentbase.api.deps import require_company
+from agentbase.api.deps import require_workspace
 from agentbase.api.models import ChatRequest
 from agentbase.document_task import (
     DocumentTask,
@@ -43,11 +43,11 @@ _STREAM_DEADLINE_SECONDS = 1800.0
 # 每个公司 60 秒窗口内最多 20 次 chat 请求（含 sync + SSE）
 _MAX_CHAT_PER_MINUTE = 20
 _WINDOW_SECONDS = 60.0
-_chat_timestamps: dict[int, list[float]] = {}  # company_id → [timestamps]
+_chat_timestamps: dict[int, list[float]] = {}  # workspace_id → [timestamps]
 _rate_limit_lock = threading.Lock()
 
-# 定期清理：每小时扫描一次，删除超过 1 小时无活跃时间戳的 company entry，
-# 防止 _chat_timestamps 和 _last_skill_per_company 无界增长导致内存泄漏。
+# 定期清理：每小时扫描一次，删除超过 1 小时无活跃时间戳的 workspace entry，
+# 防止 _chat_timestamps 和 _last_skill_per_workspace 无界增长导致内存泄漏。
 # 阈值 3600s 远大于限流窗口 60s，不会误清活跃公司。
 _STALE_THRESHOLD = 3600.0
 
@@ -62,33 +62,33 @@ def _cleanup_rate_limit_dicts():
             ]
             for cid in stale:
                 del _chat_timestamps[cid]
-        # 同时清理 skill 缓存中超过阈值的 company entry
+        # 同时清理 skill 缓存中超过阈值的 workspace entry
         with _skill_cache_lock:
             # 只能清理在 _chat_timestamps 中也被清理的条目，
             # 确保活跃公司的 skill 缓存不会被误删
             for cid in stale:
-                _last_skill_per_company.pop(cid, None)
+                _last_skill_per_workspace.pop(cid, None)
 
-# 进程内 skill 缓存：记录每个 company 上次使用的 skill 名称，用于跳过重复注入
-_last_skill_per_company: dict[int, str] = {}
+# 进程内 skill 缓存：记录每个 workspace 上次使用的 skill 名称，用于跳过重复注入
+_last_skill_per_workspace: dict[int, str] = {}
 _skill_cache_lock = threading.Lock()
 
 _cleanup_thread = threading.Thread(target=_cleanup_rate_limit_dicts, daemon=True)
 _cleanup_thread.start()
 
 
-def _check_chat_rate_limit(company_id: int) -> bool:
+def _check_chat_rate_limit(workspace_id: int) -> bool:
     """检查指定公司是否超过 chat 限流阈值。返回 True 表示允许继续。"""
     global _chat_timestamps
     now = time.time()
     with _rate_limit_lock:
-        stamps = _chat_timestamps.get(company_id, [])
+        stamps = _chat_timestamps.get(workspace_id, [])
         stamps = [t for t in stamps if now - t < _WINDOW_SECONDS]
         if len(stamps) >= _MAX_CHAT_PER_MINUTE:
-            _chat_timestamps[company_id] = stamps
+            _chat_timestamps[workspace_id] = stamps
             return False
         stamps.append(now)
-        _chat_timestamps[company_id] = stamps
+        _chat_timestamps[workspace_id] = stamps
         return True
 
 
@@ -107,7 +107,7 @@ def _extract_and_cache_skill(cid: int, full_query: str, skill_hint: str | None) 
     current_skill = _skill_match.group(1) if _skill_match else None
     with _skill_cache_lock:
         if current_skill:
-            _last_skill_per_company[cid] = current_skill
+            _last_skill_per_workspace[cid] = current_skill
     return current_skill
 
 def _document_gate(document_task, request_task_id: str, collector):
@@ -133,7 +133,7 @@ def _document_gate(document_task, request_task_id: str, collector):
 @router.post("/chat")
 async def app(
     payload: ChatRequest,
-    cid: int = Depends(require_company),
+    cid: int = Depends(require_workspace),
 ):
     """同步聊天。"""
     from agentbase.license import check_license
@@ -150,7 +150,7 @@ async def app(
 
     # 读取上次使用的 skill 名称（用于跳过重复注入）
     with _skill_cache_lock:
-        last_skill = _last_skill_per_company.get(cid)
+        last_skill = _last_skill_per_workspace.get(cid)
 
     full_query, skill_hint = build_query(
         cid, query,
@@ -252,7 +252,7 @@ async def app(
             release_read_coverage(request_task_id)
 
     conv = chat_memory.save_with_context(
-        company_id=cid, query=query,
+        workspace_id=cid, query=query,
         response=response,
         files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
                     if gate_result else None),
@@ -275,7 +275,7 @@ async def app(
 @router.post("/chat/stream")
 async def chat_stream(
     payload: ChatRequest,
-    cid: int = Depends(require_company),
+    cid: int = Depends(require_workspace),
 ):
     """SSE 流式聊天，实时推送 Agent 工具调用进度。
 
@@ -296,7 +296,7 @@ async def chat_stream(
 
     # 读取上次使用的 skill 名称（用于跳过重复注入）
     with _skill_cache_lock:
-        last_skill = _last_skill_per_company.get(cid)
+        last_skill = _last_skill_per_workspace.get(cid)
 
     full_query, skill_hint = build_query(
         cid, query,
@@ -414,7 +414,7 @@ async def chat_stream(
                 conv_id = None
                 try:
                     conv = chat_memory.save_with_context(
-                        company_id=cid,
+                        workspace_id=cid,
                         query=query, response=result or "",
                         files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
                                     if gate_result else None),

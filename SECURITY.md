@@ -15,7 +15,7 @@ the product unusable.
 
 1. **Network isolation**: Bind to `127.0.0.1` only. Do not expose to LAN/WAN. 该限制**可以**通过设置环境变量 `AGENTBASE_ALLOW_REMOTE_UI=1` 显式解除（`agentbase/app.py:_remote_ui_allowed()`）；解除后任何能访问该端口的设备都能取得 session token 并调用全部 API，**会降低安全性**。
 2. **Session token**: 32 字节 url-safe 随机 token（`secrets.token_urlsafe(32)`），`secrets.compare_digest` 时序安全比较。注入前端 HTML，所有 API 需携带。
-3. **Session-company binding**: 首次请求自动绑定 session 到 company_id，跨公司操作返回 403。切换需通过显式端点。
+3. **Session-workspace binding**: 首次请求自动绑定 session 到 workspace_id，跨公司操作返回 403。切换需通过显式端点。
 4. **CDN SRI**: 前端外部脚本（marked.js、DOMPurify）有 integrity 哈希校验。
 5. **SSRF 防护**: `osint/constants.py::_is_private_host()` 统一拦截 8 个内网/保留 IP 段（RFC1918、loopback、link-local、multicast）。`http_get()` 和 `detect_tech_stack()` 共享复用，无重复实现。
 6. **PID 三层校验**: 重启时 psutil（强制依赖）验证 cmdline + exe 路径比对 + pid 文件 0600 权限。macOS 无 /proc 也无 psutil 时信任自己的 PID 文件做兜底。

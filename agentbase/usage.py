@@ -41,7 +41,7 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS usage_ledger (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     ts                REAL    NOT NULL,
-    company_id        INTEGER NOT NULL DEFAULT 0,
+    workspace_id        INTEGER NOT NULL DEFAULT 0,
     skill             TEXT    NOT NULL DEFAULT '',
     provider          TEXT    NOT NULL DEFAULT '',
     model             TEXT    NOT NULL DEFAULT '',
@@ -88,7 +88,7 @@ def record_usage(
     model: str = "",
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
-    company_id: int = 0,
+    workspace_id: int = 0,
     price_override: tuple[float, float] | None = None,
 ) -> float:
     """记一笔用量，返回本次费用（美元）。失败永不抛错（只记日志）。"""
@@ -98,11 +98,11 @@ def record_usage(
         cost = (prompt_tokens / 1_000_000) * pin + (completion_tokens / 1_000_000) * pout
         conn.execute(
             """INSERT INTO usage_ledger
-               (ts, company_id, skill, provider, model,
+               (ts, workspace_id, skill, provider, model,
                 prompt_tokens, completion_tokens, cost_usd)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                time.time(), company_id, skill, provider, _norm_model(model),
+                time.time(), workspace_id, skill, provider, _norm_model(model),
                 int(prompt_tokens), int(completion_tokens), cost,
             ),
         )

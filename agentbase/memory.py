@@ -235,10 +235,10 @@ def reflect(
         return None
 
 
-def _bank_id(company_id: int | None) -> str:
+def _bank_id(workspace_id: int | None) -> str:
     """构造按公司隔离的 bank_id。"""
-    if company_id:
-        return f"agentbase-company-{company_id}"
+    if workspace_id:
+        return f"agentbase-workspace-{workspace_id}"
     return "agentbase-default"
 
 
@@ -248,7 +248,7 @@ def retain_conversation(
     *,
     library_name: str = "",
     customer_name: str = "",
-    company_id: int | None = None,
+    workspace_id: int | None = None,
     bank_id: str = "agentbase-default",
 ) -> bool:
     """将完整的对话轮次推送到 Hindsight 记忆。
@@ -257,14 +257,14 @@ def retain_conversation(
     """
     content_parts = [f"Q: {query}", f"A: {response}"]
     context = "B2B trade conversation"
-    if company_id:
-        context += f" — company: {company_id}"
+    if workspace_id:
+        context += f" — workspace: {workspace_id}"
     if library_name:
         context += f" — library: {library_name}"
     if customer_name:
         context += f" — customer: {customer_name}"
     content = "\n".join(content_parts)
-    bid = _bank_id(company_id) if company_id else bank_id
+    bid = _bank_id(workspace_id) if workspace_id else bank_id
     return retain(content, context=context, bank_id=bid)
 
 
@@ -272,7 +272,7 @@ def retain_to_hermes_memory(
     query: str,
     response: str,
     *,
-    company_name: str = "",
+    workspace_name: str = "",
     library_name: str = "",
     customer_name: str = "",
     limit: int = 200,
@@ -306,8 +306,8 @@ def retain_to_hermes_memory(
 
     context_parts = []
     # 如果提供了公司名称，添加到上下文片段中
-    if company_name:
-        context_parts.append("公司: " + company_name)
+    if workspace_name:
+        context_parts.append("公司: " + workspace_name)
     # 如果提供了资料库名称，添加到上下文片段中
     if library_name:
         context_parts.append("资料库: " + library_name)

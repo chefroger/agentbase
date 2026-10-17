@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from agentbase import chat_memory
-from agentbase.api.deps import opt_company
+from agentbase.api.deps import opt_workspace
 
 router = APIRouter(tags=["memory"])
 
@@ -20,32 +20,32 @@ router = APIRouter(tags=["memory"])
 # ── Hindsight 长期记忆 ────────────────────────────────────────────────────
 
 @router.get("/memory/status")
-def memory_status(cid: int | None = Depends(opt_company)):
+def memory_status(cid: int | None = Depends(opt_workspace)):
     """检查 Hindsight 长期记忆是否可用。"""
     try:
         from agentbase.memory import is_available as hindsight_available
         return {
             "hindsight_available": hindsight_available(),
-            "company_id": cid,
+            "workspace_id": cid,
         }
     except ImportError:
-        return {"hindsight_available": False, "company_id": None}
+        return {"hindsight_available": False, "workspace_id": None}
 
 
 @router.get("/memory/recall")
 def memory_recall(
     query: str,
-    cid: int | None = Depends(opt_company),
+    cid: int | None = Depends(opt_workspace),
 ):
     """搜索当前公司的长期记忆。使用公司专属 bank，确保数据隔离。"""
     if cid is None:
-        return {"results": [], "query": query, "company_id": None,
-                "hint": "请提供 X-Company-ID header 以按公司搜索记忆"}
+        return {"results": [], "query": query, "workspace_id": None,
+                "hint": "请提供 X-Workspace-ID header 以按公司搜索记忆"}
     from agentbase.memory import _bank_id
     result = chat_memory.recall_context(query, bank_id=_bank_id(cid))
     if not result:
-        return {"results": [], "query": query, "company_id": cid}
-    return {"results": [result], "query": query, "company_id": cid}
+        return {"results": [], "query": query, "workspace_id": cid}
+    return {"results": [result], "query": query, "workspace_id": cid}
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────

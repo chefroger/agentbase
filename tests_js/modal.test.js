@@ -3,9 +3,9 @@
  *
  * 回归的 bug：保存/删除订单时用 document.querySelector('.modal-backdrop') 清理弹窗。
  * querySelector 返回的是**文档序第一个**匹配元素，而 app.html 里第一个
- * .modal-backdrop 是 #company-modal（静态骨架），动态 backdrop 是 appendChild 到
+ * .modal-backdrop 是 #workspace-modal（静态骨架），动态 backdrop 是 appendChild 到
  * body 末尾排在后面 —— 于是公司设置弹窗被删掉、订单弹窗反而留在屏幕上，
- * 之后 showAddCompanyModal() 拿 $('company-modal') 直接 TypeError。
+ * 之后 showAddCompanyModal() 拿 $('workspace-modal') 直接 TypeError。
  *
  * 这里用一个记录调用的最小 DOM shim 测真实行为：不需要 jsdom，也不需要跑整个 SPA。
  */
@@ -49,30 +49,30 @@ function loadModalUtils(document) {
 }
 
 test('_removeDynamicModals 只删动态弹窗，保留静态骨架弹窗', () => {
-    const { byId, document } = makeFakeDom(['company-modal', 'order-modal-backdrop', 'customer-modal']);
+    const { byId, document } = makeFakeDom(['workspace-modal', 'order-modal-backdrop', 'customer-modal']);
     const { _removeDynamicModals } = loadModalUtils(document);
 
     _removeDynamicModals();
 
     assert.strictEqual(byId.get('order-modal-backdrop').removed, true, '动态弹窗应被移除');
-    assert.strictEqual(byId.get('company-modal').removed, false, '静态公司弹窗必须保留');
+    assert.strictEqual(byId.get('workspace-modal').removed, false, '静态公司弹窗必须保留');
     assert.strictEqual(byId.get('customer-modal').removed, false, '静态客户弹窗必须保留');
 });
 
-test('_closeOrderModal 按 id 精确移除订单弹窗，不碰 #company-modal', () => {
+test('_closeOrderModal 按 id 精确移除订单弹窗，不碰 #workspace-modal', () => {
     // 复刻 HTML 的文档序：静态公司弹窗在前，动态订单 backdrop 在后
-    const { byId, document } = makeFakeDom(['company-modal', 'order-modal-backdrop']);
+    const { byId, document } = makeFakeDom(['workspace-modal', 'order-modal-backdrop']);
     const { _closeOrderModal } = loadModalUtils(document);
 
     _closeOrderModal();
 
     assert.strictEqual(byId.get('order-modal-backdrop').removed, true, '订单弹窗应被关闭');
-    assert.strictEqual(byId.get('company-modal').removed, false,
+    assert.strictEqual(byId.get('workspace-modal').removed, false,
         '公司设置弹窗绝不能被订单流程删掉（删掉后 showAddCompanyModal 会 TypeError）');
 });
 
 test('_closeOrderModal 在弹窗不存在时静默返回，不抛错', () => {
-    const { document } = makeFakeDom(['company-modal']);
+    const { document } = makeFakeDom(['workspace-modal']);
     const { _closeOrderModal } = loadModalUtils(document);
 
     assert.doesNotThrow(() => _closeOrderModal());

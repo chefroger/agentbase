@@ -38,7 +38,7 @@ class TestSchemaCreation:
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         ).fetchall()
         table_names = {t[0] for t in tables}
-        expected = {"companies", "agentbase_companies", "conversations", "usage_ledger"}
+        expected = {"workspaces", "agentbase_workspaces", "conversations", "usage_ledger"}
         assert expected.issubset(table_names), f"Missing tables: {expected - table_names}"
 
         # 验证索引
@@ -47,7 +47,7 @@ class TestSchemaCreation:
         ).fetchall()
         index_names = {i[0] for i in indexes}
         expected_indexes = {
-            "idx_conversations_company",
+            "idx_conversations_workspace",
             "idx_conversations_created",
         }
         assert expected_indexes.issubset(index_names), \
@@ -62,8 +62,8 @@ class TestSchemaCreation:
         conn.executescript(SCHEMA_SQL)
         conn.commit()
 
-        # 插入违反外键的数据（不存在的 company_id）
-        conn.execute("INSERT INTO conversations (company_id, query) VALUES (?, ?)",
+        # 插入违反外键的数据（不存在的 workspace_id）
+        conn.execute("INSERT INTO conversations (workspace_id, query) VALUES (?, ?)",
                      (999, "q"))
         # SQLite 默认不强制外键（需要 PRAGMA），但 get_connection 会启用
         conn.close()
@@ -80,7 +80,7 @@ class TestSchemaCreation:
         _add_spare_columns(conn)
         conn.commit()
 
-        for table in ["companies", "agentbase_companies", "conversations", "usage_ledger"]:
+        for table in ["workspaces", "agentbase_workspaces", "conversations", "usage_ledger"]:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             for extra_col in ["extra1", "extra2", "extra3"]:
                 assert extra_col in cols, f"{table} missing column: {extra_col}"
@@ -95,11 +95,11 @@ class TestSchemaCreation:
         conn.commit()
 
         conn.execute(
-            "INSERT INTO companies (name, slug) VALUES (?, ?)",
+            "INSERT INTO workspaces (name, slug) VALUES (?, ?)",
             ("Test Co", "test-co"),
         )
         conn.commit()
-        row = conn.execute("SELECT extra1, extra2, extra3 FROM companies WHERE id=1").fetchone()
+        row = conn.execute("SELECT extra1, extra2, extra3 FROM workspaces WHERE id=1").fetchone()
         assert row[0] == "{}"
         assert row[1] == "{}"
         assert row[2] == "{}"
@@ -124,7 +124,7 @@ class TestSpareColumnsIdempotency:
         conn.commit()
 
         # 验证各表的列只出现一次
-        for table in ["companies", "conversations"]:
+        for table in ["workspaces", "conversations"]:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             extra_count = sum(1 for c in cols if c.startswith("extra"))
             assert extra_count == 3, f"{table} has {extra_count} extra columns (expected 3)"
