@@ -50,4 +50,4 @@
 | 项 | 任务书写的 | 实际使用 | 原因 |
 |---|---|---|---|
 | trade 基线 | `76c98d1` | **`e3f4772`** | `e3f4772` 是 `76c98d1` 的**直接后继**（中间恰好 1 个提交），内容正是修复审计 #3 的 Windows launcher 路径。任务书 §10.6 说"76c98d1 上仍未修"——即任务书基线早于该修复。使用 e3f4772 = 使用含修复的最新 main。 |
-| 业务 skill 数 | 任务书记 36（另有说 39） | **38**（36 b2b + 2 auto） | `e3f4772` 上实际 38 个；`trade-business-pack` 的 `registry.yaml` 与 `pack.yaml` 一致。任务书数字未同步基线变更。 |
+| 业务 skill 数 | 任务书旧口径 36 / 39 | **38 业务 + 1 框架技能** | trade 共 39 个 skill 目录 = 38 业务（36 个 `b2b-*` + `auto-smtp-email` + `auto-trade-customer-development`）+ `chat-memory`。`auto-smtp-email` 在 pack `registry.yaml` 的 `blocked_skills` 中停用（仅生成草稿，需用户复核），故 **37 个可用业务 skill**。任务书已于 2026-10-18 同步。 |
