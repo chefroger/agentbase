@@ -44,10 +44,25 @@ def _legacy_version() -> str | None:
 
 
 def _checkout_version() -> str | None:
-    """读 Hermes checkout 自带 pyproject.toml 的 version；读不到返回 None。"""
+    """读 Hermes checkout 的版本；读不到返回 None。
+
+    **vendored 模式优先读 checkout 根的 `VERSION` 文件**（见 vendor/hermes/README.vendor）：
+    上游 pyproject 的 version 是占位 `0.0.0`，真实版本由安装印章给出；vendor 时我们
+    把基线版本显式写进 VERSION，框架以它为准。
+
+    没有 VERSION 时回退到 pyproject.toml 的 version（兼容未 vendored 的检出）。
+    """
     try:
         import hermes_cli
-        pyproject = Path(hermes_cli.__file__).resolve().parent.parent / "pyproject.toml"
+        checkout = Path(hermes_cli.__file__).resolve().parent.parent
+
+        marker = checkout / "VERSION"
+        if marker.is_file():
+            value = marker.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+
+        pyproject = checkout / "pyproject.toml"
         if not pyproject.is_file():
             return None
         import tomllib
@@ -173,6 +188,10 @@ def _read_checkout_metadata() -> tuple[str | None, str | None]:
     注释，Windows 默认 cp1252 会解码失败。
     """
     version = _stamp_version()
+    # vendored 模式：checkout 根的 VERSION 才是权威记录。
+    # 上游的安装印章/`__version__`/pyproject 在源码快照里都是占位值（0.0.0/unknown）。
+    if not _is_real_version(version):
+        version = _checkout_version()
     pyproject = _checkout_pyproject()
     if pyproject is None:
         return version, None

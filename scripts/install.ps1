@@ -1,5 +1,5 @@
 # ==============================================================================
-# Foreign Trade Assistant — 一键安装脚本 (Windows PowerShell)
+# AgentBase — 一键安装脚本 (Windows PowerShell)
 # ==============================================================================
 # 使用方式:
 #   powershell -ExecutionPolicy Bypass -File install.ps1
@@ -10,7 +10,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  Foreign Trade Assistant — 安装向导" -ForegroundColor Cyan
+Write-Host "  AgentBase — 安装向导" -ForegroundColor Cyan
 Write-Host ""
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,8 +78,8 @@ if (-not $PythonCmd) {
 # ─────────────────────────────────────────────────────────────────────────────
 # 创建 venv
 # ─────────────────────────────────────────────────────────────────────────────
-$TradeHome = if ($env:AGENT_HOME) { $env:AGENT_HOME } else { "$env:LOCALAPPDATA\agentbase" }
-$VenvReal = "$TradeHome\venv"
+$AgentHome = if ($env:AGENT_HOME) { $env:AGENT_HOME } else { "$env:LOCALAPPDATA\agentbase" }
+$VenvReal = "$AgentHome\venv"
 $VenvDir  = $VenvReal
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 $VenvOld  = $null
@@ -87,15 +87,15 @@ $VenvOld  = $null
 # 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 trade 时，代码与依赖
 # 都换了、venv 的解释器还是旧的（`agentbase update` 只更新代码与依赖，不重建 venv），
 # 于是 Hermes 的 pm 激活会把 cp314 的包塞进旧解释器 → 聊天只报「AI Agent 模块未加载」。
-# **重建不会丢任何用户数据**：数据在 $TradeHome 下（数据库、公司目录），不在 venv 里。
+# **重建不会丢任何用户数据**：数据在 $AgentHome 下（数据库、公司目录），不在 venv 里。
 if ((Test-Path "$VenvDir\Scripts\python.exe") -and -not (& $IsPython314 "$VenvDir\Scripts\python.exe")) {
     Write-Host "  ! 已有的运行环境不是 Python 3.14 —— 正在重建（不会动你的数据）..." -ForegroundColor Yellow
     # 换掉之前留一份已装包清单：venv 里可能有用户手动 pip install 的东西，
     # 这份清单是事后唯一的追查线索。失败不影响安装（best-effort）。
     try {
-        if (-not (Test-Path $TradeHome)) { New-Item -ItemType Directory -Path $TradeHome -Force | Out-Null }
-        & "$VenvDir\Scripts\pip.exe" freeze 2>$null | Out-File -FilePath "$TradeHome\venv-packages-before-rebuild.txt" -Encoding utf8
-        Write-Host "  → 已把重建前的包清单留档：$TradeHome\venv-packages-before-rebuild.txt" -ForegroundColor Cyan
+        if (-not (Test-Path $AgentHome)) { New-Item -ItemType Directory -Path $AgentHome -Force | Out-Null }
+        & "$VenvDir\Scripts\pip.exe" freeze 2>$null | Out-File -FilePath "$AgentHome\venv-packages-before-rebuild.txt" -Encoding utf8
+        Write-Host "  → 已把重建前的包清单留档：$AgentHome\venv-packages-before-rebuild.txt" -ForegroundColor Cyan
     } catch {}
     # **不在原地重建**（2026-10-16 改，与 install.sh 同步）。原实现是 Remove-Item 后立刻重建，
     # 中间任何一步失败（断网 / 磁盘满 / 找不到 3.14 / 依赖装不上）都会留下
@@ -163,65 +163,39 @@ function Invoke-CloneOrUpdate {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 2: 安装 hermes-agent
+# Step 2: Hermes（内置）
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Step 2/5: 检查 Hermes Agent" -ForegroundColor White
+Write-Host "Step 2/5: Hermes（内置）" -ForegroundColor White
 
-# **不再把 Hermes 克隆/安装进 Trade 的 venv**（旧的固定 tag 方案已废除）。
-# 现在机器上只有**一份** Hermes：用户自己装的那份。Trade 通过 sys.path 指向它，
-# 并让它的 pm 托管环境提供 Hermes 的依赖（见 agentbase/bootstrap.py 与 COMPATIBILITY.md）。
-#
-# 旧方案把 Hermes 装进 Trade 的 venv，并与用户那份抢同一个 checkout 目录，
-# 结果是「pin 静默失效 + 把用户的 Hermes 降级」（见 COMPATIBILITY.md 跟进记录）。
-#
-# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（agentbase/hermes_upgrade.py），
-# 所以这里只确认它存在，不在这里改动用户的 Hermes。
-$hermesCmd = $null
-foreach ($candidate in @("$env:LOCALAPPDATA\hermes\hermes-agent\.hermes\bin\hermes.cmd",
-                         "$env:USERPROFILE\.local\bin\hermes.cmd",
-                         "$env:USERPROFILE\.local\bin\hermes.exe")) {
-    if (Test-Path $candidate) { $hermesCmd = $candidate; break }
-}
-if (-not $hermesCmd) {
-    $onPath = Get-Command hermes -ErrorAction SilentlyContinue
-    if ($onPath) { $hermesCmd = $onPath.Source }
-}
-
-if ($hermesCmd) {
-    Write-Host "  ✓ 已找到 hermes 命令（$hermesCmd）" -ForegroundColor Green
-} else {
-    Write-Host "  ✗ 未找到 hermes 命令 —— 请先安装 Hermes Agent。" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  复制下面这一行，粘贴到 PowerShell 后回车：" -ForegroundColor White
-    Write-Host "    irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
-    Write-Host ""
-    Write-Host "  装好后重新运行本安装脚本。" -ForegroundColor White
-    exit 1
-}
+# 任务书 v2 §10.7：Hermes 源码随框架分发在 vendor/hermes/，用户不需要单独安装。
+# 真正的完整性检查在 Step 3（clone 之后）—— 这一步仓库还没落地。
+# 隔离铁律：HERMES_HOME 固定指向 AGENT_HOME（%LOCALAPPDATA%\agentbase），
+# vendored Hermes 永不读写用户自己的 %LOCALAPPDATA%\hermes。
+Write-Host "  OK Hermes 随 agentbase 内置分发，无需单独安装" -ForegroundColor Green
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3: 安装 agentbase
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Step 3/5: 安装 Foreign Trade Assistant" -ForegroundColor White
+Write-Host "Step 3/5: 安装 AgentBase" -ForegroundColor White
 
-$TradeRepo = "https://github.com/chefroger/smart-trade-ai.git"
-$TradeDir = "$TradeHome\agentbase"
+$AgentbaseRepo = "https://github.com/chefroger/smart-trade-ai.git"
+$AgentbaseDir = "$AgentHome\agentbase"
 
 # 记录回滚点（2026-10-16 加，与 install.sh 同步）。重建场景下依赖若装不上，代码必须能
 # 退回升级前 —— 否则「新代码 + 旧 venv」照样起不来，等于把「重建失败」升级成「彻底打不开」。
 # 新装用户这里是空的，Invoke-RollbackCode 自然什么都不做。
-$TradeHeadBefore = $null
-if (Test-Path "$TradeDir\.git") {
-    $sha = git -C $TradeDir rev-parse HEAD 2>$null
-    if ($LASTEXITCODE -eq 0 -and $sha) { $TradeHeadBefore = "$sha".Trim() }
+$AgentbaseHeadBefore = $null
+if (Test-Path "$AgentbaseDir\.git") {
+    $sha = git -C $AgentbaseDir rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $sha) { $AgentbaseHeadBefore = "$sha".Trim() }
 }
 
 function Invoke-RollbackCode {
-    if (-not $TradeHeadBefore) { return }
-    Write-Host "  ⚠ 正在把代码回退到升级前的版本（$($TradeHeadBefore.Substring(0,8))）..." -ForegroundColor Yellow
-    git -C $TradeDir reset --hard $TradeHeadBefore 2>&1 | Out-Null
+    if (-not $AgentbaseHeadBefore) { return }
+    Write-Host "  ⚠ 正在把代码回退到升级前的版本（$($AgentbaseHeadBefore.Substring(0,8))）..." -ForegroundColor Yellow
+    git -C $AgentbaseDir reset --hard $AgentbaseHeadBefore 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ 代码已回退，旧版本仍可正常使用" -ForegroundColor Green
     } else {
@@ -231,10 +205,24 @@ function Invoke-RollbackCode {
     if ($VenvOld -and (Test-Path $VenvDir)) { Remove-Item -Recurse -Force $VenvDir }
 }
 
-if (-not (Invoke-CloneOrUpdate "agentbase" $TradeRepo $TradeDir)) { exit 1 }
+if (-not (Invoke-CloneOrUpdate "agentbase" $AgentbaseRepo $AgentbaseDir)) { exit 1 }
 
-Push-Location $TradeDir
-# 装依赖 + trade 自身。
+Push-Location $AgentbaseDir
+
+# ── 内置 Hermes 完整性检查（clone 到这里之后才能查）──────────────────────
+if (Test-Path "$AgentbaseDir\vendor\hermes\hermes_cli") {
+    $VendorVer = if (Test-Path "$AgentbaseDir\vendor\hermes\VERSION") {
+        (Get-Content "$AgentbaseDir\vendor\hermes\VERSION" -Raw).Trim()
+    } else { "unknown" }
+    Write-Host "  OK 内置 Hermes $VendorVer（vendor/hermes，已接管不再跟踪上游）" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ 仓库缺少内置 Hermes：vendor\hermes\hermes_cli" -ForegroundColor Red
+    Write-Host "    仓库不完整，请重新下载/克隆 agentbase。" -ForegroundColor White
+    Pop-Location
+    exit 1
+}
+
+# 装依赖：框架自身 + Hermes 的依赖闭包（vendor 源码不 pip 安装，但依赖要装）。
 # 每个 pip 后都必须查 $LASTEXITCODE —— 原生命令非零退出不抛异常（见本文件前面的说明），
 # 不查就会在弱网/磁盘满时把失败当成成功，用户之后运行 agentbase 只得到
 # ModuleNotFoundError，且开机自启任务每次登录静默失败。
@@ -245,9 +233,16 @@ if ($LASTEXITCODE -ne 0) {
     Pop-Location
     exit 1
 }
+& $PipCmd install -r requirements-hermes.txt
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ✗ Hermes 依赖安装失败（pip 的报错见上）。" -ForegroundColor Red
+    Invoke-RollbackCode
+    Pop-Location
+    exit 1
+}
 & $PipCmd install -e "." --no-deps
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ✗ Foreign Trade Assistant 安装失败（pip 的报错见上）。" -ForegroundColor Red
+    Write-Host "  ✗ AgentBase 安装失败（pip 的报错见上）。" -ForegroundColor Red
     Invoke-RollbackCode
     Pop-Location
     exit 1
@@ -274,7 +269,7 @@ Pop-Location
 # 只看 pip 退出码还不够 —— editable 安装可能"成功"但路径不对。
 & $PyCmd -c "import agentbase.app"
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ✗ Foreign Trade Assistant 装好了但无法导入，安装不完整。" -ForegroundColor Red
+    Write-Host "  ✗ AgentBase 装好了但无法导入，安装不完整。" -ForegroundColor Red
     Invoke-RollbackCode
     exit 1
 }
@@ -312,7 +307,7 @@ if ($VenvOld) {
     }
 }
 
-Write-Host "  ✓ Foreign Trade Assistant 安装完成" -ForegroundColor Green
+Write-Host "  ✓ AgentBase 安装完成" -ForegroundColor Green
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 4: 安装 B2B skills
@@ -345,9 +340,9 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host ""
 Write-Host "Step 5/5: 初始化数据目录" -ForegroundColor White
 
-$DataDir = "$TradeHome\data"
+$DataDir = "$AgentHome\data"
 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
-New-Item -ItemType Directory -Path "$TradeHome\companies" -Force | Out-Null
+New-Item -ItemType Directory -Path "$AgentHome\companies" -Force | Out-Null
 
 try {
     & $PyCmd -c "from agentbase.database import init_db; init_db()" 2>$null
@@ -369,7 +364,7 @@ REM 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes
 REM （那里没有 trade 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 REM 前端只会看到「Agent 未返回有效响应」。bootstrap.py 里也设了一处，这里是双保险。
 set HERMES_DISABLE_LAZY_INSTALLS=1
-"$PyCmd" "$TradeDir\server.py" %*
+"$PyCmd" "$AgentbaseDir\server.py" %*
 "@ | Out-File -FilePath "$LocalBin\agentbase.cmd" -Encoding OEM
 
 # 检测 PATH 中是否已包含 $LocalBin
@@ -417,12 +412,12 @@ Write-Host "══ 安装完成 ══" -ForegroundColor Green
 Write-Host ""
 Write-Host "  启动方式:"
 Write-Host "    新终端: trade"
-Write-Host "    或: $PyCmd $TradeDir\server.py"
+Write-Host "    或: $PyCmd $AgentbaseDir\server.py"
 Write-Host "    Trade 将在每次开机后自动启动（后台静默运行）"
 Write-Host ""
 Write-Host "  启动后打开: http://127.0.0.1:9120/agentbase"
 Write-Host ""
 Write-Host "  数据位置:"
-Write-Host "    用户数据: $TradeHome\"
+Write-Host "    用户数据: $AgentHome\"
 Write-Host "    Hermes 配置: $HermesHome\"
 Write-Host ""

@@ -210,7 +210,7 @@ if [ -f "$VENV_DIR/bin/python" ] && ! _is_py314 "$VENV_DIR/bin/python"; then
     log_warn "已有的运行环境是 Python ${_old_ver}，需要 3.14 —— 正在重建（不会动你的数据）..."
     # 换掉之前留一份已装包清单：venv 里可能有用户手动 pip install 的东西，
     # 这份清单是事后唯一的追查线索。失败不影响安装（best-effort）。
-    _dump_dir="${AGENT_HOME:-$HOME/.trade}"
+    _dump_dir="${AGENT_HOME:-$HOME/.agentbase}"
     mkdir -p "$_dump_dir" 2>/dev/null
     "$VENV_DIR/bin/pip" freeze > "$_dump_dir/venv-packages-before-rebuild.txt" 2>/dev/null \
         && log_info "已把重建前的包清单留档：$_dump_dir/venv-packages-before-rebuild.txt"
@@ -234,33 +234,15 @@ log_ok "虚拟环境就绪 ($VENV_DIR)"
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2: 检查 Hermes Agent
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "Step 2/5: 检查 Hermes Agent"
+log_step "Step 2/5: Hermes（内置）"
 
-# **不再把 Hermes 克隆/安装进 Trade 的 venv**（旧的固定 tag 方案已废除）。
-# 现在机器上只有**一份** Hermes：用户自己装的那份。Trade 通过 sys.path 指向它，
-# 并让它的 pm 托管环境提供 Hermes 的依赖（见 agentbase/bootstrap.py 与 COMPATIBILITY.md）。
+# 任务书 v2 §10.7：Hermes 源码随框架分发在 vendor/hermes/，用户**不需要**单独安装。
+# 真正的完整性检查放在 Step 3（clone 完成之后）—— 这一步时仓库还没落地。
 #
-# 这样做的理由（两条都是实测出来的）：
-#   1. 上游从 v0.21.6 起把核心依赖标成 `python_version >= '3.14'`，Hermes 与它的
-#      依赖是一个 3.14 的整体；Trade 进程必须是 3.14 才能加载它（Step 1 已保证）。
-#   2. 旧方案把 Hermes 装进 Trade 的 venv，会和用户自己那份抢同一个 checkout 目录，
-#      导致「pin 失效 + 把用户的 Hermes 降级」—— 见 COMPATIBILITY.md 的跟进记录。
-#
-# 版本是否够新由 Trade 启动时判定；过旧会在界面里自动升级（agentbase/hermes_upgrade.py），
-# 所以这里只确认它存在，不在这里改动用户的 Hermes。
-if command -v hermes &>/dev/null; then
-    log_ok "已找到 hermes 命令（$(command -v hermes)）"
-elif [ -x "$HOME/.local/bin/hermes" ]; then
-    log_ok "已找到 hermes 命令（$HOME/.local/bin/hermes）"
-else
-    log_err "未找到 hermes 命令 —— 请先安装 Hermes Agent。"
-    echo ""
-    echo "  复制下面这一行，粘贴到终端后回车："
-    echo "    curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
-    echo ""
-    echo "  装好后重新运行本安装脚本。"
-    exit 1
-fi
+# 隔离铁律：运行时 HERMES_HOME 固定指向 AGENT_HOME（~/.agentbase），
+# vendored Hermes 永不读写用户自己的 ~/.hermes。用户机器上可能已经装着
+# 独立 Hermes / OpenClaw，两者互不干扰。
+log_ok "Hermes 随 agentbase 内置分发，无需单独安装（版本见 vendor/hermes/VERSION）"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3: 安装 agentbase + 全部依赖
@@ -292,7 +274,20 @@ _rollback_code() {
 _clone_or_update "agentbase" "$AGENTBASE_REPO" "$AGENTBASE_DIR" || exit 1
 
 cd "$AGENTBASE_DIR"
-# 装依赖（不含 hermes-agent，它在 Step 2 已装进 venv）+ trade 自身
+
+# ── 内置 Hermes 完整性检查（clone 到这里之后才能查）──────────────────────
+if [ -d "$AGENTBASE_DIR/vendor/hermes/hermes_cli" ]; then
+    _VENDOR_VER="$(cat "$AGENTBASE_DIR/vendor/hermes/VERSION" 2>/dev/null || echo unknown)"
+    log_ok "内置 Hermes ${_VENDOR_VER}（vendor/hermes，已接管不再跟踪上游）"
+else
+    log_err "仓库缺少内置 Hermes：vendor/hermes/hermes_cli"
+    echo "  仓库不完整，请重新下载/克隆 agentbase。"
+    exit 1
+fi
+
+# 装依赖：框架自身 + **Hermes 的依赖闭包**（vendor 源码不 pip 安装，但依赖要装）
+# 用 if 而非裸命令：`set -e` 会让失败直接退出，跳过代码回滚，机器就卡在
+# 「新代码 + 旧依赖」的半吊子状态。
 # 用 if 而非裸命令：`set -e` 会让失败直接退出，跳过代码回滚，机器就卡在
 # 「新代码 + 旧依赖」的半吊子状态。
 if ! "$PIP" install -r requirements.txt; then
@@ -300,8 +295,13 @@ if ! "$PIP" install -r requirements.txt; then
     _rollback_code
     exit 1
 fi
+if ! "$PIP" install -r requirements-hermes.txt; then
+    log_err "Hermes 依赖安装失败（多为网络或磁盘问题）。"
+    _rollback_code
+    exit 1
+fi
 if ! "$PIP" install -e "." --no-deps; then
-    log_err "Trade 自身安装失败。"
+    log_err "agentbase 自身安装失败。"
     _rollback_code
     exit 1
 fi
@@ -375,7 +375,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 5/5: 初始化数据目录"
 
-AGENT_HOME="${AGENT_HOME:-$HOME/.trade}"
+AGENT_HOME="${AGENT_HOME:-$HOME/.agentbase}"
 mkdir -p "$AGENT_HOME/data"
 mkdir -p "$AGENT_HOME/companies"
 

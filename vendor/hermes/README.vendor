@@ -1,0 +1,54 @@
+# vendor/hermes — 已接管，不再跟踪上游
+
+本目录是 **Hermes Agent 源码快照**，随 agentbase 一起分发。**不是** pip 依赖，
+也**不再**跟随上游仓库自动更新。
+
+| 项 | 值 |
+|---|---|
+| 上游仓库 | https://github.com/NousResearch/hermes-agent |
+| 版本 | **v0.22.2**（0.22.x 最新稳定版） |
+| 来源 commit | `d923a5eb487a17c0a68801bba9ef0f56c81040a8` |
+| 快照日期 | 2026-10-17 |
+| 许可证 | MIT（见本目录 `LICENSE`，版权归 Nous Research） |
+| 获取方式 | `git clone --depth 1 --branch v0.22.2` 后复制工作树 |
+
+## 集成方式
+
+`sys.path` 插入本目录，保持原有 import 不变（**零改动**）：
+
+```python
+sys.path.insert(0, str(REPO_ROOT / "vendor" / "hermes"))
+import hermes_cli            # 不变
+from run_agent import AIAgent  # 不变
+```
+
+`HERMES_HOME` **统一指向 `$AGENT_HOME`**（即 `~/.agentbase`）。vendored Hermes
+**永不读写**用户原有的 `~/.hermes` —— 用户机器上可能装着独立 Hermes / OpenClaw，
+必须物理隔离。
+
+## 裁剪清单（相对上游工作树）
+
+为控制仓库体积，只裁掉**零运行时引用**的资产目录。所有 Python 包与运行数据保留。
+
+| 目录 | 上游大小 | 裁剪理由 |
+|---|---|---|
+| `.git/` | 99MB | 只要工作树快照，不要历史 |
+| `tests/` | 65MB | Hermes 自身测试；回归跑 agentbase 的测试套件 |
+| `apps/` | 52MB | Hermes 桌面客户端；agentbase 有自己的 UI |
+| `website/` | 28MB | 文档站点 |
+| `contributors/` | 7.8MB | 贡献者数据 |
+| `tests-js/` | — | 前端测试 |
+
+裁剪后：**93MB / 5,561 文件**（上游工作树约 246MB，含 `.git` 共 345MB）。
+
+> 若将来发现某个被裁目录其实被引用，从上述 commit 重新取回对应目录即可。
+
+## 手动 bump 流程（唯一升级方式）
+
+1. 取新版本：`git clone --depth 1 --branch <tag> https://github.com/NousResearch/hermes-agent.git /tmp/hermes-new`
+2. 替换本目录（保留 `README.vendor` 与 `VERSION`，按上面的裁剪清单重裁）
+3. 更新 `VERSION`、本文件的版本/commit/日期
+4. 跑 agentbase 全量测试 + 真机冒烟（聊天、工具调用、cron、插件、MCP）
+5. 提交
+
+**没有后台自动升级，没有降级模式，没有 watchdog。** 升级是人工决策。

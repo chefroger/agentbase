@@ -1,20 +1,22 @@
 """
-Trade AI Assistant — B2B Skills 安装器。
+AgentBase — Skills 安装器。
 
-将项目内置的 37 个 skill 从 Python 包目录复制到 Hermes runtime skills 目录：
-  {package}/skills/b2b-*/SKILL.md → ~/.hermes/skills/b2b-*/SKILL.md
+把 skill 复制到 Hermes runtime skills 目录，Hermes 从那里自动发现并注入提示词：
 
-Hermes Agent 从 ~/.hermes/skills/ 自动发现 skill 定义并注入到 AI 提示词中。
+  框架内置：{package}/skills/*/SKILL.md
+  业务技能：{skill_pack}/skills/*/SKILL.md
+
+**框架自身只带 chat-memory。** 业务 skill 全部来自当前激活的 skill pack
+（见 business.yaml 的 skill_pack 字段）。没有配包时只装框架内置 skill —— 正常降级，
+不是错误。
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
+import subprocess
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 
@@ -49,6 +51,13 @@ def _get_trade_home() -> Path:
         )
         return Path(local_appdata) / "agentbase"
     return Path.home() / ".agentbase"
+
+
+def _active_pack_dir() -> Path | None:
+    """当前激活的 skill pack 目录（来自 business.yaml / AGENTBASE_SKILL_PACK）。"""
+    from agentbase.skill_registry import active_skill_pack
+
+    return active_skill_pack()
 
 
 def _get_package_skills_dir() -> Path | None:
@@ -94,19 +103,19 @@ def _copy_skills(src: Path, dst_base: Path, progress_callback=None) -> list[str]
     """将 src 下的所有 skill 目录复制到 dst_base 对应的 skill 目录。
 
     每个 skill 在目标创建 dst_base/{name}/SKILL.md。
-    处理 b2b-* 和 auto-* 前缀的目录，忽略其他文件和目录。
+
+    **判定标准是「子目录里有 SKILL.md」，不按名字前缀过滤** —— 框架不该知道
+    业务 skill 叫什么（旧版写死 b2b-/auto- 前缀，等于把业务知识焊进框架）。
 
     Args:
         progress_callback: 可选回调 f(msg)，每安装一个 skill 调用一次
 
     Returns:
-        已安装的 skill 目录名列表（如 ["b2b-document", "auto-smtp-email", ...]）
+        已安装的 skill 目录名列表
     """
     installed = []
     for skill_dir in sorted(src.iterdir()):
         if not skill_dir.is_dir():
-            continue
-        if not (skill_dir.name.startswith("b2b-") or skill_dir.name.startswith("auto-") or skill_dir.name == "chat-memory"):
             continue
         skill_file = skill_dir / "SKILL.md"
         if not skill_file.is_file():
@@ -212,6 +221,20 @@ def install_skills(progress_callback=None) -> None:
 
     installed = _copy_skills(package_skills, hermes_skills_dir, progress_callback=progress_callback)
 
+    # 业务 skill 来自当前激活的 skill pack —— 框架自身只带 chat-memory。
+    # 没配包（或包不存在）不是错误：照常装框架内置 skill，只是没有业务技能。
+    pack_dir = _active_pack_dir()
+    if pack_dir is None:
+        note = "[post_install] No business skill pack configured — framework skills only."
+        (progress_callback or print)(note)
+    else:
+        pack_skills = pack_dir / "skills"
+        if pack_skills.is_dir():
+            installed += _copy_skills(pack_skills, hermes_skills_dir, progress_callback=progress_callback)
+        else:
+            warn = f"[post_install] WARNING: pack {pack_dir} has no skills/ directory."
+            print(warn, file=sys.stderr)
+
     if installed:
         count_msg = f"[post_install] Installed {len(installed)} skills: {', '.join(installed)}"
         if progress_callback:
@@ -259,161 +282,74 @@ def install_skills(progress_callback=None) -> None:
 
 
 def update_skills() -> None:
-    """从 GitHub 拉取最新 B2B skill 定义 (SKILL.md) 更新到本地 Hermes 目录。
+    """更新业务 skill pack，并同步到 Hermes。
 
-    与 install_skills 的区别：
-      - install_skills: 从本地 pip 安装包中复制 skills（新安装时用）
-      - update_skills:  从 GitHub main 分支下载最新 SKILL.md（更新时用）
+    旧实现从 `raw.githubusercontent.com/chefroger/smart-trade-ai` 逐个下载
+    b2b 的 SKILL.md —— 抽取之后那套做法已经不成立：skill 现在住在**独立的
+    skill pack 仓库**里，而且多半是 private（raw URL 取不到）。
 
-    用法: agentbase-skills-update（或 python -m agentbase.post_install update）
+    新实现分三步：
+      1. 对当前激活的 skill pack 做一次 `git pull --ff-only`；
+      2. 重新加载注册表（skills / blocked_skills）；
+      3. 把 pack 的 skills/ 同步进 Hermes skills 目录。
 
-    安全措施：
-      - 路径穿越校验（skill 目录名限制 b2b- 前缀 + 小写字母连字符）
-      - 下载内容校验（禁止以 ".." 开头的异常内容）
-      - 最大 1MB 下载限制（防止内存耗尽）
-      - 递增退避重试（网络波动时自动恢复）
+    没有配置包、或包不是 git 检出 → 打印操作指引后正常返回（不算失败）。
+
+    用法: agentbase-skills-update
     """
-    hermes_home = _get_hermes_home()
-    hermes_skills_dir = hermes_home / "skills"
+    pack_dir = _active_pack_dir()
 
-    # 本地包中的 skills 目录（用于列出需要更新哪些 skill）
-    package_skills = _get_package_skills_dir()
-    if package_skills is None:
-        print(
-            "[update_skills] ERROR: Cannot find local skills directory.",
-            file=sys.stderr,
-        )
+    if pack_dir is None:
+        print("[update_skills] 未配置 skill pack（business.yaml 的 skill_pack 为空）。")
+        print("  框架内置 skill 随框架一起更新，无需本命令。")
+        return
+
+    if not pack_dir.is_dir():
+        print(f"[update_skills] skill pack 目录不存在: {pack_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # GitHub raw 文件 URL 前缀
-    RAW_BASE = (
-        "https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/skills"
-    )
+    if not (pack_dir / ".git").exists():
+        print(f"[update_skills] {pack_dir} 不是 git 检出，无法自动更新。")
+        print("  请手动把它替换为最新版 skill pack。")
+        return
 
-    updated = 0
-    skipped = 0
-    failed = 0
+    print(f"[update_skills] 更新 skill pack: {pack_dir}")
 
-    for skill_dir in sorted(package_skills.iterdir()):
-        if not skill_dir.is_dir() or not (
-            skill_dir.name.startswith("b2b-") or skill_dir.name.startswith("auto-") or skill_dir.name == "chat-memory"
-        ):
-            continue  # 只处理 b2b-、auto-、chat-memory skill 目录
+    # 关键：断掉一切交互式提示。撞到凭证提示会永久挂住（这是 Trade 时代
+    # 用真机事故换来的教训，见 COMPATIBILITY.md 的网络探测那一节）。
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GCM_INTERACTIVE": "never",
+    }
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(pack_dir), "pull", "--ff-only"],
+            capture_output=True, text=True, env=env, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print("[update_skills] git pull 超时（120s）——已放弃，不影响当前会话。", file=sys.stderr)
+        sys.exit(1)
 
-        skill_name = skill_dir.name
+    if proc.returncode != 0:
+        print(f"[update_skills] git pull 失败：\n{proc.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
 
-        # 安全校验：skill 目录名只能是 b2b- 前缀 + 小写字母连字符
-        if (
-            ".." in skill_name
-            or "/" in skill_name
-            or "\\" in skill_name
-            or not (skill_name.startswith("b2b-") or skill_name.startswith("auto-") or skill_name == "chat-memory")
-        ):
-            print(f"  ✗ {skill_name} (invalid name, skipped)", file=sys.stderr)
-            failed += 1
-            continue
+    print((proc.stdout or "").strip() or "  (已是最新)")
 
-        raw_url = f"{RAW_BASE}/{skill_name}/SKILL.md"
-        dest_dir = hermes_skills_dir / skill_name
-        dest_file = dest_dir / "SKILL.md"
+    # 重新加载注册表
+    from agentbase.skill_registry import load_active_pack
 
-        # 递增退避重试（应对 GitHub 偶发的 SSL 超时 / 丢包）
-        _MAX_TRIES = 3
-        _tried = 0
-        _last_error = None
+    count = load_active_pack()
+    print(f"[update_skills] 注册表已重载: {count} 个 skill")
 
-        while _tried < _MAX_TRIES:
-            _tried += 1
-            try:
-                # 下载 GitHub 上的最新 SKILL.md
-                req = urllib.request.Request(
-                    raw_url,
-                    headers={"User-Agent": "Trade-Skills-Updater/1.0"},
-                )
-                # 限制下载大小：1MB（实际 SKILL.md 仅需数 KB）
-                _MAX_SKILL_BYTES = 1 * 1024 * 1024
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    remote_raw = resp.read(_MAX_SKILL_BYTES + 1)
-                    if len(remote_raw) > _MAX_SKILL_BYTES:
-                        print(
-                            f"  ✗ {skill_name} (content too large, possible MITM)",
-                            file=sys.stderr,
-                        )
-                        failed += 1
-                        break
-                    remote_content = remote_raw.decode("utf-8")
+    # 同步到 Hermes
+    pack_skills = pack_dir / "skills"
+    if not pack_skills.is_dir():
+        print(f"[update_skills] WARNING: {pack_dir} 下没有 skills/ 目录。", file=sys.stderr)
+        return
 
-                # 下载后二次校验：禁止路径穿越内容
-                if remote_content.startswith(".."):
-                    print(
-                        f"  ✗ {skill_name} (content validation failed, skipped)",
-                        file=sys.stderr,
-                    )
-                    failed += 1
-                    break
-
-                # SHA256 哈希比对，避免重复下载
-                remote_hash = hashlib.sha256(remote_content.encode()).hexdigest()
-                if dest_file.is_file():
-                    local_hash = hashlib.sha256(dest_file.read_bytes()).hexdigest()
-                    if local_hash == remote_hash:
-                        print(f"  ✓ {skill_name} (already up-to-date)")
-                        skipped += 1
-                        break
-
-                # 写入更新内容到本地 Hermes skill 目录
-                # newline="\n" 是关键：Windows 上 write_text 默认 newline=None 会把
-                # "\n" 翻译成 "\r\n"，CRLF 的 SKILL.md 会让 frontmatter 解析失配
-                # （triggers/injection_prompt 全丢）。解析器已做归一化兜底，这里
-                # 从源头保证写出去的也是 LF。
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                with open(dest_file, "w", encoding="utf-8", newline="\n") as fh:
-                    fh.write(remote_content)
-                print(f"  ↻ {skill_name} (updated)")
-                updated += 1
-
-                # 同步下载 references/qa_pairs.md（如果 GitHub 上存在）
-                try:
-                    qa_url = f"{RAW_BASE}/{skill_name}/references/qa_pairs.md"
-                    qa_req = urllib.request.Request(
-                        qa_url,
-                        headers={"User-Agent": "Trade-Skills-Updater/1.0"},
-                    )
-                    with urllib.request.urlopen(qa_req, timeout=10) as qa_resp:
-                        qa_raw = qa_resp.read(_MAX_SKILL_BYTES + 1)
-                        if len(qa_raw) <= _MAX_SKILL_BYTES:
-                            qa_dest = dest_dir / "references" / "qa_pairs.md"
-                            qa_dest.parent.mkdir(parents=True, exist_ok=True)
-                            qa_dest.write_bytes(qa_raw)
-                except urllib.error.HTTPError:
-                    pass  # 该 skill 没有 QA 对文件，正常跳过
-                except Exception:
-                    pass  # 网络或其他问题，不阻塞主流程
-
-                break
-
-            except urllib.error.HTTPError as e:
-                print(
-                    f"  ✗ {skill_name} (HTTP {e.code}: {raw_url})",
-                    file=sys.stderr,
-                )
-                failed += 1
-                break  # HTTP 错误（如 404）不需要重试
-            except Exception as e:
-                _last_error = e
-                if _tried < _MAX_TRIES:
-                    import time as _time
-                    _time.sleep(1.0 * _tried)  # 递增退避：1s → 2s → 放弃
-                    continue
-                # 重试耗尽
-                print(
-                    f"  ✗ {skill_name} (error after {_MAX_TRIES} retries: {_last_error})",
-                    file=sys.stderr,
-                )
-                failed += 1
-
-    print(
-        f"\n[update_skills] Done. {updated} updated, {skipped} skipped, {failed} failed."
-    )
-    if updated > 0:
-        print("Hermes will pick up the updated skills on the next request.")
+    hermes_skills_dir = _get_hermes_home() / "skills"
+    installed = _copy_skills(pack_skills, hermes_skills_dir)
+    print(f"[update_skills] 已同步 {len(installed)} 个 skill 到 {hermes_skills_dir}")
+    print("Hermes 会在下一个请求时用上更新后的 skill。")

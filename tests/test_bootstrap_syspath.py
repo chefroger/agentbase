@@ -39,90 +39,76 @@ def isolated(monkeypatch):
 
 
 class TestHermesCheckoutResolution:
-    """HERMES_HOME 指向数据根目录时，必须解析到其下的 hermes-agent。"""
+    """vendored 模式（任务书 v2 §10.7）：`vendor/hermes/` 是唯一来源。
 
-    def test_resolves_nested_checkout_when_hermes_home_is_data_root(self, isolated, tmp_path):
-        """HERMES_HOME=~/.hermes（数据根）→ 应插入 ~/.hermes/hermes-agent。"""
-        data_root = tmp_path / "hermes"
-        data_root.mkdir()
-        checkout = _make_checkout(data_root / "hermes-agent")
-        isolated.setenv("HERMES_HOME", str(data_root))
+    旧实现允许从 `HERMES_HOME` 或 `~/.hermes/hermes-agent` 解析 checkout。
+    vendored 之后这条路被**有意封死** —— 用户机器上可能装着独立 Hermes / OpenClaw，
+    混用会串数据。这些测试钉住的是「新架构下必须成立的不变量」，不是旧行为。
+    """
 
+    def test_resolves_repo_vendored_checkout(self, isolated):
+        """默认解析到仓库根的 vendor/hermes/。"""
+        isolated.delenv("AGENTBASE_HERMES_CHECKOUT", raising=False)
+        checkout = bootstrap._resolve_hermes_checkout()
+        assert checkout, "应能解析到 vendor/hermes"
+        assert checkout.replace("\\", "/").endswith("vendor/hermes"), checkout
+        assert (Path(checkout) / "hermes_cli").is_dir()
+
+    def test_env_override_wins(self, isolated, tmp_path):
+        """AGENTBASE_HERMES_CHECKOUT 可覆盖（开发 / 调试用）。"""
+        custom = _make_checkout(tmp_path / "custom")
+        isolated.setenv("AGENTBASE_HERMES_CHECKOUT", str(custom))
+
+        assert bootstrap._resolve_hermes_checkout() == str(custom)
+
+    def test_invalid_override_falls_back_to_repo_vendor(self, isolated, tmp_path):
+        """覆盖路径不是有效 checkout 时，回退到仓库内置的 vendor/hermes。"""
+        isolated.setenv("AGENTBASE_HERMES_CHECKOUT", str(tmp_path / "nope"))
+
+        checkout = bootstrap._resolve_hermes_checkout()
+        assert checkout.replace("\\", "/").endswith("vendor/hermes")
+
+    def test_adjust_sys_path_inserts_vendored_checkout_before_site_packages(self, isolated):
+        """checkout 必须排在 site-packages 之前，否则同名包会遮蔽它。"""
+        isolated.delenv("AGENTBASE_HERMES_CHECKOUT", raising=False)
         bootstrap._adjust_sys_path()
 
-        # 只断言路径，不调用 find_spec/import —— CI 会屏蔽 Hermes 顶层模块，
-        # 任何触发导入系统的调用在那里都会抛 ImportError（本用例曾因此在 ci_sim 下挂）
-        assert (checkout / "hermes_cli" / "__init__.py").is_file(), "假 checkout 未造好"
-        assert str(checkout) in sys.path, f"未插入 checkout：{sys.path[:3]}"
-        assert str(data_root) not in sys.path, "数据根目录不该被当成 checkout 插入"
-        # 关键不变量：checkout 必须排在 site-packages 之前 —— 否则同名包会遮蔽它
-        # （这正是 site-packages 里那份 0.18.0 长期顶替 checkout 的机制）
+        checkout = bootstrap._resolve_hermes_checkout()
+        assert checkout in sys.path
         site_indexes = [i for i, p in enumerate(sys.path) if p.endswith("site-packages")]
         if site_indexes:
-            assert sys.path.index(str(checkout)) < min(site_indexes), \
+            assert sys.path.index(checkout) < min(site_indexes), \
                 "checkout 排在 site-packages 之后，会被同名包遮蔽"
 
-    def test_accepts_hermes_home_pointing_at_checkout_itself(self, isolated, tmp_path):
-        """HERMES_HOME 直接就指向 checkout（其下有 hermes_cli）时按原样使用。"""
-        checkout = _make_checkout(tmp_path / "checkout")
-        isolated.setenv("HERMES_HOME", str(checkout))
+    def test_never_inserts_user_hermes_home(self, isolated, tmp_path):
+        """HERMES_HOME 指向用户自己的 ~/.hermes checkout 时，绝不能被采用。"""
+        fake = _make_checkout(tmp_path / "home" / ".hermes" / "hermes-agent")
+        isolated.setenv("HERMES_HOME", str(fake))
+        isolated.delenv("AGENTBASE_HERMES_CHECKOUT", raising=False)
 
         bootstrap._adjust_sys_path()
 
-        assert str(checkout) in sys.path
+        assert str(fake) not in sys.path, "vendored Hermes 绝不能混用用户的 ~/.hermes"
 
-    def _make_default_checkout(self, isolated, tmp_path) -> Path:
-        """按**平台约定**造一个「默认位置」的假 checkout 并返回它。
-
-        生产代码在 Windows 走 %LOCALAPPDATA%\\hermes\\hermes-agent，
-        POSIX 走 ~/.hermes/hermes-agent —— 测试必须跟着平台走，
-        否则会写成 Unix 专用（本用例曾在 CI 的 windows 任务上挂过）。
-        """
-        if os.name == "nt":
-            base = tmp_path / "localappdata"
-            isolated.setenv("LOCALAPPDATA", str(base))
-            return _make_checkout(base / "hermes" / "hermes-agent")
-        fake_home = tmp_path / "home"
-        isolated.setattr(Path, "home", classmethod(lambda cls: fake_home))
-        return _make_checkout(fake_home / ".hermes" / "hermes-agent")
-
-    def _make_default_probe_fail(self, isolated, tmp_path) -> None:
-        """让「平台默认位置」探测落空，隔离真实机器上的 ~/.hermes。"""
-        if os.name == "nt":
-            isolated.setenv("LOCALAPPDATA", str(tmp_path / "empty-localappdata"))
-        else:
-            isolated.setattr(Path, "home", classmethod(lambda cls: tmp_path / "nohome"))
-
-    def test_does_not_insert_data_root_without_checkout(self, isolated, tmp_path):
-        """HERMES_HOME 里没有 checkout 时，绝不能把该目录本身当 checkout 插入。"""
-        data_root = tmp_path / "hermes"
-        data_root.mkdir()  # 空目录：既非 checkout 也没有 hermes-agent/
-        isolated.setenv("HERMES_HOME", str(data_root))
-        self._make_default_probe_fail(isolated, tmp_path)
+    def test_hermes_home_is_forced_to_agent_home(self, isolated, tmp_path):
+        """HERMES_HOME 必须被强制改成 AGENT_HOME（永不指向 ~/.hermes）。"""
+        isolated.setenv("AGENT_HOME", str(tmp_path / "ab"))
+        isolated.setenv("HERMES_HOME", str(tmp_path / "user-hermes"))
 
         bootstrap._adjust_sys_path()
 
-        assert str(data_root) not in sys.path, "数据根目录被误当 checkout 插入"
+        assert os.environ["HERMES_HOME"] == str(tmp_path / "ab"), (
+            "继承来的 HERMES_HOME 必须被覆盖为 AGENT_HOME，否则会串到用户自己的 Hermes 数据"
+        )
 
-    def test_falls_back_to_default_location_when_hermes_home_lacks_checkout(self, isolated, tmp_path):
-        """HERMES_HOME 下没有 checkout 时，回退到平台默认路径。"""
-        data_root = tmp_path / "hermes"
-        data_root.mkdir()
-        isolated.setenv("HERMES_HOME", str(data_root))
-        checkout = self._make_default_checkout(isolated, tmp_path)
-
-        bootstrap._adjust_sys_path()
-
-        assert str(checkout) in sys.path, f"未回退到默认位置：{sys.path[:3]}"
-
-    def test_unset_hermes_home_uses_default_location(self, isolated, tmp_path):
-        """回归护栏：HERMES_HOME 未设置时仍走平台默认路径。"""
-        isolated.delenv("HERMES_HOME", raising=False)
-        checkout = self._make_default_checkout(isolated, tmp_path)
+    def test_agent_home_defaults_to_dot_agentbase(self, isolated, tmp_path):
+        """未设 AGENT_HOME 时默认 ~/.agentbase（测试里伪造 home）。"""
+        isolated.delenv("AGENT_HOME", raising=False)
+        isolated.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
 
         bootstrap._adjust_sys_path()
 
-        assert str(checkout) in sys.path
+        assert os.environ["HERMES_HOME"] == str(tmp_path / "home" / ".agentbase")
 
 
 class TestHermesActivationRestore:

@@ -36,38 +36,47 @@ _warnings.filterwarnings("ignore", message=r".*No module named 'hermes_cli\.tool
 def _resolve_hermes_checkout() -> str:
     r"""解析 Hermes 源码目录（含 `hermes_cli` 包的那个目录）；找不到返回空串。
 
+    **vendored 模式（任务书 v2 §10.7）**：Hermes 源码随框架分发在 `vendor/hermes/`，
+    这是唯一权威来源。
+
     候选顺序：
-      1. `HERMES_HOME` —— 注意它是**数据根目录**（~/.hermes），checkout 在其下的
-         `hermes-agent/`；若 HERMES_HOME 本身就指向 checkout 也接受
-      2. 平台默认路径（macOS/Linux: `~/.hermes/hermes-agent`，
-         Windows: `%LOCALAPPDATA%\hermes\hermes-agent`）
-      3. 与 Trade 平级的 `agentbase_ai_assistant` 开发目录
+      1. `AGENTBASE_HERMES_CHECKOUT` 环境变量（开发/调试覆盖）
+      2. PyInstaller `_MEIPASS/vendor/hermes`
+      3. 仓库根的 `vendor/hermes/`
 
-    每个候选都必须真的含 `hermes_cli` 目录才采用 —— 否则会把不含包的路径插进
-    sys.path（历史 bug：`trade` 包装脚本会 export HERMES_HOME=~/.hermes，
-    于是插进去的是数据根目录，`import hermes_cli` 直接失败）。
+    **绝不回退到用户的 `~/.hermes`** —— 用户机器上可能装着独立 Hermes / OpenClaw，
+    vendored Hermes 与它们必须物理隔离（v2 §10.7 / §10.9）。
     """
-    def _is_checkout(path: Path) -> bool:
-        """是否为可用的 Hermes checkout（含 hermes_cli 包）。"""
-        return (path / "hermes_cli").is_dir()
-
     candidates: list[Path] = []
-    _hermes_home = os.environ.get("HERMES_HOME", "").strip()
-    if _hermes_home:
-        _root = Path(_hermes_home)
-        candidates.append(_root)                 # HERMES_HOME 本身即 checkout
-        candidates.append(_root / "hermes-agent")  # 数据根目录下的 checkout
-    if os.name == "nt":
-        _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        candidates.append(Path(_local) / "hermes" / "hermes-agent")
-    else:
-        candidates.append(Path.home() / ".hermes" / "hermes-agent")
-    candidates.append(Path(__file__).resolve().parent.parent.parent / "agentbase_ai_assistant")
+
+    _override = os.environ.get("AGENTBASE_HERMES_CHECKOUT", "").strip()
+    if _override:
+        candidates.append(Path(_override))
+
+    _meipass = getattr(sys, "_MEIPASS", None)
+    if _meipass:
+        candidates.append(Path(_meipass) / "vendor" / "hermes")
+
+    candidates.append(Path(__file__).resolve().parent.parent / "vendor" / "hermes")
 
     for candidate in candidates:
-        if _is_checkout(candidate):
+        if (candidate / "hermes_cli").is_dir():
             return str(candidate)
     return ""
+
+
+def _agent_home() -> str:
+    """AgentBase 数据根目录：AGENT_HOME 优先，默认 ~/.agentbase。
+
+    平台差异只在回退路径上：Windows 落到 %LOCALAPPDATA%\\agentbase。
+    """
+    raw = os.environ.get("AGENT_HOME", "").strip()
+    if raw:
+        return raw
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        return str(Path(local) / "agentbase")
+    return str(Path.home() / ".agentbase")
 
 
 def _adjust_sys_path():
@@ -83,12 +92,11 @@ def _adjust_sys_path():
         # Hermes 放在第 1 位，Trade 仍在第 0 位（避免 agentbase/ 包名冲突）
         sys.path.insert(1, _hermes_checkout)
 
-    # 如果 HERMES_HOME 未设置但我们找到了 Hermes 路径，注入环境变量
-    # 防止 hermes_constants.get_hermes_home() 在 Windows 上回退到
-    # Path.home() / ".hermes"（Path.home() 在 SYSTEM 用户下指向 System32）
-    if not os.environ.get("HERMES_HOME") and _hermes_checkout:
-        _hermes_home_dir = str(Path(_hermes_checkout).parent)
-        os.environ["HERMES_HOME"] = _hermes_home_dir
+    # ── HERMES_HOME 统一指向 AGENT_HOME（任务书 v2 §10.7）────────────────
+    # vendored Hermes 的数据根必须落在 ~/.agentbase，**永不读写用户的 ~/.hermes**。
+    # 这里**强制覆盖**继承来的 HERMES_HOME：旧 trade 启动器可能把它设成 ~/.hermes，
+    # 放行就会串到用户自己的 Hermes 数据。
+    os.environ["HERMES_HOME"] = _agent_home()
 
 
 # ── 子命令分发 ────────────────────────────────────────────────────────────
@@ -526,47 +534,55 @@ def load_env_and_set_yolo():
 # ── Skills 同步 ──────────────────────────────────────────────────────────
 
 
+def _skill_source_roots() -> list[Path]:
+    """返回所有 skill 源目录。
+
+    两处：**框架内置 skills/**（chat-memory）与**当前激活的 skill pack 的 skills/**
+    （业务技能）。没有配置包时只剩前者 —— 不是错误。
+    """
+    roots: list[Path] = []
+
+    _meipass = getattr(sys, "_MEIPASS", None)
+    if _meipass:
+        roots.append(Path(_meipass) / "skills")
+    else:
+        roots.append(Path(__file__).resolve().parent.parent / "skills")
+
+    try:
+        from agentbase.skill_registry import active_skill_pack
+
+        pack = active_skill_pack()
+        if pack is not None:
+            roots.append(pack / "skills")
+    except Exception:
+        pass  # 包解析失败不应阻断启动
+
+    return [r for r in roots if r.is_dir()]
+
+
 def _local_skills_sync():
     """仅做本地 hash 比对同步，不访问 GitHub。
 
-    从项目目录（或 PyInstaller/运行时目录）复制 skills 到 Hermes，
-    比对外部哈希避免重复写入。速度远快于 GitHub 下载。
+    源目录见 _skill_source_roots()。**判定一个目录是不是 skill 只看它有没有
+    SKILL.md** —— 旧版写死 b2b-/auto- 前缀，等于把业务知识焊进框架。
     """
     from hermes_constants import get_hermes_home
 
-    # 优先级：PyInstaller _MEIPASS > 运行时目录 > 开发目录
-    _meipass = getattr(sys, "_MEIPASS", None)
-    if _meipass:
-        _project_skills = Path(_meipass) / "skills"
-    else:
-        _trade_home = os.environ.get("AGENT_HOME", "").strip()
-        if not _trade_home:
-            if os.name == "nt":
-                _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-                _trade_home = str(Path(_local) / "agentbase")
-            else:
-                _trade_home = str(Path.home() / ".agentbase")
-        _runtime_skills = Path(_trade_home) / "agentbase" / "skills"
-        if _runtime_skills.is_dir():
-            _project_skills = _runtime_skills
-        else:
-            _project_root = Path(__file__).resolve().parent.parent
-            _project_skills = _project_root / "skills"
-    if not _project_skills.is_dir():
+    _roots = _skill_source_roots()
+    if not _roots:
         return
 
     _hermes_skills = get_hermes_home() / "skills"
     _hermes_skills.mkdir(parents=True, exist_ok=True)
 
+    _skill_dirs = [
+        d for _root in _roots for d in sorted(_root.iterdir())
+        if d.is_dir() and (d / "SKILL.md").is_file()
+    ]
+
     synced = 0
-    for skill_dir in sorted(_project_skills.iterdir()):
-        if not skill_dir.is_dir() or not (
-            skill_dir.name.startswith("b2b-") or skill_dir.name.startswith("auto-") or skill_dir.name == "chat-memory"
-        ):
-            continue
+    for skill_dir in _skill_dirs:
         src = skill_dir / "SKILL.md"
-        if not src.is_file():
-            continue
         dst_dir = _hermes_skills / skill_dir.name
         dst = dst_dir / "SKILL.md"
         src_hash = hashlib.sha256(src.read_bytes()).hexdigest()
@@ -1144,10 +1160,8 @@ def setup():
                 _optional_step()
             except Exception as exc:  # noqa: BLE001 — 见上：降级模式必须走到起服务
                 print(f"  ⚠️ {_optional_step.__name__} 跳过（{exc}）")
-        # 只有「Hermes 过旧」才自动升级 Hermes。「Trade 运行环境过旧」时跑 hermes update
-        # 毫无用处（问题在 Trade 这一侧），反而会让用户等一场没有结果的升级。
-        if _fix == "upgrade_hermes":
-            _start_hermes_upgrade_in_background()
+        # vendored 模式（任务书 v2 §10.7）：Hermes 版本随框架固定分发，
+        # **没有自动升级**。这里只保留「服务必须起得来」的不变量。
         return
 
     load_env_and_set_yolo()
@@ -1157,23 +1171,6 @@ def setup():
     ensure_document_deps()
     ensure_desktop_integration()
     start_doctor_if_needed()
-
-
-def _start_hermes_upgrade_in_background() -> None:
-    """降级模式下自动在后台升级 Hermes。
-
-    用户明确要求「版本过低就直接帮用户升级」—— 桌面端用户看不到终端，让他们自己敲
-    命令等于没做。升级本身会先查 GitHub 可达性（见 agentbase.hermes_upgrade）：网络不通
-    绝不开始，否则失败会同时弄坏 Hermes 与 Trade。
-
-    这里吞掉所有异常：自动升级失败不能反过来挡住服务启动，否则界面就出不来了。
-    """
-    try:
-        from agentbase.hermes_upgrade import start_upgrade
-
-        start_upgrade()
-    except Exception as exc:  # noqa: BLE001 — 启动路径必须永不因升级失败而中断
-        print(f"  ⚠️ 后台升级 Hermes 启动失败：{exc}")
 
 
 def start_doctor_if_needed() -> None:

@@ -332,10 +332,6 @@ class TestDegradedStartup:
         monkeypatch.setattr(bootstrap, "load_env_and_set_yolo", lambda: calls.append("env"))
         for name in ("sync_b2b_skills", "ensure_document_deps", "ensure_desktop_integration"):
             monkeypatch.setattr(bootstrap, name, (lambda n: lambda: calls.append(n))(name))
-        monkeypatch.setattr(
-            bootstrap, "_start_hermes_upgrade_in_background",
-            lambda: calls.append("upgrade"),
-        )
         monkeypatch.setattr(bootstrap, "start_doctor_if_needed", lambda: calls.append("doctor"))
 
     def test_paths_are_prepared_before_subcommand_dispatch(self, monkeypatch):
@@ -356,7 +352,7 @@ class TestDegradedStartup:
         # 懒加载守卫仍必须最先（子命令与版本检查都可能 import Hermes）
         assert calls[0] == "guard"
 
-    def test_too_old_skips_hermes_steps_and_starts_upgrade(self, monkeypatch, capsys):
+    def test_too_old_skips_hermes_steps_and_still_serves(self, monkeypatch, capsys):
         from agentbase import bootstrap
 
         calls: list[str] = []
@@ -366,7 +362,7 @@ class TestDegradedStartup:
 
         assert "env" not in calls, "过旧时不该跑会 import Hermes 的步骤"
         assert "doctor" not in calls, "过旧时端到端自检要起 agent，必须跳过"
-        assert "upgrade" in calls, "过旧时必须启动后台升级"
+        # vendored 模式（v2 §10.7）：版本随框架固定分发，**没有**后台自动升级
         # 不碰 Hermes 的步骤照常跑，保持功能完整
         assert "sync_b2b_skills" in calls and "ensure_desktop_integration" in calls
         assert "降级模式" in capsys.readouterr().out
@@ -381,12 +377,11 @@ class TestDegradedStartup:
         def _boom() -> None:
             raise RuntimeError("boom")
 
-        # 让第一步就炸：降级模式仍必须走到「启动升级」
+        # 让第一步就炸：降级模式仍必须照常起服务
         monkeypatch.setattr(bootstrap, "sync_b2b_skills", _boom)
 
         bootstrap.setup()  # 不抛异常即通过
 
-        assert "upgrade" in calls
         assert "跳过" in capsys.readouterr().out
 
     def test_usable_path_still_runs_hermes_steps(self, monkeypatch):

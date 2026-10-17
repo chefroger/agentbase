@@ -536,9 +536,9 @@ def has_fatal_failure(results: list[CheckResult], ignore_names: tuple[str, ...] 
 
     Args:
         ignore_names: 需要忽略的检查项名。用于「这项失败不该阻断安装、而由运行时
-            自己处理」的场景 —— 典型是 Hermes 版本过旧：Trade 启动后会在界面里
-            自动升级 Hermes（见 agentbase/hermes_upgrade.py），安装脚本若因此判定
-            「安装失败」，用户就永远见不到那个升级界面。
+            自己处理」的场景。vendored 模式下 Hermes 版本随框架固定分发（见
+            vendor/hermes/VERSION），不再有运行期升级，但「安装失败不该挡住
+            服务启动」这条原则仍适用。
     """
     return any(
         r.fatal and r.status == STATUS_FAIL and r.name not in ignore_names

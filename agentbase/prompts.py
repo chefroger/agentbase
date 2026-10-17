@@ -293,13 +293,21 @@ def _resolve_custom_prompt(company_slug: str | None, db_identity: str | None) ->
     return _load_file(_system_prompt_path())
 
 
-# 文档处理类技能：只有这些任务才需要注入 FULL 的文档生成/分析指南
-_DOC_TASK_SKILLS = frozenset({
-    "b2b-document",
-    "b2b-doc-generation",
-    "b2b-tech-drawing",
-    "b2b-customs-data",
-})
+def _doc_task_skills() -> frozenset:
+    """文档处理类技能：只有这些任务才需要注入 FULL 的文档生成/分析指南。
+
+    由 skill pack 的 pack.yaml 的 `doc_task_skills` 声明 —— 框架不该知道任何
+    具体业务 skill 的名字。没有配置包时返回空集（= 不注入 FULL 提示词）。
+    """
+    try:
+        from agentbase.skill_registry import pack_manifest
+
+        raw = pack_manifest().get("doc_task_skills")
+    except Exception:
+        return frozenset()
+    if not isinstance(raw, list):
+        return frozenset()
+    return frozenset(str(x) for x in raw if isinstance(x, str))
 
 
 def needs_full_prompt(
@@ -316,7 +324,7 @@ def needs_full_prompt(
 
     普通问答（营销/背调/闲聊）不注入，避免每次多付约 5700 token。
     """
-    if matched_name and matched_name in _DOC_TASK_SKILLS:
+    if matched_name and matched_name in _doc_task_skills():
         return True
     if library_id:
         return True

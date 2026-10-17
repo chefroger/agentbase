@@ -1,0 +1,13 @@
+# 测试用最小 skill pack —— 框架侧测试只依赖这个，不依赖任何业务 skill。
+# 结构完全对齐真实 pack 契约，见 FRAMEWORK.md。
+name: demo-pack
+version: 0.0.1
+description: 框架测试用的最小 skill pack（2 个中性 skill）。
+registry: registry.yaml
+
+doc_task_skills:
+  - demo-beta
+
+skills:
+  - demo-alpha
+  - demo-beta

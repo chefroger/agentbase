@@ -1,0 +1,28 @@
+version: 1
+blocked_skills: []
+skills:
+  - name: demo-alpha
+    triggers:
+      - alpha
+      - 阿尔法
+      - alpha 测试
+    aliases:
+      - demo-a
+    input_fmt: 任意文本
+    output_fmt: 一段结构化摘要
+    augment_prompt: |
+      你是 demo-alpha 技能。用户提到 alpha 时按以下步骤处理：
+      1. 读取用户输入
+      2. 输出结构化摘要
+  - name: demo-beta
+    triggers:
+      - beta
+      - 贝塔
+      - beta 文档
+    aliases: []
+    input_fmt: 文档路径或文档内容
+    output_fmt: 文档分析结果
+    augment_prompt: |
+      你是 demo-beta 技能。用户提到 beta 或需要文档分析时按以下步骤处理：
+      1. 读取文档
+      2. 输出分析结果
