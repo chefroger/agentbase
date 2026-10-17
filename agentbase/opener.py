@@ -144,7 +144,7 @@ def open_trade(
 # 页面标题里这段是稳定的（见 static/app.html 的 <title>）。
 # 浏览器会在后面追加 " - Google Chrome" / " - Microsoft Edge" 之类，
 # 所以用「包含」而不是相等来匹配。
-WINDOW_TITLE_MARKER = "Trade AI Assistant"
+WINDOW_TITLE_MARKER = "AgentBase"
 
 
 def match_trade_window(titles: list[str]) -> str | None:

@@ -1,1 +1,1 @@
-# Trade AI Assistant — B2B business layer
+# AgentBase — framework package

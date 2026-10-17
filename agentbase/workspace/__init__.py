@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 公司数据层。
+AgentBase — 公司数据层。
 
 三模块结构：
   - crud: workspaces + agentbase_workspaces 表的增删改查 + 审计日志

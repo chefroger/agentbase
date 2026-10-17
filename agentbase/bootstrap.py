@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 启动引导模块。
+AgentBase — 启动引导模块。
 
 负责：日志过滤、sys.path 调整、子命令分发、Hermes 版本检查、
 .env 加载、YOLO 模式设置、Skills 同步。

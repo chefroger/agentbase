@@ -26,4 +26,8 @@ def get_branding() -> dict:
         "logo": branding.get("logo") or "",
         "business_name": config.get("business_name") or "AgentBase",
         "tagline": config.get("tagline") or "",
+        # 前端上传弹窗要用的目录清单
+        "work_dirs": business_config.work_dir_names(),
+        # 通用 onboarding 表单字段（框架不含业务字段）
+        "onboarding_fields": business_config.onboarding_fields(),
     }

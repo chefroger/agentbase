@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — Prompt File Loader.
+AgentBase — Prompt File Loader.
 
 Unified loader for all user-editable prompt files:
   - ~/.agentbase/prompts/system.md          (全局自定义 system prompt)

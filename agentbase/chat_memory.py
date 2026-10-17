@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 聊天记忆 / 对话记录。
+AgentBase — 聊天记忆 / 对话记录。
 
 存储 Agent 会话期间的查询、回复以及读取的文件。
 可选地将对话轮次保留到 Hindsight 长期记忆（需要 hindsight-client 包和 API 密钥）。

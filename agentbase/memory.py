@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 记忆桥接层（Hindsight 集成）。
+AgentBase — 记忆桥接层（Hindsight 集成）。
 
 提供 agentbase/chat_memory 与 Hindsight 长期记忆后端之间的轻量桥接。
 独立于 Hermes Agent 运行时工作（不需要 MemoryManager）。

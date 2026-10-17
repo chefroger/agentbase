@@ -205,12 +205,12 @@ class TestWindowTitleMatching:
         """浏览器会在标题后追加自己的名字，所以用包含匹配。"""
         titles = [
             "某个无关窗口",
-            "Trade AI Assistant — 智能外贸销售助手 - Google Chrome",
+            "AgentBase - Google Chrome",
             "另一个窗口",
         ]
 
         assert opener.match_trade_window(titles) == (
-            "Trade AI Assistant — 智能外贸销售助手 - Google Chrome"
+            "AgentBase - Google Chrome"
         )
 
     def test_returns_none_when_absent(self):

@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — SQLite 数据库层。
+AgentBase — SQLite 数据库层。
 
 提供独立的数据库 (data/agentbase.db) 用于 B2B 业务表：
 conversations / usage_ledger 等框架表。

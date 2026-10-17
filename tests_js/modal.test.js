@@ -43,39 +43,19 @@ function makeFakeDom(ids) {
 function loadModalUtils(document) {
     return loadRegion(
         'modal-utils',
-        '{ _STATIC_MODAL_IDS: _STATIC_MODAL_IDS, _removeDynamicModals: _removeDynamicModals, _closeOrderModal: _closeOrderModal }',
+        '{ _STATIC_MODAL_IDS: _STATIC_MODAL_IDS, _removeDynamicModals: _removeDynamicModals }',
         { document },
     );
 }
 
 test('_removeDynamicModals 只删动态弹窗，保留静态骨架弹窗', () => {
-    const { byId, document } = makeFakeDom(['workspace-modal', 'order-modal-backdrop', 'customer-modal']);
+    const { byId, document } = makeFakeDom(['workspace-modal', 'dynamic-modal']);
     const { _removeDynamicModals } = loadModalUtils(document);
 
     _removeDynamicModals();
 
-    assert.strictEqual(byId.get('order-modal-backdrop').removed, true, '动态弹窗应被移除');
-    assert.strictEqual(byId.get('workspace-modal').removed, false, '静态公司弹窗必须保留');
-    assert.strictEqual(byId.get('customer-modal').removed, false, '静态客户弹窗必须保留');
-});
-
-test('_closeOrderModal 按 id 精确移除订单弹窗，不碰 #workspace-modal', () => {
-    // 复刻 HTML 的文档序：静态公司弹窗在前，动态订单 backdrop 在后
-    const { byId, document } = makeFakeDom(['workspace-modal', 'order-modal-backdrop']);
-    const { _closeOrderModal } = loadModalUtils(document);
-
-    _closeOrderModal();
-
-    assert.strictEqual(byId.get('order-modal-backdrop').removed, true, '订单弹窗应被关闭');
-    assert.strictEqual(byId.get('workspace-modal').removed, false,
-        '公司设置弹窗绝不能被订单流程删掉（删掉后 showAddCompanyModal 会 TypeError）');
-});
-
-test('_closeOrderModal 在弹窗不存在时静默返回，不抛错', () => {
-    const { document } = makeFakeDom(['workspace-modal']);
-    const { _closeOrderModal } = loadModalUtils(document);
-
-    assert.doesNotThrow(() => _closeOrderModal());
+    assert.strictEqual(byId.get('dynamic-modal').removed, true, '动态弹窗应被移除');
+    assert.strictEqual(byId.get('workspace-modal').removed, false, '静态 workspace 弹窗必须保留');
 });
 
 test('静态弹窗白名单覆盖 app.html 里全部骨架弹窗', () => {
