@@ -1,16 +1,14 @@
 #Requires -Version 5
 # ==============================================================================
-# Hermes Agent 前置软件安装脚本 — Windows (PowerShell)
+# AgentBase 前置软件安装脚本 — Windows (PowerShell)
 # ==============================================================================
-# 安装 hermes-agent（NousResearch/hermes-agent）所需的全部前置软件。
-# 仅安装必需的系统依赖，不包含 hermes-agent 自身。
+# 安装 AgentBase 所需的全部系统依赖。
+# Hermes 随 AgentBase 内置分发（vendor/hermes），无需单独安装。
 #
 # 使用方式（PowerShell 5.1+）：
 #   powershell -ExecutionPolicy Bypass -File install_prereqs.ps1
 #
-# 或者一键安装（curl | iex）：
-#   irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex
-#   （官方安装脚本已包含所有前置软件，以上仅作独立运行参考）
+# 安装 AgentBase 时另行运行其 install.ps1（本脚本只装系统依赖）。
 # ==============================================================================
 
 $ErrorActionPreference = 'Stop'
@@ -19,9 +17,8 @@ $ErrorActionPreference = 'Stop'
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置
 # ─────────────────────────────────────────────────────────────────────────────
-$PythonVersion = "3.11"
+$PythonVersion = "3.14"
 $NodeVersion = "22"
-$HermesHome = "$env:LOCALAPPDATA\hermes"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 颜色输出
@@ -37,8 +34,8 @@ function Write-Step   { param([int]$n, [string]$m) Write-Host "`n[$n] $m" -Foreg
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Magenta
-Write-Host "  Hermes Agent 前置软件安装脚本 (Windows)" -ForegroundColor Magenta
-Write-Host "  仅安装系统依赖，不包含 Hermes Agent 本身" -ForegroundColor Magenta
+Write-Host "  AgentBase 前置软件安装脚本 (Windows)" -ForegroundColor Magenta
+Write-Host "  仅安装系统依赖，不含 AgentBase 与内置 Hermes" -ForegroundColor Magenta
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host ""
 
@@ -61,9 +58,9 @@ Write-Info "scoop: $hasScoop"
 Write-Host ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Git（Bash 环境，Hermes terminal tool 和 agent-browser 必需）
+# 1. Git（Bash 环境，AgentBase terminal tool 和 agent-browser 必需）
 # ─────────────────────────────────────────────────────────────────────────────
-Write-Step 1 "Git（Hermes terminal tool 和 agent-browser 必需）"
+Write-Step 1 "Git（AgentBase terminal tool 和 agent-browser 必需）"
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
     $gitVer = git --version
@@ -86,14 +83,13 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     }
     Write-Info "  选项 C — 手动下载:"
     Write-Info "    https://git-scm.com/download/win"
-    Write-Info "  选项 D — 使用 Hermes 安装器（自动下载 PortableGit）:"
-    Write-Info "    irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
+    Write-Info "  选项 D — 手动下载 PortableGit 并解压到 PATH。"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Python（Hermes Python 包必需）
+# 2. Python（AgentBase 必需）
 # ─────────────────────────────────────────────────────────────────────────────
-Write-Step 2 "Python $PythonVersion（Hermes Python 包必需）"
+Write-Step 2 "Python $PythonVersion（AgentBase 必需）"
 
 $pythonFound = $false
 $pythonPath = $null
@@ -129,15 +125,14 @@ if (-not $pythonFound) {
 
 if (-not $pythonFound) {
     Write-Warn "Python $PythonVersion 未找到"
-    Write-Info "Hermes 安装器会自动通过 uv 安装 Python，无需手动安装"
-    Write-Info "（使用 Hermes 安装器安装时，会自动处理 Python）:"
-    Write-Info "  irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
+    Write-Info "请安装 Python $PythonVersion 后重新运行本脚本："
+    Write-Info "  winget install Python.Python.3.14"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. uv（Python 包管理器，Hermes 安装器核心工具）
+# 3. uv（Python 包管理器，可选）
 # ─────────────────────────────────────────────────────────────────────────────
-Write-Step 3 "uv（Python 包管理器，Hermes 安装器核心工具）"
+Write-Step 3 "uv（Python 包管理器，可选）"
 
 if (Get-Command uv -ErrorAction SilentlyContinue) {
     $ver = uv --version
@@ -170,7 +165,7 @@ Write-Step 4 "Node.js $NodeVersion LTS（可选，浏览器工具需要）"
 if (Get-Command node -ErrorAction SilentlyContinue) {
     Write-Success "Node.js 已安装: $(node --version)"
 } else {
-    Write-Warn "Node.js 未安装（可选：Hermes 浏览器工具需要）"
+    Write-Warn "Node.js 未安装（可选：浏览器工具需要）"
 
     if ($hasWinget) {
         Write-Info "通过 winget 安装 Node.js LTS..."
@@ -246,16 +241,13 @@ Write-Host "============================================================" -Foreg
 Write-Host "  前置软件检查完成" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  接下来安装 Hermes Agent:" -ForegroundColor White
+Write-Host "  接下来安装 AgentBase（会自动创建 Python 3.14 环境；" -ForegroundColor White
+Write-Host "  Hermes 已内置在 vendor\hermes，无需单独安装）：" -ForegroundColor White
 Write-Host ""
 Write-Host "  PowerShell 一键安装（推荐）:" -ForegroundColor Cyan
-Write-Host "    irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex" -ForegroundColor Gray
+Write-Host "    irm https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.ps1 | iex" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  或者下载安装脚本后运行:" -ForegroundColor Cyan
-Write-Host "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1' -OutFile install.ps1" -ForegroundColor Gray
+Write-Host "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.ps1' -OutFile install.ps1" -ForegroundColor Gray
 Write-Host "    .\install.ps1" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  安装完成后验证 Hermes:" -ForegroundColor White
-Write-Host "    hermes --version" -ForegroundColor Gray
-Write-Host "    python pre_install_check.py" -ForegroundColor Gray
 Write-Host ""

@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==============================================================================
-# Hermes Agent 前置软件安装脚本 — macOS / Linux / Termux
+# AgentBase 前置软件安装脚本 — macOS / Linux / Termux
 # ==============================================================================
-# 安装 hermes-agent（NousResearch/hermes-agent）所需的全部前置软件。
-# 仅安装必需的系统依赖，不包含 hermes-agent 自身（由 hermes install.sh 处理）。
+# 安装 AgentBase 所需的全部系统依赖。
+# Hermes 随 AgentBase 内置分发（vendor/hermes），无需单独安装。
 #
 # 使用方式：
 #   chmod +x install_prereqs.sh
@@ -64,10 +64,10 @@ is_interactive() {
 # 前置软件包列表（按操作系统分组）
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 必需（hermes-agent 无法运行的核心依赖）
+# 必需（AgentBase 无法运行的核心依赖）
 REQUIRED_DEPS=()
 
-# 可选（缺少时 Hermes 部分功能降级，但不阻塞运行）
+# 可选（缺少时部分功能降级，但不阻塞运行）
 OPTIONAL_DEPS=()
 
 # macOS
@@ -88,19 +88,19 @@ install_macos() {
 
     # Homebrew（可选，但能简化后续安装）
     if ! command -v brew &>/dev/null; then
-        log_warn "Homebrew 未安装（可选，不影响 Hermes 运行）"
+        log_warn "Homebrew 未安装（可选，不影响 AgentBase 运行）"
         log_info "安装 Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/installHEAD/install.sh)\""
     else
         log_ok "Homebrew 已安装"
     fi
 
-    # Python（由 hermes install.sh 通过 uv 自动处理，这里仅检查）
-    log_step "2" "Python（由 Hermes 安装器通过 uv 管理，跳过手动安装）"
+    # Python 3.14（由 agentbase 安装脚本创建 venv，这里仅检查）
+    log_step "2" "Python 3.14（由 agentbase 安装脚本管理，跳过手动安装）"
 
     # Node.js（可选，浏览器工具需要）
     log_step "3" "Node.js 22 LTS（可选，浏览器工具需要）"
     if ! command -v node &>/dev/null; then
-        log_warn "Node.js 未安装（可选： Hermes 浏览器工具需要）"
+        log_warn "Node.js 未安装（可选：浏览器工具需要）"
         log_info "使用 Homebrew 安装: brew install node@22"
         log_info "或手动下载: https://nodejs.org/en/download/"
     else
@@ -150,7 +150,7 @@ install_debian() {
         fi
     done
 
-    log_step "2" "Python 3.11+（由 Hermes 安装器通过 uv 管理，跳过）"
+    log_step "2" "Python 3.14（由 agentbase 安装脚本管理，跳过）"
 
     log_step "3" "Node.js 22 LTS（可选）"
     if ! command -v node &>/dev/null; then
@@ -237,16 +237,10 @@ show_summary() {
     echo "  前置软件检查完成"
     echo "============================================================"
     echo ""
-    echo "  接下来安装 Hermes Agent（用官方安装器，它会自带 Python 3.14）："
+    echo "  接下来运行 AgentBase 安装脚本（会自动创建 Python 3.14 环境，"
+    echo "  Hermes 已内置在 vendor/hermes，无需单独安装）："
     echo ""
-    echo "  curl -fsSL \\"
-    echo "    https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \\"
-    echo "    | bash"
-    echo ""
-    echo "  注意：不要把某个 tag 克隆到 ~/.hermes/hermes-agent —— 那会覆盖掉用户"
-    echo "        已装的那份 Hermes。AgentBase 与 Hermes 共用同一份安装。"
-    echo ""
-    echo "  装好后 AgentBase 会在启动时检查版本；过旧会在界面里自动升级。"
+    echo "  curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash"
     echo ""
 }
 
@@ -256,8 +250,8 @@ show_summary() {
 main() {
     echo ""
     echo "============================================================"
-    echo "  Hermes Agent 前置软件安装脚本"
-    echo "  (仅安装系统依赖，不包含 Hermes Agent 本身)"
+    echo "  AgentBase 前置软件安装脚本"
+    echo "  (仅安装系统依赖，不含 AgentBase 与内置 Hermes)"
     echo "============================================================"
     echo ""
 

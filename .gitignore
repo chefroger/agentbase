@@ -12,7 +12,7 @@ venv/
 dist/
 build/
 # Runtime data directory — NOT tracked (created on install/init)
-.trade/
+.agentbase/
 
 # Temp / generated files
 结构化知识库构建方法论.md

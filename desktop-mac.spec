@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for TradeWin macOS .app bundle (pywebview)."""
+"""PyInstaller spec for AgentBase macOS .app bundle (pywebview)."""
 from pathlib import Path
 
 _block_cipher = None
@@ -53,7 +53,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=_block_cipher)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas,
     [],
-    name='TradeWin',
+    name='AgentBase',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -68,7 +68,7 @@ exe = EXE(
 )
 app = BUNDLE(
     exe,
-    name='TradeWin.app',
+    name='AgentBase.app',
     icon=None,
     bundle_identifier='ai.smarttrade.desktop',
     info_plist={

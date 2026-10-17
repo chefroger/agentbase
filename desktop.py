@@ -1,5 +1,5 @@
 """
-TradeWin — 独立桌面应用入口 (Windows/macOS)。
+AgentBase — 独立桌面应用入口 (Windows/macOS)。
 
 双击 desktop.exe 或 python desktop.py 启动：
   FastAPI 后端在后台线程运行 → WebView 窗口加载 app.html。

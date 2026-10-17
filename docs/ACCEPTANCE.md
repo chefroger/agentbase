@@ -6,13 +6,13 @@
 | # | 验收项 | 结果 | 证据 / 说明 |
 |---|---|---|---|
 | 1 | 全新机器 `install.sh` 走通 | ⚠️ **部分** | `install.sh` 语法通过；在本机用临时 `AGENT_HOME` 起服务冒烟通过（`/api/status` ok、页面 200、Hermes 0.22.2 usable）。**未在真·全新机器复跑**；`install.ps1` 因本机无 `pwsh` **未做语法验证** |
-| 2 | 零外贸残留 grep | ✅ **通过** | `grep -ri "外贸\|trade\|领英\|linkedin\|b2b\|询盘\|报关" --include=*.py --include=*.js --include=*.html --include=*.css --include=*.md agentbase/ static/ skills/` → **0 命中** |
+| 2 | 零外贸残留 grep | ✅ **通过** | `grep -riE "外贸\|trade\|领英\|linkedin\|b2b\|询盘\|报关\|报价单\|\bPI\b" --include=*.py --include=*.js --include=*.html --include=*.css --include=*.md --include=*.sh --include=*.ps1 agentbase/ static/ skills/ scripts/` → **0 命中**（2026-10-18 审计后补入「报价单/PI」与 `scripts/`，修复 5 处 prompt 残留与安装脚本仓库地址） |
 | 3 | 不带 skill 包能启动 | ✅ **通过** | 注册表为空（`skills: []`）；服务正常启动，`/api/status` ok；前端仅提示无业务技能 |
 | 4 | `demo-pack` 能被路由命中并调用 | ✅ **通过** | `match_skill("演示一下 demo 技能")` → `demo-skill`；`build_query` 输出含 `[SKILL AUGMENTATION]` 且含 `demo-skill`。真实模型调用需 API Key，未跑 |
 | 5 | 第三方 Hermes plugin 加载调用 | ✅ **通过** | `scripts/verify_extensions.py`：在临时 `HERMES_HOME/plugins/` 放插件 → `discover_plugins()` → `tools.registry` 出现 `demo_ping`，调用返回 `pong:ok` |
 | 6 | tools registry 注册并调用 | ✅ **通过** | 同一脚本：`get_tool_names_for_toolset("demo")` 返回 `[demo_ping]`，handler 可调用 |
 | 7 | 改 `business.yaml` 生效 | ✅ **通过** | 实测：branding 标题/欢迎语、onboarding 字段、prompt override、work_dirs、FastAPI title 全部按配置生效 |
-| 8 | 通用测试通过、无僵尸业务测试 | ✅ **通过** | `pytest tests/` → **689 passed / 1 skipped / 0 failed**；JS `node --test` → **33 passed**；删除的业务测试已归档在 `docs/EXTRACTED-CAPABILITIES.md` |
+| 8 | 通用测试通过、无僵尸业务测试 | ✅ **通过** | `pytest tests/` → **702 passed / 1 skipped / 0 failed**（2026-10-18，含审计 #11/#12 安全回归）；JS `node --test` → **33 passed**；删除的业务测试已归档在 `docs/EXTRACTED-CAPABILITIES.md` |
 | 9 | `FRAMEWORK.md` 完成 | ✅ **通过** | 见 `FRAMEWORK.md`（安装 / 三步接业务 / pack 契约 / 边界 / 数据布局 / Hermes 升级） |
 
 ## 额外验证
@@ -50,3 +50,4 @@
 | 项 | 任务书写的 | 实际使用 | 原因 |
 |---|---|---|---|
 | trade 基线 | `76c98d1` | **`e3f4772`** | `e3f4772` 是 `76c98d1` 的**直接后继**（中间恰好 1 个提交），内容正是修复审计 #3 的 Windows launcher 路径。任务书 §10.6 说"76c98d1 上仍未修"——即任务书基线早于该修复。使用 e3f4772 = 使用含修复的最新 main。 |
+| 业务 skill 数 | 任务书记 36（另有说 39） | **38**（36 b2b + 2 auto） | `e3f4772` 上实际 38 个；`trade-business-pack` 的 `registry.yaml` 与 `pack.yaml` 一致。任务书数字未同步基线变更。 |

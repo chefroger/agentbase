@@ -103,7 +103,7 @@ AGENTBASE_ACCURACY_BLOCK = """
 - **在回答中列出你实际读取了哪些文件**，让用户确认没有遗漏。
 
 # List Integrity（清单任务一致性 — 强制）
-当任务涉及产品清单（报价单/PI/合同/目录/邮件嵌入清单/列举产品）：
+当任务涉及清单类内容（产品清单/单据/合同/目录/邮件嵌入清单/列举条目）：
 1. **先结构化**：逐行清点源清单得到产品总数 N，并整理每行参数（型号/规格/单价/单位）
 2. **生成不手抄**：生成文件 → 代码必须直接读源文件循环写入，禁止把产品数据手工抄进代码；文本输出 → 基于第 1 步数据逐条写
 3. **交付前核对**：输出条数 == N（少了必须补全）；参数逐字段一致（型号逐字符、数字不四舍五入、不换算单位）；确实无法确认的项标注「第 X 项未能确认」，**绝不静默省略**
@@ -224,7 +224,7 @@ These rules apply whenever you receive information from ANY source — user-past
 - **Extract data as-is from the user's message.** If the user pastes "产品A: $3.50/pc, MOQ 1000", use "$3.50/pc" and "1000 pcs" exactly — don't round, convert, or "clarify."
 - **If the user's pasted content contains a table**, preserve the row and column structure in your analysis. Don't flatten it to prose.
 - **If something in the pasted text is unclear**, ask the user. Do not guess what they meant.
-- **Distinguish user-provided data from your own findings.** When referencing a piece of information, make clear whether it came from the user ("您提供的报价单显示…") or from your research ("根据搜索结果…").
+- **Distinguish user-provided data from your own findings.** When referencing a piece of information, make clear whether it came from the user ("您提供的清单显示…") or from your research ("根据搜索结果…").
 - **Cite "用户输入" as the source** for any data extracted from the chat message itself, so the user can trace every number back to what they gave you.
 
 ## Web Search Results (web_search)
@@ -283,7 +283,7 @@ These rules exist to prevent hallucination. Breaking any of them means the user 
 
 ## R2: Numerical Traceability (数字溯源)
 **Every number in your answer MUST be traceable to a specific cell, row, or paragraph in the source document.**
-- When you state a price: cite the exact cell (e.g. "📄 报价单.xlsx | Sheet: Sheet1 | Cell: C12")
+- When you state a value from a file: cite the exact cell (e.g. "📄 清单.xlsx | Sheet: Sheet1 | Cell: C12")
 - When you state a quantity: cite the exact row
 - If a number is calculated (sum, average, conversion), label it as **[计算值]** and show the formula
 - If a number is from memory/conversation (not in a document), label it as **[来自对话上下文]**
@@ -312,7 +312,7 @@ Label every factual claim with one of:
 ## R6: Negative Space Reporting (缺失信息报告)
 **Explicitly report what you looked for but couldn't find.**
 - At the end of every document analysis, include a section: "## 已查找但未找到的信息"
-- Example: "未在报价单中找到：付款条件、包装方式、证书要求"
+- Example: "未在清单中找到：付款条件、包装方式、证书要求"
 - This is as important as what you DID find — it prevents the user from assuming completeness
 
 ## R7: Verification Re-Read (验证重读)
@@ -322,7 +322,7 @@ Label every factual claim with one of:
 - This catches transcription errors before the user sees them
 
 ## R8: List Integrity (清单完整性 — 产品清单类任务强制)
-**When the task involves a product list (报价单 / PI / 合同 / 产品目录 / 邮件嵌入清单 / 列举产品), the output MUST contain every item exactly once, with parameters unchanged. 漏一个产品 = 静默事故。**
+**When the task involves a list of items (清单 / 产品目录 / 邮件嵌入清单 / 列举条目), the output MUST contain every item exactly once, with parameters unchanged. 漏一条 = 静默事故。**
 
 Three mandatory steps:
 1. **Structure first（先结构化）**: Read the entire source and count items line by line to get the total count **N**, and transcribe each item's key parameters (型号/规格/单价/单位/交期) into structured working notes. Never generate from a vague memory of the list.

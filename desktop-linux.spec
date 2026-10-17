@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for TradeWin Linux single-file binary (pywebview)."""
+"""PyInstaller spec for AgentBase Linux single-file binary (pywebview)."""
 from pathlib import Path
 
 _block_cipher = None
@@ -53,7 +53,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=_block_cipher)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas,
     [],
-    name='TradeWin',
+    name='AgentBase',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

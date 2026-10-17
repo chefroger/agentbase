@@ -37,14 +37,14 @@ echo "→ 开始打包..."
 python -m PyInstaller desktop-mac.spec --noconfirm --clean 2>&1 | tail -10
 
 # ── Verify ──
-if [ -d "dist/TradeWin.app" ]; then
-    APP_SIZE=$(du -sh "dist/TradeWin.app" | cut -f1)
+if [ -d "dist/AgentBase.app" ]; then
+    APP_SIZE=$(du -sh "dist/AgentBase.app" | cut -f1)
     echo ""
     echo "══ 构建完成 ══"
-    echo "  位置: $ROOT/dist/TradeWin.app"
+    echo "  位置: $ROOT/dist/AgentBase.app"
     echo "  大小: $APP_SIZE"
     echo ""
-    echo "  双击 TradeWin.app 启动"
+    echo "  双击 AgentBase.app 启动"
 else
     echo "✗ 构建失败，请检查上方错误信息"
     exit 1
