@@ -357,10 +357,19 @@ def ensure_windows_setup(agentbase_dir: Path) -> list[str]:
     except Exception as e:
         return [f"⚠ 生成启动器脚本失败：{e}"]
 
+    # 尊重用户在设置页的选择：关掉自启后，服务重启不能把它装回来。
     try:
-        messages.append(ensure_scheduled_task(scripts["autostart_vbs"]))
-    except Exception as e:
-        messages.append(f"⚠ 注册开机自启失败：{e}")
+        from agentbase.service import autostart_preference
+
+        allow_autostart = autostart_preference()
+    except Exception:
+        allow_autostart = True
+
+    if allow_autostart:
+        try:
+            messages.append(ensure_scheduled_task(scripts["autostart_vbs"]))
+        except Exception as e:
+            messages.append(f"⚠ 注册开机自启失败：{e}")
 
     try:
         legacy = remove_legacy_run_entry()

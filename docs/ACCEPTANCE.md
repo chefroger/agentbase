@@ -22,12 +22,54 @@
 - **MCP 客户端**：`scripts/verify_extensions.py` 连接本地 stdio MCP server，注册 5 个工具（`mcp__demo__*`），实际调用 `mcp__demo__echo` 返回 `echo:it-works`。
 - **自动升级已删**：`hermes_upgrade.py`、后台钩子、`/system/hermes-upgrade[/stream]` 端点与前端面板全部移除。
 
+## Phase 7：单文件打包 + 后台常驻服务
+
+**服务模型（方案 A：只跑后端，打开系统浏览器）**
+
+| 入口 | 行为 |
+|---|---|
+| 双击产物 / 无参数 | `agentbase.opener.open_agentbase()`：探测服务 → 未运行则后台派生 `--service` → 等就绪 → 打开浏览器 |
+| `--service` | 前台常驻（uvicorn），由自启机制或双击派生；不打开浏览器 |
+| `--stop` | 读 `AGENT_HOME/data/agentbase.pid` → SIGTERM → 等退出 |
+| `agentbase open` | 与双击等价（Windows 桌面快捷方式的目标） |
+
+**单实例**：以 `127.0.0.1:9120/api/status` 探活为准；重复启动的服务会因端口冲突退出（app.py 既有重试/退出逻辑）。
+
+**开机自启**
+
+- macOS：launchd `~/Library/LaunchAgents/com.agentbase.assistant.plist`（`RunAtLoad=true`、`KeepAlive=false`，用户级）。`install.sh` 每次重写并 `bootout`+`bootstrap`。
+- Windows：计划任务 `AgentBase`（登录触发、`wscript` 隐藏窗口，见 `post_install/win_setup.py`）；install.ps1 与服务启动时幂等确保。
+- Linux：systemd user unit（install.sh 既有）。
+- 用户偏好：`AGENT_HOME/data/autostart.json`。设置页关闭自启后，Windows 服务重启**不会**把它装回来；重跑安装脚本会重置为默认开启。
+
+**设置页入口**：`后台服务` 区块（开机自启开关 + 退出服务），对应
+`GET /system/service-status`、`POST /system/autostart`、`POST /system/quit`（均需 session token）。
+
+**macOS 产物实测（2026-10-18，本机 x86_64）**
+
+- 构建：`python -m PyInstaller desktop-mac.spec`（PyInstaller 6.22.3）
+- 体积 **108MB**（目标 ≤300MB）
+- 冷启动到 `/api/status` 就绪：**5.9s**
+- 常驻 RSS：**~190MB**（首次加载 provider catalog 后）
+- `/agentbase` 返回 200；`/api/agentbase/settings` 能读出 Hermes provider catalog（证明 frozen 下 vendor Hermes import 正常）
+- `--stop` 正常停止；无 `ModuleNotFoundError`
+- 未签名（PyInstaller 提示需手动签名）
+
+**打包要点（踩坑记录）**
+
+- `vendor/hermes` 以 **datas 源码目录**分发；`bootstrap._adjust_sys_path()` 在 frozen 下把 `_MEIPASS/vendor/hermes` 加入 `sys.path`。只靠 PyInstaller 静态分析会漏 Hermes 的惰性导入。
+- Hermes 的运行时依赖必须在 `hiddenimports` 显式列出（ruamel.yaml / certifi / truststore / dotenv / httpx / rich …）；`PIL` 不能排除（Hermes 图像工具需要）。
+- 三份 spec（mac/windows/linux）保持一致；`tests/test_service.py::TestSpecHygiene` 钉住"不引用已删模块"和"必须包含 vendor/hermes"。
+
 ## 未完成 / 后续
 
 1. 真·全新机器安装复跑（Windows + macOS）；`install.ps1` 语法验证。
 2. 文件上传 → 解析 → Agent 读取全链路真机验证（需要模型 Key）。
-3. Phase 7（单文件打包 + 常驻服务）尚未开始。
-4. `COMPATIBILITY.md` 保留为 Hermes 兼容历史记录（含旧项目名称，属溯源材料）。
+3. **Windows 单文件产物未构建**：`desktop-windows.spec` 已就绪，需在 Windows 机器上跑 `scripts/build.ps1` 实测。
+4. **macOS 产物仅 x86_64**：本机 Python 为 x86_64；Apple Silicon 需在 arm64 解释器下另构建（任务书允许分别构建）。
+5. **代码签名未做**：未签名的常驻/自启程序会触发杀软与 Gatekeeper 提示（任务书已列为产品决策）。
+6. **.app 分发包的自启未接线**：当前自启由 install.sh/install.ps1（源码安装）注册；若只分发 .app，需要首次启动时征得用户同意后注册 launchd。
+7. `COMPATIBILITY.md` 保留为 Hermes 兼容历史记录（含旧项目名称，属溯源材料）。
 
 ## 审计 bug（任务书 v2 引用的 76c98d1 审计）处置
 

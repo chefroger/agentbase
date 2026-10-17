@@ -376,6 +376,8 @@ if ($currentPath -notlike "*$LocalBin*") {
 # 以前这里用 Register-ScheduledTask 直接跑 python.exe，是控制台程序 → 登录必弹
 # 终端窗口；而且只在这一处配，走「让 Hermes 装 AgentBase」流程的用户根本拿不到。
 # ─────────────────────────────────────────────────────────────────────────────
+# 重新安装 = 恢复默认：清掉「用户手动关闭自启」的偏好记录
+& $PyCmd -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()"
 & $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(agentbase_dir_from_module())]"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 AgentBase 使用，可稍后重试）" -ForegroundColor Yellow

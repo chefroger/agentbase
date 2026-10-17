@@ -2252,10 +2252,44 @@ async function loadSettings() {
             启用 MoA
         </label>
         ${data.moa?.presets?.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:4px;">预设：${esc((data.moa.presets || []).join(', '))}</p>` : ''}
+        <h3 style="font-size:15px;margin:18px 0 10px;">后台服务</h3>
+        <div id="service-body" style="font-size:13px;">加载中...</div>
         <h3 style="font-size:15px;margin:18px 0 10px;">业务技能包</h3>
         <div id="packs-body" style="font-size:13px;">加载中...</div>
     `;
     loadPacks();
+    loadServiceSettings();
+}
+
+async function loadServiceSettings() {
+    const el = document.getElementById('service-body');
+    if (!el) return;
+    const data = await api('GET', '/system/service-status');
+    if (!data) { el.textContent = '加载失败'; return; }
+    el.innerHTML = `
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <input type="checkbox" id="autostart-toggle" ${data.autostart ? 'checked' : ''} onchange="setAutostart(this.checked)">
+            开机自动启动（登录后后台运行，无窗口）
+        </label>
+        <button class="btn" onclick="quitService()">退出服务</button>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">退出后定时任务会停止；再次双击图标即可重新启动。</p>`;
+}
+
+async function setAutostart(enabled) {
+    const resp = await api('POST', '/system/autostart', { enabled });
+    if (resp?.ok) { toast(resp.message || '已保存'); }
+    else {
+        toast(resp?.error || '设置失败');
+        const el = document.getElementById('autostart-toggle');
+        if (el) el.checked = !enabled;
+    }
+    loadServiceSettings();
+}
+
+async function quitService() {
+    if (!confirm('确定退出 AgentBase 服务？退出后定时任务将停止。')) return;
+    const resp = await api('POST', '/system/quit', {});
+    if (resp?.ok) toast('服务正在退出…');
 }
 
 async function saveProviderKey(providerId, envVar) {

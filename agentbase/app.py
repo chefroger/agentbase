@@ -682,6 +682,52 @@ def _create_system_router() -> APIRouter:
             "message": "重建已开始，AgentBase 会在完成后自动恢复（约 5~10 分钟）。",
         }
 
+    @router.get("/system/service-status")
+    def api_service_status():
+        """常驻服务状态 + 开机自启开关（Phase 7）。"""
+        from agentbase.opener import is_server_up
+        from agentbase.service import autostart_enabled
+
+        return {
+            "ok": True,
+            "running": is_server_up(),
+            "autostart": autostart_enabled(),
+        }
+
+    @router.post("/system/autostart")
+    def api_set_autostart(payload: dict, request: Request):
+        """开启/关闭**用户级**开机自启（无需管理员权限）。"""
+        _tk = request.headers.get("X-Hermes-Session-Token", "")
+        if _tk and not _check_system_rate_limit(_tk[:16]):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=429, detail="系统端点请求过于频繁，请稍后重试。")
+
+        from agentbase.service import set_autostart
+
+        enabled = bool(payload.get("enabled"))
+        ok, message = set_autostart(enabled)
+        if not ok:
+            return {"ok": False, "error": message}
+        return {"ok": True, "message": message, "autostart": enabled}
+
+    @router.post("/system/quit")
+    def api_quit_service():
+        """退出常驻服务（不是卸载）。
+
+        先返回响应，再在后台线程里发 SIGTERM，避免把正在写的响应掐断。
+        """
+        import threading
+        import time as _t
+
+        def _quit() -> None:
+            _t.sleep(0.5)
+            from agentbase.service import quit_service
+
+            quit_service()
+
+        threading.Thread(target=_quit, daemon=True).start()
+        return {"ok": True, "message": "服务正在退出。下次双击图标可重新启动。"}
+
     return router
 
 

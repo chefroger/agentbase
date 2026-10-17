@@ -461,9 +461,12 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     PLIST_DIR="$HOME/Library/LaunchAgents"
     PLIST_FILE="$PLIST_DIR/com.agentbase.assistant.plist"
     mkdir -p "$PLIST_DIR"
+    # 重新安装 = 恢复默认：清掉「用户手动关闭自启」的偏好记录
+    "$VENV_DIR/bin/python" -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()" 2>/dev/null || true
 
-    if [ ! -f "$PLIST_FILE" ]; then
-        cat > "$PLIST_FILE" << PLIST
+    # 每次都重写：旧装用户的 plist 可能带 KeepAlive=true，
+    # 那样「退出服务」后会被 launchd 立刻拉起（Phase 7 要求可退出）。
+    cat > "$PLIST_FILE" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -478,7 +481,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <false/>
     <key>StandardOutPath</key>
     <string>$AGENT_HOME/logs/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
@@ -495,19 +498,18 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 </dict>
 </plist>
 PLIST
-        # 确保日志目录存在
-        mkdir -p "$AGENT_HOME/logs"
-        # 加载到当前会话（用户级，无需 sudo）
-        launchctl bootstrap gui/$(id -u) "$PLIST_FILE" 2>/dev/null || \
+    # 确保日志目录存在
+    mkdir -p "$AGENT_HOME/logs"
+    # 卸载旧配置后再加载（用户级，无需 sudo）
+    launchctl bootout gui/$(id -u) "$PLIST_FILE" 2>/dev/null || \
+        launchctl unload "$PLIST_FILE" 2>/dev/null || true
+    launchctl bootstrap gui/$(id -u) "$PLIST_FILE" 2>/dev/null || \
         launchctl load "$PLIST_FILE" 2>/dev/null || true
-        echo -e "  ${GREEN}✓${NC} macOS 开机自启动已配置（后台运行，无终端窗口）"
-        echo -e "    管理命令:"
-        echo -e "      停止:  ${CYAN}launchctl unload $PLIST_FILE${NC}"
-        echo -e "      重启:  ${CYAN}launchctl unload $PLIST_FILE && launchctl load $PLIST_FILE${NC}"
-        echo -e "      查看日志: ${CYAN}tail -f $AGENT_HOME/logs/launchd-stdout.log${NC}"
-    else
-        echo -e "  ${GREEN}✓${NC} macOS 开机自启动已配置"
-    fi
+    echo -e "  ${GREEN}✓${NC} macOS 开机自启动已配置（后台运行，无终端窗口）"
+    echo -e "    管理命令:"
+    echo -e "      停止:  ${CYAN}launchctl unload $PLIST_FILE${NC}"
+    echo -e "      重启:  ${CYAN}launchctl unload $PLIST_FILE && launchctl load $PLIST_FILE${NC}"
+    echo -e "      查看日志: ${CYAN}tail -f $AGENT_HOME/logs/launchd-stdout.log${NC}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置 Linux 开机自启动（systemd user unit）

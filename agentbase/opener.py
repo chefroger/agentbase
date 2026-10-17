@@ -51,6 +51,20 @@ def _server_script_path() -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def _service_command() -> list[str] | None:
+    """构造「启动常驻服务」的命令。
+
+    PyInstaller 打包后没有 server.py —— 同一个可执行文件用 `--service`
+    进入服务模式（见 desktop.py）。源码运行则用 python + server.py。
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--service"]
+    server_py = _server_script_path()
+    if server_py is None:
+        return None
+    return [sys.executable, str(server_py), "--no-browser"]
+
+
 def _spawn_detached(cmd: list[str]) -> None:
     """后台启动，且**不显示窗口**（Windows）/ 脱离会话（POSIX）。"""
     kwargs: dict = {}
@@ -97,8 +111,8 @@ def open_agentbase(
     was_running = probe(base_url)
     started = was_running
     if not started:
-        server_py = _server_script_path()
-        if server_py is None:
+        cmd = _service_command()
+        if cmd is None:
             return (
                 "✗ 找不到 server.py，无法启动服务。请重新安装 AgentBase，"
                 f"或手动运行 agentbase 后访问 {url}"
@@ -106,8 +120,8 @@ def open_agentbase(
 
         print("[open] AgentBase 未运行，正在后台启动 ...")
         try:
-            # --no-browser：浏览器由本命令负责，避免服务自己也开一次
-            spawn([sys.executable, str(server_py), "--no-browser"])
+            # --no-browser / --service：浏览器由本命令负责，避免服务自己也开一次
+            spawn(cmd)
         except Exception as e:
             return f"✗ 启动 AgentBase 失败：{e}"
 

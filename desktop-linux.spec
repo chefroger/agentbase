@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for AgentBase Linux single-file binary (pywebview)."""
+"""PyInstaller spec for the AgentBase Linux single-file binary.
+
+任务书 §12 说明 Linux 暂不做正式交付；此 spec 与 Windows 版同构，
+保留作为开发/自用构建入口。Phase 7 方案 A：只跑后端，打开系统浏览器。
+"""
 from pathlib import Path
 
 _block_cipher = None
@@ -15,37 +19,43 @@ a = Analysis(
         (str(_PROJECT_ROOT / 'agentbase'), 'agentbase'),
         (str(_PROJECT_ROOT / 'static'), 'static'),
         (str(_PROJECT_ROOT / 'pyproject.toml'), '.'),
+        (str(_PROJECT_ROOT / 'vendor' / 'hermes'), 'vendor/hermes'),
     ],
     hiddenimports=[
         'uvicorn.loops.auto', 'uvicorn.protocols.http.auto',
         'agentbase', 'agentbase.api', 'agentbase.api.chat', 'agentbase.api.cron',
-        'agentbase.api.workspaces', 'agentbase.api.customers', 'agentbase.api.libraries',
-        'agentbase.api.orders', 'agentbase.api.conversations', 'agentbase.api.memory',
+        'agentbase.api.workspaces', 'agentbase.api.conversations', 'agentbase.api.memory',
         'agentbase.api.onboarding', 'agentbase.api.license', 'agentbase.api.deps',
-        'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud', 'agentbase.workspace.workdir',
+        'agentbase.api.settings', 'agentbase.api.packs', 'agentbase.api.files',
+        'agentbase.api.branding',
+        'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud',
+        'agentbase.workspace.workdir',
         'agentbase.helpers', 'agentbase.prompts', 'agentbase.prompt',
-        'agentbase.skill_router', 'agentbase.skill_registry',
+        'agentbase.skill_router', 'agentbase.skill_registry', 'agentbase.skill_semantic',
         'agentbase.chat_memory', 'agentbase.memory', 'agentbase.license',
-        'agentbase.onboarding', 'agentbase.bootstrap',
-        'agentbase.osint', 'agentbase.osint.orchestrator', 'agentbase.osint.whois',
-        'agentbase.osint.email_verify', 'agentbase.osint.sanctions', 'agentbase.osint.sanctions.loader',
-        'agentbase.osint.tech_stack', 'agentbase.osint.linkedin_verify',
-        'agentbase.osint.scoring', 'agentbase.osint.constants',
-        'hermes_cli', 'hermes_cli.config', 'hermes_cli.auth',
-        'hermes_cli.env_loader', 'hermes_cli.models',
-        'hermes_constants', 'run_agent',
-        'openai', 'anthropic',  # LLM Provider SDKs — required, not optional
-        'pymupdf', 'anydoc', 'pypdfium2',  # 文档解析 / 图纸渲染（扫描件走 vision）
-        'psutil', 'dnspython',  # Process management / DNS lookups
-        'webview', 'webview.platforms.gtk',
-        'asyncio', 'sqlite3', 'json', 'csv', 'io', 're', 'hashlib',
+        'agentbase.onboarding', 'agentbase.bootstrap', 'agentbase.cli',
+        'agentbase.service', 'agentbase.opener', 'agentbase.pdf_vision',
+        'agentbase.post_install', 'agentbase.post_install.skills',
+        'agentbase.post_install.win_setup',
+        'openai', 'anthropic',
+        'pymupdf', 'fitz', 'anydoc', 'pypdfium2',
+        'psutil', 'dns',
+        'asyncio', 'sqlite3', 'json', 'csv', 'io', 're', 'hashlib', 'filecmp',
         'multiprocessing',
+        # Hermes 的运行时依赖：Hermes 以源码 datas 分发，PyInstaller 不会静态分析，
+        # 必须在 hiddenimports 里显式列出（否则 frozen 启动时才报 ModuleNotFoundError）。
+        'certifi', 'truststore', 'dotenv', 'fire', 'httpx', 'socksio',
+        'rich', 'tenacity', 'tomli_w', 'ruamel.yaml', 'requests', 'jinja2',
+        'prompt_toolkit', 'croniter', 'snowballstemmer', 'markdown', 'jwt',
+        'urllib3', 'cryptography', 'websockets', 'browser_harness', 'pathspec',
+        'httptools', 'watchfiles', 'multipart', 'PIL', 'pillow_heif', 'resvg_py',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas', 'PIL',
-              'PySide6', 'PyQt5', 'PyQt6'],
+    excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas',
+              'PySide6', 'PyQt5', 'PyQt6', 'webview',
+              'PyInstaller', 'pytest'],
     cipher=_block_cipher,
     noarchive=False,
 )

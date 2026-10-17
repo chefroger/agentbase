@@ -1,5 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for AgentBase macOS .app bundle (pywebview)."""
+"""PyInstaller spec for the AgentBase macOS .app bundle.
+
+Phase 7 方案 A：产物只跑后端，双击后打开系统浏览器（不内嵌 WebView）。
+
+关键点：vendor/hermes 以**源码目录**（datas）随包分发，运行时由
+bootstrap._adjust_sys_path() 把 _MEIPASS/vendor/hermes 加进 sys.path。
+不能只靠 PyInstaller 的静态分析 —— Hermes 大量惰性导入，分析器抓不到。
+"""
 from pathlib import Path
 
 _block_cipher = None
@@ -15,37 +22,44 @@ a = Analysis(
         (str(_PROJECT_ROOT / 'agentbase'), 'agentbase'),
         (str(_PROJECT_ROOT / 'static'), 'static'),
         (str(_PROJECT_ROOT / 'pyproject.toml'), '.'),
+        # Vendored Hermes: 源码随包分发（MIT，见 vendor/hermes/LICENSE）
+        (str(_PROJECT_ROOT / 'vendor' / 'hermes'), 'vendor/hermes'),
     ],
     hiddenimports=[
         'uvicorn.loops.auto', 'uvicorn.protocols.http.auto',
         'agentbase', 'agentbase.api', 'agentbase.api.chat', 'agentbase.api.cron',
-        'agentbase.api.workspaces', 'agentbase.api.customers', 'agentbase.api.libraries',
-        'agentbase.api.orders', 'agentbase.api.conversations', 'agentbase.api.memory',
+        'agentbase.api.workspaces', 'agentbase.api.conversations', 'agentbase.api.memory',
         'agentbase.api.onboarding', 'agentbase.api.license', 'agentbase.api.deps',
-        'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud', 'agentbase.workspace.workdir',
+        'agentbase.api.settings', 'agentbase.api.packs', 'agentbase.api.files',
+        'agentbase.api.branding',
+        'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud',
+        'agentbase.workspace.workdir',
         'agentbase.helpers', 'agentbase.prompts', 'agentbase.prompt',
-        'agentbase.skill_router', 'agentbase.skill_registry',
+        'agentbase.skill_router', 'agentbase.skill_registry', 'agentbase.skill_semantic',
         'agentbase.chat_memory', 'agentbase.memory', 'agentbase.license',
-        'agentbase.onboarding', 'agentbase.bootstrap',
-        'agentbase.osint', 'agentbase.osint.orchestrator', 'agentbase.osint.whois',
-        'agentbase.osint.email_verify', 'agentbase.osint.sanctions', 'agentbase.osint.sanctions.loader',
-        'agentbase.osint.tech_stack', 'agentbase.osint.linkedin_verify',
-        'agentbase.osint.scoring', 'agentbase.osint.constants',
-        'hermes_cli', 'hermes_cli.config', 'hermes_cli.auth',
-        'hermes_cli.env_loader', 'hermes_cli.models',
-        'hermes_constants', 'run_agent',
+        'agentbase.onboarding', 'agentbase.bootstrap', 'agentbase.cli',
+        'agentbase.service', 'agentbase.opener', 'agentbase.pdf_vision',
+        'agentbase.post_install', 'agentbase.post_install.skills',
+        'agentbase.post_install.win_setup',
         'openai', 'anthropic',  # LLM Provider SDKs — required, not optional
-        'pymupdf', 'anydoc', 'pypdfium2',  # 文档解析 / 图纸渲染（扫描件走 vision）
-        'psutil', 'dnspython',  # Process management / DNS lookups
-        'webview', 'webview.platforms.cocoa',
-        'asyncio', 'sqlite3', 'json', 'csv', 'io', 're', 'hashlib',
+        'pymupdf', 'fitz', 'anydoc', 'pypdfium2',  # 文档解析（扫描件走 vision）
+        'psutil', 'dns',  # Process management / DNS lookups
+        'asyncio', 'sqlite3', 'json', 'csv', 'io', 're', 'hashlib', 'filecmp',
         'multiprocessing',
+        # Hermes 的运行时依赖：Hermes 以源码 datas 分发，PyInstaller 不会静态分析，
+        # 必须在 hiddenimports 里显式列出（否则 frozen 启动时才报 ModuleNotFoundError）。
+        'certifi', 'truststore', 'dotenv', 'fire', 'httpx', 'socksio',
+        'rich', 'tenacity', 'tomli_w', 'ruamel.yaml', 'requests', 'jinja2',
+        'prompt_toolkit', 'croniter', 'snowballstemmer', 'markdown', 'jwt',
+        'urllib3', 'cryptography', 'websockets', 'browser_harness', 'pathspec',
+        'httptools', 'watchfiles', 'multipart', 'PIL', 'pillow_heif', 'resvg_py',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas', 'PIL',
-              'PySide6', 'PyQt5', 'PyQt6'],
+    excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas',
+              'PySide6', 'PyQt5', 'PyQt6', 'webview',
+              'PyInstaller', 'pytest'],
     cipher=_block_cipher,
     noarchive=False,
 )
@@ -70,10 +84,12 @@ app = BUNDLE(
     exe,
     name='AgentBase.app',
     icon=None,
-    bundle_identifier='ai.smarttrade.desktop',
+    bundle_identifier='ai.agentbase.app',
     info_plist={
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '12.0',
         'NSSupportsAutomaticTermination': True,
+        # Phase 7：常驻服务 + 双击打开浏览器，没有窗口
+        'LSUIElement': True,
     },
 )

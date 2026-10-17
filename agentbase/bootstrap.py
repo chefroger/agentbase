@@ -80,8 +80,17 @@ def _agent_home() -> str:
 
 
 def _adjust_sys_path():
-    # PyInstaller 打包后 sys.frozen=True，不需要 sys.path 调整
+    # PyInstaller 打包后 sys.frozen=True：Hermes 以 **源码目录**（datas）随包分发，
+    # 不在 PYZ 里，因此必须把 _MEIPASS/vendor/hermes 加进 sys.path，
+    # 否则 hermes_cli / run_agent / tools.* 全部 import 失败。
     if getattr(sys, "frozen", False):
+        _meipass = getattr(sys, "_MEIPASS", None)
+        if _meipass:
+            _hermes = str(Path(_meipass) / "vendor" / "hermes")
+            if (Path(_hermes) / "hermes_cli").is_dir() and _hermes not in sys.path:
+                # append 而非 insert：agentbase 自己的包已经在 sys.path 里，
+                # 让 Hermes 的顶层模块排在其后。
+                sys.path.append(_hermes)
         return
     _pkg_root = str(Path(__file__).resolve().parent.parent)
     if _pkg_root not in sys.path:
