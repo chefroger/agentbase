@@ -42,8 +42,8 @@
 | 7 | launchd label 与 unit 名不一致 | ✅ 一致（`com.agentbase.assistant`） |
 | 8 | `_patch_yaml_list` 子串匹配误伤 | ✅ 已修（逐项精确比较 + 回归测试） |
 | 10 | 硬编码销毁口令 + 口令进 argv | ✅ 已修（`AGENTBASE_PURGE_PASSWORD` 环境变量 / getpass；拒绝 `--password`） |
-| 11 | license 路由无鉴权 / 跨租户 fallback | ⚠️ 部分：跨租户读取已消除（license 为机器级）；**路由仍未要求 session token**，记为安全债 |
-| 12 | plugin 的 workspace_id 由 LLM 从 system prompt 读取 | ⚠️ **未修**：仍是 LLM 传参；服务端注入需要插件上下文改造，记为安全债 |
+| 11 | license 路由无鉴权 / 跨租户 fallback | ✅ 已修：`POST /license/activate` 要求 session token；`GET /license/status` 保持免鉴权（登录前展示品牌）且不再接受 workspace 参数；跨租户读取已消除（license 为机器级）。回归测试 `tests/test_security_hardening.py` |
+| 12 | plugin 的 workspace_id 由 LLM 从 system prompt 读取 | ✅ 已修：workspace 由服务端 `bind_workspace()` 在发起 agent 调用时绑定（ContextVar，随 Hermes `propagate_context_to_thread` 传播）；`chat_memory_list` schema 移除 `workspace_id`，handler 只读服务端绑定值并 fail-closed。回归测试 `tests/test_chat_memory_plugin.py` + `TestWorkspaceContextTrust` |
 
 ## 基线差异（重要）
 

@@ -716,7 +716,7 @@ def create_app() -> FastAPI:
     from agentbase.api.deps import set_session_token
     set_session_token(_SESSION_TOKEN)
 
-    # 挂载 license + branding 路由（无需 session token：登录前就要显示品牌）
+    # 挂载 license + branding 路由（登录前就要显示品牌；license 写端点单独要求 session token）
     from agentbase.api.license import router as license_router
     app.include_router(license_router, prefix="/api/agentbase")
 

@@ -399,7 +399,6 @@ def _get_history_block(workspace_id: int | None, total_prompt_chars: int) -> tup
             "可用 time_range：today / yesterday / this_week / last_week / "
             "this_month / last_month / this_year / last_year / all；"
             "或 recent_days / recent_months 表达上上周三/前几个月等。"
-            "workspace_id 从 system prompt 的 AgentBase Context 段读取。"
         )
     else:                                # >= 50k tokens — 上下文紧张，仅注入 5 条
         limit = 5

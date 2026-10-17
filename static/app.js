@@ -547,11 +547,13 @@ async function doActivate() {
     const code = input.value.trim();
     if (!code) { msg.textContent = currentLang === 'en' ? 'Please enter the activation code' : '请输入激活码'; msg.style.color = 'var(--accent-red)'; return; }
     try {
-        const r = await fetch('/api/agentbase/license/activate', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({code})
-        });
-        const data = await r.json();
+        // 走统一 api 包装：激活是写操作，必须带 session token
+        const data = await api('POST', '/license/activate', {code});
+        if (!data) {
+            msg.textContent = t('toast.activate_fail');
+            msg.style.color = 'var(--accent-red)';
+            return;
+        }
         if (data.ok) {
             msg.textContent = data.message;
             msg.style.color = 'var(--accent-green)';

@@ -29,6 +29,7 @@ from agentbase.document_task import (
 from agentbase.helpers import _extract_explicit_paths, build_query, create_agent
 from agentbase.hermes_compat import release_read_coverage, snapshot_read_coverage
 from agentbase.read_evidence import ReadEvidenceCollector
+from agentbase.workspace_context import bind_workspace
 
 _log = logging.getLogger(__name__)
 
@@ -182,16 +183,19 @@ async def app(
         last_error = ""
         for attempt in range(_MAX_AGENT_RETRIES + 1):
             try:
-                agent = create_agent(
-                    ephemeral_system_prompt=skill_hint,
-                    skill_name=current_skill,
-                    tool_start_callback=evidence.on_start if evidence else None,
-                    tool_complete_callback=evidence.on_complete if evidence else None,
-                )
-                if document_task and request_task_id:
-                    result = agent.run_conversation(full_query, task_id=request_task_id)["final_response"]
-                else:
-                    result = agent.chat(full_query)
+                # 服务端绑定当前 workspace：插件工具（chat_memory_list 等）只读取它，
+                # 不再让 LLM 从 prompt 里传值（传错会跨 workspace 读数据）。
+                with bind_workspace(cid):
+                    agent = create_agent(
+                        ephemeral_system_prompt=skill_hint,
+                        skill_name=current_skill,
+                        tool_start_callback=evidence.on_start if evidence else None,
+                        tool_complete_callback=evidence.on_complete if evidence else None,
+                    )
+                    if document_task and request_task_id:
+                        result = agent.run_conversation(full_query, task_id=request_task_id)["final_response"]
+                    else:
+                        result = agent.chat(full_query)
                 if result:
                     return result, True
                 if attempt < _MAX_AGENT_RETRIES:
@@ -370,18 +374,19 @@ async def chat_stream(
                     _emit_threadsafe("thinking", {"message": "正在分析问题..."})
                 else:
                     _emit_threadsafe("thinking", {"message": f"正在重试（第 {attempt} 次）..."})
-                agent = create_agent(
-                    tool_start_callback=_tool_start,
-                    tool_complete_callback=_tool_complete,
-                    ephemeral_system_prompt=skill_hint,
-                    skill_name=current_skill,
-                )
-                start = time.time()
-                if document_task and request_task_id:
-                    result = agent.run_conversation(full_query, task_id=request_task_id)["final_response"]
-                else:
-                    result = agent.chat(full_query)
-                elapsed = time.time() - start
+                with bind_workspace(cid):
+                    agent = create_agent(
+                        tool_start_callback=_tool_start,
+                        tool_complete_callback=_tool_complete,
+                        ephemeral_system_prompt=skill_hint,
+                        skill_name=current_skill,
+                    )
+                    start = time.time()
+                    if document_task and request_task_id:
+                        result = agent.run_conversation(full_query, task_id=request_task_id)["final_response"]
+                    else:
+                        result = agent.chat(full_query)
+                    elapsed = time.time() - start
 
                 if not result and attempt < _MAX_AGENT_RETRIES:
                     if cancel_event.is_set():

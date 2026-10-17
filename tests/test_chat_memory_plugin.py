@@ -433,37 +433,74 @@ class TestChatMemoryPluginE2E:
         assert calls[0]["toolset"] == "chat-memory"
         assert "schema" in calls[0] and "handler" in calls[0]
 
-    def test_handler_rejects_missing_workspace_id(self, tmp_path, monkeypatch):
+    def test_handler_rejects_when_no_workspace_bound(self, tmp_path, monkeypatch):
+        """没有服务端绑定 → fail closed（绝不回退到 LLM 传的参数）。"""
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
         res = json.loads(plugin.handle_chat_memory_list({"time_range": "all"}))
         assert "error" in res
-        assert "workspace_id" in res["error"]
+        assert "workspace" in res["error"]
 
-    def test_handler_rejects_non_int_workspace_id(self, tmp_path, monkeypatch):
+    def test_handler_ignores_llm_supplied_workspace_id(self, tmp_path, monkeypatch):
+        """LLM 自己塞进来的 workspace_id 必须被忽略，用服务端绑定的值。"""
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
+        import agentbase.database as db
+        db.init_db()
+        con = db.get_connection()
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (1, 't', 't')")
+        con.execute("INSERT INTO workspaces (id, name, slug) VALUES (2, 'other', 'other')")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        con.execute(
+            "INSERT INTO conversations (workspace_id, query, response, created_at) "
+            "VALUES (1, 'ws1', 'r', ?)", (ts,),
+        )
+        con.execute(
+            "INSERT INTO conversations (workspace_id, query, response, created_at) "
+            "VALUES (2, 'ws2', 'r', ?)", (ts,),
+        )
+        con.commit()
+
+        from agentbase.workspace_context import bind_workspace
+
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({"workspace_id": "1", "time_range": "all"}))
-        assert "workspace_id" in res["error"]
+        with bind_workspace(1):
+            res = json.loads(plugin.handle_chat_memory_list({
+                "workspace_id": 2, "time_range": "all",
+            }))
+        assert "error" not in res
+        assert res["workspace_id"] == 1
+        assert [r["query"] for r in res["rows"]] == ["ws1"]
+
+    def test_schema_has_no_workspace_id_parameter(self):
+        """workspace_id 不能再暴露给 LLM —— 它由服务端绑定。"""
+        from agentbase.hermes_chat_memory_plugin.tools import CHAT_MEMORY_LIST_SCHEMA
+
+        params = CHAT_MEMORY_LIST_SCHEMA["parameters"]
+        assert "workspace_id" not in params["properties"]
+        assert "workspace_id" not in params.get("required", [])
 
     def test_handler_rejects_recent_days_and_months_together(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({
-            "workspace_id": 1, "recent_days": 7, "recent_months": 2,
-        }))
+        from agentbase.workspace_context import bind_workspace
+
+        with bind_workspace(1):
+            res = json.loads(plugin.handle_chat_memory_list({
+                "recent_days": 7, "recent_months": 2,
+            }))
         assert "mutually exclusive" in res["error"]
 
     def test_handler_rejects_zero_recent_days(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({
-            "workspace_id": 1, "recent_days": 0,
-        }))
+        from agentbase.workspace_context import bind_workspace
+
+        with bind_workspace(1):
+            res = json.loads(plugin.handle_chat_memory_list({"recent_days": 0}))
         assert "recent_days" in res["error"]
 
     def test_handler_succeeds_with_valid_args(self, tmp_path, monkeypatch):
-        """端到端：真 SQLite + 真 handler。"""
+        """端到端：真 SQLite + 真 handler + 服务端绑定 workspace。"""
         # 用 monkeypatch 而不是直接赋值 —— 后者不会在用例结束时还原，
         # 会把 AGENT_HOME 渗给后续用例（它们拿到的是已删除的 tmp_path）
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
@@ -478,8 +515,11 @@ class TestChatMemoryPluginE2E:
         )
         con.commit()
 
+        from agentbase.workspace_context import bind_workspace
+
         plugin = self._load_plugin()
-        res = json.loads(plugin.handle_chat_memory_list({"workspace_id": 1, "time_range": "today"}))
+        with bind_workspace(1):
+            res = json.loads(plugin.handle_chat_memory_list({"time_range": "today"}))
         assert "error" not in res
         assert res["count"] == 1
         assert res["rows"][0]["query"] == "今天"

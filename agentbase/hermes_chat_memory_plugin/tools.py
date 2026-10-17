@@ -50,18 +50,10 @@ _RECENT_MONTHS_DESCRIPTION = (
 
 CHAT_MEMORY_LIST_SCHEMA = _schema(
     "chat_memory_list",
-    "查 agentbase 用户的对话历史（SQLite，按 workspace_id 严格隔离）。"
-    "**workspace_id 必填**——必须传用户在 system prompt 的 AgentBase Context 段里写明的那个数字，"
-    "**不能**从用户消息推断，传错会读到其他公司的数据。"
+    "查当前工作区的对话历史（SQLite，按 workspace 严格隔离）。"
+    "工作区由服务端根据当前会话自动确定，**没有 workspace_id 参数**，不要向用户索要。"
     "时间范围默认 'all'；给具体枚举值能精确窗口；recent_days/recent_months 用来表达枚举外的相对区间。",
     {
-        "workspace_id": {
-            "type": "integer",
-            "description": (
-                "当前会话的公司 ID。从 system prompt 的 'AgentBase Context' 段读取；"
-                "**不要**让用户输入这个值。传错会读到其他公司数据（严重 bug）。"
-            ),
-        },
         "time_range": {
             "type": "string",
             "enum": [
@@ -91,7 +83,6 @@ CHAT_MEMORY_LIST_SCHEMA = _schema(
             "description": "最大返回条数。默认 20。",
         },
     },
-    required=["workspace_id"],
 )
 
 
@@ -101,13 +92,18 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
     **_kw 来自 dispatcher 注入**（task_id/session_id 等），signatures 已被 Hermes
     用 inspect 过滤（plugins/AGENTS.md），所以"宽收"是安全的。
     """
-    # workspace_id 缺失/类型错 → 绝不能静默用别的值（会读到错误公司数据，**最毒**）
-    workspace_id = args.get("workspace_id")
+    # workspace_id **只能**来自服务端绑定，绝不从工具参数/用户消息里取
+    # （LLM 传错就会读到别的工作区数据）。
+    try:
+        from agentbase.workspace_context import current_workspace_id
+    except ImportError as exc:
+        return _err(f"agentbase workspace context unavailable: {exc}")
+
+    workspace_id = current_workspace_id()
     if not isinstance(workspace_id, int) or workspace_id <= 0:
         return _err(
-            "workspace_id is required and must be a positive integer — "
-            "read it from the system prompt's 'AgentBase Context' section, "
-            "do not invent a value or read it from the user's message."
+            "chat_memory_list is only available inside an AgentBase chat session — "
+            "no workspace is bound to this call. Do not retry with a user-supplied workspace id."
         )
 
     time_range = args.get("time_range") or "all"
