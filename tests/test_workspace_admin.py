@@ -117,7 +117,7 @@ class TestPurgeRequiresConfirmation:
 
     def test_preview_counts_user_files(self, env):
         """目录里有几个文件要如实报 —— 用户据此判断是否真有资料在里面。"""
-        (env["desktop"] / "错误公司" / "合同" / "客户合同.txt").write_text("x", encoding="utf-8")
+        (env["desktop"] / "错误公司" / "documents" / "客户合同.txt").write_text("x", encoding="utf-8")
 
         text, _ = workspace_admin.purge_workspace("wrong-co")
 
@@ -173,7 +173,7 @@ class TestDirGuard:
         from agentbase.workspace import crud
 
         outside = tmp_path / "elsewhere" / "错误公司"
-        (outside / "合同").mkdir(parents=True)
+        (outside / "documents").mkdir(parents=True)
         crud.update_trade_workspace(
             env["workspace"]["id"], extra1=json.dumps({"work_dir": str(outside)})
         )
@@ -569,7 +569,7 @@ class TestOrphanPurgeLeavesAuditTrail:
         d = env["desktop"] / name
         for cat, _ in __import__("agentbase.workspace.workdir", fromlist=["x"])._WORK_DIR_CATEGORIES:
             (d / cat).mkdir(parents=True)
-        (d / "合同" / "某合同.txt").write_text("x", encoding="utf-8")
+        (d / "documents" / "某合同.txt").write_text("x", encoding="utf-8")
         return d
 
     def test_writes_audit_entry(self, env):
@@ -733,7 +733,7 @@ class TestWindowsRobustness:
         import stat as _stat
 
         d = self._orphan_dir(env)
-        ro = d / "报价单" / "只读文件.txt"
+        ro = d / "documents" / "只读文件.txt"
         ro.write_text("x", encoding="utf-8")
         ro.chmod(_stat.S_IREAD)
 

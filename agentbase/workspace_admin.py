@@ -39,9 +39,12 @@ from pathlib import Path
 from agentbase.console import reconfigure_streams
 from agentbase.workspace.workdir import _WORK_DIR_CATEGORIES
 
+
 # 桌面目录的识别指纹：工作目录由 _setup_work_directory 建成含这些分类子目录的结构。
 # 用「命中数」而不是「全部命中」判定 —— 用户可能删掉或改名个别分类目录。
-_ORPHAN_MIN_HITS = 5
+# 分类数量由 business.yaml 决定，所以阈值跟着分类数走（业务默认只有 1 个目录）。
+def _orphan_min_hits() -> int:
+    return max(1, min(5, len(_WORK_DIR_CATEGORIES)))
 
 # 清理口令：删除公司/残留目录前必须输入。
 #
@@ -304,7 +307,7 @@ def is_trade_work_dir(path: Path) -> bool:
     except OSError:
         return False
     hits = sum(1 for cat, _ in _WORK_DIR_CATEGORIES if cat in names)
-    return hits >= _ORPHAN_MIN_HITS
+    return hits >= _orphan_min_hits()
 
 
 def _known_workspace_paths_and_names() -> tuple[set[str], set[str]]:

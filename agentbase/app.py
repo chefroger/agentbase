@@ -19,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from agentbase import business_config
+
 # ── Database initialization ──────────────────────────────────────────────────
 
 
@@ -690,7 +692,7 @@ def create_app() -> FastAPI:
 
     可在测试中导入以创建独立 app 实例。
     """
-    app = FastAPI(title="Foreign Trade Assistant")
+    app = FastAPI(title=business_config.branding().get("title") or "AgentBase")
 
     # 数据库初始化
     _db_path = _init_db()
@@ -713,9 +715,12 @@ def create_app() -> FastAPI:
     from agentbase.api.deps import set_session_token
     set_session_token(_SESSION_TOKEN)
 
-    # 挂载 license 路由（无需 session token）
+    # 挂载 license + branding 路由（无需 session token：登录前就要显示品牌）
     from agentbase.api.license import router as license_router
     app.include_router(license_router, prefix="/api/agentbase")
+
+    from agentbase.api.branding import router as branding_router
+    app.include_router(branding_router, prefix="/api/agentbase")
 
     # 挂载 system 路由（需要 session token）
     app.include_router(_create_system_router(), prefix="/api/agentbase")
@@ -775,7 +780,7 @@ def create_app() -> FastAPI:
 
         return {
             "status": "ok",
-            "app": "Foreign Trade Assistant",
+            "app": business_config.branding().get("title") or "AgentBase",
             "version": version,
             "latest_version": latest or None,
             "started_at": _STARTED_AT,
@@ -841,7 +846,7 @@ def main() -> None:
     """`trade` console script 入口 + `python server.py` 入口。"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Foreign Trade Assistant")
+    parser = argparse.ArgumentParser(description="AgentBase")
     parser.add_argument("--port", type=int, default=9120)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--no-browser", action="store_true")
@@ -873,7 +878,7 @@ def main() -> None:
     background_github_skills_sync()
 
     url = f"http://{args.host}:{args.port}/agentbase"
-    print(f"\n  Foreign Trade Assistant → {url}")
+    print(f"\n  {business_config.branding().get('title') or 'AgentBase'} → {url}")
     print(f"  Session token: {_SESSION_TOKEN[:8]}...（完整 token 已注入 API 页面）")
     print()
 

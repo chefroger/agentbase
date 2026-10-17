@@ -194,6 +194,14 @@ def install_skills(progress_callback=None) -> None:
     agentbase_home = _get_trade_home()
     hermes_skills_dir = hermes_home / "skills"
 
+    # 首次安装时从模板生成 ~/.agentbase/business.yaml（已存在则绝不覆盖）
+    try:
+        from agentbase import business_config
+
+        business_config.ensure_business_config()
+    except Exception as exc:  # noqa: BLE001 — 配置生成失败不该阻断装 skill
+        print(f"[post_install] WARNING: business.yaml 未生成（{exc}）", file=sys.stderr)
+
     # 查找本地包中的 skills 源目录
     package_skills = _get_package_skills_dir()
     if package_skills is None:

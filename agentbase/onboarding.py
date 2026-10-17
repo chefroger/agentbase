@@ -1,9 +1,9 @@
 """
-Trade AI Assistant — 首次运行引导模块。
+AgentBase — 首次运行引导模块。
 
 职责：
-  首次启动时引导用户完成公司注册和 Agent 身份配置，一步到位。
-  提供「一体化」API，将公司创建、agent 身份配置合并为单个原子操作，
+  首次启动时引导用户完成 workspace 注册和 Agent 身份配置，一步到位。
+  提供「一体化」API，将 workspace 创建、agent 身份配置合并为单个原子操作，
   避免用户分两步操作导致状态不完整。
 
 调用方式：
@@ -24,6 +24,7 @@ Trade AI Assistant — 首次运行引导模块。
 
 from __future__ import annotations
 
+from agentbase import business_config
 from agentbase import workspace as _workspace_module
 from agentbase.database import get_connection
 
@@ -68,78 +69,51 @@ def reset_onboarding_flag() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Agent identity 模板（用户未填时使用默认值）
+# Agent identity（由 business.yaml 的 onboarding_fields 动态生成）
 # ─────────────────────────────────────────────────────────────────────────────
 
-_DEFAULT_AGENT_IDENTITY_TEMPLATE = """# Agent 身份配置 — 高级外贸业务经理
-
-## 你是谁
-
-你是 {workspace_name} 的高级外贸业务经理，负责公司的海外市场开拓和客户关系维护。
-
-## 核心职责
-
-1. **新客户开发** — 通过 B2B 平台、LinkedIn、海关数据、行业展会等渠道拓展海外客户
-2. **询盘跟进** — 及时响应客户询盘，提供专业的产品方案和报价
-3. **客户维护** — 定期跟进老客户，了解采购动态，挖掘复购机会
-4. **市场洞察** — 跟踪目标市场的行业动态、汇率变化、竞争对手动向
-
-## 产品与优势
-
-- **主营产品**：{products}
-- **核心优势**：{differentiation}
-- **目标市场**：{target_region}
-
-## 沟通原则
-
-- **专业、简洁、真诚** — 说人话，不堆砌术语，不编造信息
-- **先了解需求，再给方案** — 不要一上来就报价，先问清楚客户需要什么
-- **数据说话** — 引用具体数字和历史案例，而不是空泛的"我们是最好的"
-- **主动创造价值** — 每次沟通都要让客户觉得跟你是值得的，无论是行业信息、采购建议还是技术支持
-- **坦诚面对不确定** — 不知道就说不知道，确认后第一时间同步客户
-
-## 工作习惯
-
-- **今日事今日毕** — 当天询盘当天回复，不隔夜
-- **跟进有节奏** — 初次联系 3 天后跟进，之后每周一次，不要过度骚扰
-- **记录要完整** — 每次客户沟通后更新客户档案，下次打开一目了然
-- **报价要规范** — 注明有效期、贸易术语、付款方式、交货期
-
-## 禁止行为
-
-- **禁止编造数据** — 汇率、价格、库存必须实时查询，不得凭空编造
-- **禁止过度承诺** — 不要答应无法做到的付款条件、交期或定制需求
-- **禁止泄露客户隐私** — 不在与客户 A 的对话中提及客户 B 的任何信息
-- **禁止空泛回复** — 每个答案都要有依据（搜索结果 / 文件内容 / 数据库记录）
-
-## 回复格式偏好
-
-- 客户问题 → 直接回答，再补充细节和建议
-- 开发信 → 痛点引入 → 方案展示 → 证据支撑 → 明确 CTA
-- 报价单 → 产品规格 → 单价（含贸易术语）→ 有效期 → 交货期 → 付款方式
-- 市场简报 → 关键指标（汇率/行情）→ 市场动态 → 客户提醒 → 今日待办
-""".strip()
-
-
+# 身份模板由 business.yaml 的 onboarding_fields 动态生成 —— 框架里不写死任何业务字段。
 def _build_agent_identity(workspace_name: str, identity_data: dict) -> str:
-    """根据用户输入构建 agent_identity_md 文本。
+    """根据 onboarding_fields 生成 agent_identity_md 文本。
 
-    参数：
-        identity_data: {
-            "role": "AI 销售助手",
-            "products": "...",
-            "differentiation": "...",
-            "target_region": "..."
-        }
-        如果任何字段为空，使用默认值。
+    identity_data 的键与 business.yaml 里 onboarding_fields[].key 对应；
+    未填写的字段如实标注「未填写」，不编造默认业务描述。
     """
-    return _DEFAULT_AGENT_IDENTITY_TEMPLATE.format(
-        workspace_name=workspace_name or "（公司名称未设置）",
-        products=identity_data.get("products", "各类工业产品"),
-        differentiation=identity_data.get("differentiation", "源头工厂，性价比高"),
-        target_region=identity_data.get("target_region", "全球市场"),
-    )
+    name = workspace_name or "（workspace 名称未设置）"
+    lines = [
+        f"# Agent 身份配置 — {name}",
+        "",
+        "## 你是谁",
+        "",
+        f"你是 {name} 的业务助手。",
+        "",
+        "## 业务信息",
+        "",
+    ]
+    for field in business_config.onboarding_fields():
+        key = str(field.get("key", "")).strip()
+        if not key:
+            continue
+        label = str(field.get("label") or key)
+        value = str(identity_data.get(key, "") or "").strip()
+        lines.append(f"- **{label}**：{value or '（未填写）'}")
 
+    lines += [
+        "",
+        "## 沟通原则",
+        "",
+        "- 专业、简洁、真诚；不编造信息",
+        "- 先了解需求，再给方案",
+        "- 不确定时明确说明「无法确认」",
+        "",
+        "## 禁止行为",
+        "",
+        "- 不编造数据、价格、库存",
+        "- 不做无法兑现的承诺",
+        "- 不泄露其他 workspace 的信息",
+        "",
+    ]
+    return "\n".join(lines)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # One-step onboarding: 创建公司 + 配置 Agent 身份

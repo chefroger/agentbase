@@ -289,8 +289,40 @@ def _resolve_custom_prompt(workspace_slug: str | None, db_identity: str | None) 
     if db_identity:
         return db_identity
 
-    # 3. 全局自定义 system.md
-    return _load_file(_system_prompt_path())
+    # 3. 全局自定义 system.md（用户直接编辑的文件，优先级高于业务配置）
+    global_text = _load_file(_system_prompt_path())
+    if global_text:
+        return global_text
+
+    # 4. business.yaml 的 prompt_overrides.system（业务配置化覆盖）
+    try:
+        from agentbase import business_config
+
+        business_text = business_config.prompt_override_system()
+        if business_text:
+            return business_text
+    except Exception:
+        pass
+
+    # 5. skill pack 的 prompt_overrides.system（包内文件）
+    return _pack_prompt_override()
+
+
+def _pack_prompt_override() -> str:
+    """读取当前 skill pack 的 `prompt_overrides.system` 文件内容；没有则空串。"""
+    try:
+        from agentbase.skill_registry import active_skill_pack, pack_manifest
+
+        raw = (pack_manifest().get("prompt_overrides") or {}).get("system")
+        pack = active_skill_pack()
+        if not raw or pack is None:
+            return ""
+        path = Path(raw)
+        if not path.is_absolute():
+            path = pack / path
+        return _load_file(path)
+    except Exception:
+        return ""
 
 
 def _doc_task_skills() -> frozenset:

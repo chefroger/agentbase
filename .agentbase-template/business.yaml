@@ -1,0 +1,37 @@
+# AgentBase 业务配置
+#
+# 安装时复制到 ~/.agentbase/business.yaml。修改后重启服务生效。
+# 框架代码不含任何业务信息 —— 所有业务差异都在这个文件 + skill 包里。
+
+business_name: "示例业务"
+tagline: "一句话介绍你的业务"
+
+# 业务 skill 包路径（相对仓库根，或绝对路径）。留空 = 不加载业务技能。
+skill_pack: ""
+
+# onboarding 表单字段（通用 onboarding 按此动态生成）
+onboarding_fields:
+  - key: role
+    label: "助手角色"
+    example: "AI 业务助手"
+  - key: products
+    label: "产品/服务"
+    example: "请填写主要产品或服务"
+  - key: audience
+    label: "目标客户"
+    example: "请填写目标客户群"
+
+# 前端品牌（启动时经 /api/branding 读取）
+branding:
+  title: "AgentBase"
+  welcome: "你好，我是你的业务助手。"
+  logo: ""
+
+# 工作目录分类（建 workspace 时在桌面/数据目录下创建）
+work_dirs:
+  - name: documents
+    description: "业务文档"
+
+# 可选：覆盖全局 system prompt（纯文本；留空则用 prompts/system.md 或代码默认值）
+prompt_overrides:
+  system: ""

@@ -358,11 +358,11 @@ class TestWorkDirUpload:
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"hello world"))
         result = self._run(upload_to_work_dir(
-            subdir="合同", files=[f], x_workspace_id=workspace_id,
+            subdir="documents", files=[f], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 1
         assert "test.txt" in result["files"][0]
-        assert (work_dir / "合同" / "test.txt").read_text() == "hello world"
+        assert (work_dir / "documents" / "test.txt").read_text() == "hello world"
 
     def test_upload_preserves_subdirs(self, test_db, workspace_id, setup_mocks, monkeypatch):
         """上传带子路径结构的文件"""
@@ -387,12 +387,12 @@ class TestWorkDirUpload:
         f1 = UploadFile(filename="sub/a.txt", file=io.BytesIO(b"aaa"))
         f2 = UploadFile(filename="sub/deep/b.txt", file=io.BytesIO(b"bbb"))
         result = self._run(upload_to_work_dir(
-            subdir="客户资料", files=[f1, f2], x_workspace_id=workspace_id,
+            subdir="documents", files=[f1, f2], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 2
         # result["files"] 的路径是相对于 work_dir 的，包含子目录前缀
-        assert (work_dir / "客户资料" / "sub" / "a.txt").read_text() == "aaa"
-        assert (work_dir / "客户资料" / "sub" / "deep" / "b.txt").read_text() == "bbb"
+        assert (work_dir / "documents" / "sub" / "a.txt").read_text() == "aaa"
+        assert (work_dir / "documents" / "sub" / "deep" / "b.txt").read_text() == "bbb"
 
     def test_invalid_subdir_rejected(self, test_db, workspace_id, setup_mocks):
         """非法的子目录名应返回 400"""
@@ -431,7 +431,7 @@ class TestWorkDirUpload:
 
         f = UploadFile(filename="../escape.txt", file=io.BytesIO(b"bad"))
         result = self._run(upload_to_work_dir(
-            subdir="报价单", files=[f], x_workspace_id=workspace_id,
+            subdir="documents", files=[f], x_workspace_id=workspace_id,
         ))
         assert result["uploaded"] == 1
         assert "escape.txt" in result["files"][0]

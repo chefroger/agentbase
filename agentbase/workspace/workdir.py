@@ -1,7 +1,7 @@
 """
-Trade AI Assistant — 公司工作目录管理。
+AgentBase — workspace 工作目录管理。
 
-负责在用户桌面创建按外贸业务流程分类的目录结构，复制 .agentbase-template 模板骨架，
+负责在用户桌面创建由 `business.yaml` 配置的目录结构，并复制 `.agentbase-template` 模板骨架。
 """
 
 from __future__ import annotations
@@ -12,27 +12,33 @@ import shutil
 import sys
 from pathlib import Path
 
+from agentbase import business_config
+
 # ── 工作目录分类 ──────────────────────────────────────────────────────────
 
-# 每个公司自动在桌面创建的工作目录结构，每个子目录对应一条 library 记录
+# 目录清单来自 business.yaml 的 `work_dirs`（name/description）。
+# 这里在 import 时物化一次；配置变更后重启进程（或调用 reload_work_dirs()）生效。
 # 格式: (目录名, 描述)
-_WORK_DIR_CATEGORIES: list[tuple[str, str]] = [
-    ("报价单", "客户报价、价格谈判记录"),
-    ("合同", "销售合同、采购合同、协议"),
-    ("客户资料", "客户公司信息、联系人、需求"),
-    ("产品规格", "产品参数表、规格书、技术文档"),
-    ("发票", "商业发票、形式发票"),
-    ("物流单据", "装箱单、提单、报关单、货运记录"),
-    ("认证资质", "ISO认证、CE证书、检测报告"),
-    ("营销素材", "产品图片、视频、公司介绍PPT、社媒素材"),
-    ("海关数据", "进出口海关数据 CSV/Excel，采购商分析、贸易模式"),
-]
+def _categories_from_config() -> list[tuple[str, str]]:
+    return [
+        (str(d.get("name", "")).strip(), str(d.get("description", "")))
+        for d in business_config.work_dirs()
+        if str(d.get("name", "")).strip()
+    ]
+
+
+_WORK_DIR_CATEGORIES: list[tuple[str, str]] = _categories_from_config()
+
+
+def reload_work_dirs() -> None:
+    """按最新的 business.yaml 刷新目录清单（就地修改，保持引用有效）。"""
+    _WORK_DIR_CATEGORIES[:] = _categories_from_config()
 
 
 # ── 基础目录工具 ──────────────────────────────────────────────────────────
 
 def _slugify(name: str) -> str:
-    """将公司名称转换为 URL 安全的 slug 标识（仅小写字母、数字、连字符）。
+    """将 workspace 名称转换为 URL 安全的 slug 标识（仅小写字母、数字、连字符）。
 
     用于生成文件系统目录名，确保跨平台兼容。
     当名称无法生成有效 slug 时，使用带随机后缀的唯一后备值，避免多公司冲突。

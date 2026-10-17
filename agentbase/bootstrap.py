@@ -1125,6 +1125,11 @@ def setup():
     if not check_native_architecture():
         sys.exit(1)
 
+    # 业务配置：首次启动时从模板生成 ~/.agentbase/business.yaml（已存在则不动）
+    from agentbase import business_config
+
+    business_config.ensure_business_config()
+
     # 第 2 步：路径准备（含 pm 激活后的恢复），必须在任何 Hermes import 之前
     prepare_hermes_import_paths()
 
