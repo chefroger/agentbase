@@ -923,6 +923,9 @@ function navToView(view, chatCtx, chatName) {
             case 'history':
                 renderHistoryViewInto(container);
                 break;
+            case 'settings':
+                renderSettingsViewInto(container);
+                break;
         }
         viewCache[cacheKey].rendered = true;
     }
@@ -2197,6 +2200,112 @@ async function saveCompanyIdentity() {
     const r = await api('PUT', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`, {agent_identity_md:identity});
     if (r?.workspace_id) { toast('身份配置已保存'); hideModal('workspace-modal'); }
     else toast(r?.detail||'保存失败');
+}
+
+// ═════════════════════ SETTINGS ═════════════════════
+async function renderSettingsViewInto(container) {
+    container.innerHTML = `<div class="panel-view" style="display:flex;flex-direction:column;height:100%;">
+        <div class="panel-topbar"><h2>⚙️ 设置</h2></div>
+        <div class="panel-body" id="settings-body" style="overflow-y:auto;padding:16px 20px;color:var(--text-muted);font-size:13px;">加载中...</div>
+    </div>`;
+    await loadSettings();
+}
+
+async function loadSettings() {
+    const body = document.getElementById('settings-body');
+    if (!body) return;
+    const data = await api('GET', '/api/agentbase/settings');
+    if (!data) { body.textContent = '加载失败'; return; }
+
+    const providers = (data.providers || []).filter(p => (p.key_env_vars || []).length);
+    const providerRows = providers.map(p => `
+        <div class="task-card" style="margin-bottom:10px;">
+            <div class="task-card-header"><span class="task-card-name">${esc(p.name || p.id)}</span>
+                <span style="font-size:11px;color:${p.has_key ? 'var(--accent-green)' : 'var(--text-muted)'};">${p.has_key ? '● 已配置' : '○ 未配置'}</span>
+            </div>
+            ${(p.key_env_vars || []).map(env => `
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <input type="password" id="key-${esc(p.id)}-${esc(env)}" placeholder="${esc(env)}" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+                    <button class="btn" onclick="saveProviderKey('${escJs(p.id)}','${escJs(env)}')">保存</button>
+                </div>`).join('')}
+        </div>`).join('') || '<p>暂无需要填写 Key 的 provider。</p>';
+
+    const modelOptions = (data.providers || []).map(p => `<option value="${esc(p.id)}" ${p.id === data.active?.provider ? 'selected' : ''}>${esc(p.name || p.id)}</option>`).join('');
+
+    body.innerHTML = `
+        <h3 style="font-size:15px;margin:0 0 10px;">模型与 API Key</h3>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Key 只保存在本机 <code>~/.agentbase/.env</code>，不会上传。</p>
+        ${providerRows}
+        <h3 style="font-size:15px;margin:18px 0 10px;">默认模型</h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="default-provider" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;">${modelOptions}</select>
+            <input id="default-model" value="${esc(data.active?.model || '')}" placeholder="模型名，如 deepseek-chat" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;min-width:220px;">
+            <button class="btn btn-primary" onclick="saveDefaultModel()">保存</button>
+            <span style="font-size:12px;color:var(--text-muted);">当前：${esc(data.active?.provider || '未设置')} / ${esc(data.active?.model || '未设置')}</span>
+        </div>
+        <h3 style="font-size:15px;margin:18px 0 10px;">MoA</h3>
+        <p style="font-size:12px;color:var(--text-secondary);">${data.moa_available ? '已配置 ' + data.configured_provider_count + ' 个 provider，可开启 MoA。' : '至少配置 2 个 provider 的 Key 才能开启 MoA。'}<br>${esc(data.moa_hint || '')}</p>
+        <p style="font-size:12px;color:var(--text-muted);">MoA 开关与预设选择将在下一阶段接入。</p>
+        <h3 style="font-size:15px;margin:18px 0 10px;">业务技能包</h3>
+        <div id="packs-body" style="font-size:13px;">加载中...</div>
+    `;
+    loadPacks();
+}
+
+async function saveProviderKey(providerId, envVar) {
+    const el = document.getElementById('key-' + providerId + '-' + envVar);
+    const value = (el?.value || '').trim();
+    if (!value) { toast('请输入 Key'); return; }
+    const resp = await api('POST', '/api/agentbase/settings/keys', { keys: { [envVar]: value } });
+    if (resp?.ok) { el.value = ''; toast('已保存'); loadSettings(); }
+}
+
+async function saveDefaultModel() {
+    const provider = document.getElementById('default-provider')?.value || '';
+    const model = (document.getElementById('default-model')?.value || '').trim();
+    if (!provider || !model) { toast('请填写 provider 和模型名'); return; }
+    const resp = await api('POST', '/api/agentbase/settings/model', { provider, model });
+    if (resp?.ok) toast('已保存，重启服务后生效');
+}
+
+async function loadPacks() {
+    const body = document.getElementById('packs-body');
+    if (!body) return;
+    const data = await api('GET', '/api/agentbase/skill-packs');
+    if (!data) { body.textContent = '加载失败'; return; }
+    const rows = (data.packs || []).map(p => `
+        <div class="task-card" style="margin-bottom:8px;">
+            <div class="task-card-header"><span class="task-card-name">${esc(p.name)}</span>
+                ${data.active === p.path ? '<span style="font-size:11px;color:var(--accent-green);">● 已启用</span>' : ''}
+            </div>
+            <div class="task-card-actions">
+                <button onclick="activatePack('${escJs(p.name)}')">启用</button>
+                <button onclick="removePack('${escJs(p.name)}')">卸载</button>
+            </div>
+        </div>`).join('') || '<p style="color:var(--text-muted);">尚未安装业务技能包。框架仍可正常聊天。</p>';
+    body.innerHTML = rows + `
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <input id="pack-install-path" placeholder="本地 pack 目录（含 pack.yaml）" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+            <button class="btn" onclick="installPack()">安装</button>
+        </div>`;
+}
+
+async function installPack() {
+    const path = (document.getElementById('pack-install-path')?.value || '').trim();
+    if (!path) { toast('请填写目录路径'); return; }
+    const resp = await api('POST', '/api/agentbase/skill-packs/install', { path });
+    if (resp?.ok) { toast('已安装：' + resp.name); loadPacks(); }
+}
+
+async function activatePack(name) {
+    const resp = await api('POST', '/api/agentbase/skill-packs/activate', { name });
+    if (resp?.ok) { toast('已启用，加载 ' + resp.skills + ' 个技能'); loadPacks(); }
+}
+
+async function removePack(name) {
+    if (!confirm('确定卸载该技能包？')) return;
+    const resp = await api('DELETE', '/api/agentbase/skill-packs/' + encodeURIComponent(name));
+    if (resp?.ok) { toast('已卸载'); loadPacks(); }
 }
 
 // ═════════════════════ INIT ═════════════════════

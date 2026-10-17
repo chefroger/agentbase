@@ -34,6 +34,7 @@ def test_provider_catalog_uses_public_catalog_and_model_api(monkeypatch, compat_
         "auth_type": "api_key",
         "auth_status": auth,
         "has_key": True,
+        "key_env_vars": [],
         "models": ["gpt-5"],
     }]
 

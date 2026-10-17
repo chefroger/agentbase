@@ -17,6 +17,8 @@ from agentbase.api.deps import opt_workspace, require_session, require_workspace
 from agentbase.api.files import router as files_router
 from agentbase.api.memory import router as memory_router
 from agentbase.api.onboarding import router as onboarding_router
+from agentbase.api.packs import router as packs_router
+from agentbase.api.settings import router as settings_router
 from agentbase.api.workspaces import router as companies_router
 
 
@@ -74,6 +76,8 @@ router.include_router(chat_router)
 router.include_router(memory_router)
 router.include_router(cron_router)
 router.include_router(files_router)
+router.include_router(settings_router)
+router.include_router(packs_router)
 
 # 便捷导出
 __all__ = [

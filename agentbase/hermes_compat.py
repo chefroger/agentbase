@@ -516,6 +516,8 @@ def _record(provider_id: str, config: Any, public_catalog: bool) -> dict[str, An
         "auth_type": auth_type,
         "auth_status": status,
         "has_key": logged_in,
+        # 设置页需要知道把 Key 写到哪个环境变量（不返回 Key 本身）
+        "key_env_vars": list(getattr(config, "api_key_env_vars", ()) or ()),
         "models": models[:50],
     }
 
