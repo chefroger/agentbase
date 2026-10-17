@@ -22,6 +22,8 @@ pypdfium2>=4.30.0,<6.0
 # 注意：hermes-agent 不在本文件里。它由安装脚本单独 git clone + editable 安装
 # （scripts/install.sh Step 2），AgentBase 用 --no-deps 安装自身。Hermes 的 setup.py
 # 已明确拒绝通过 pip 构建，所以不能让 pip 去解析它。
+# MCP client (extension point: connect public MCP servers)
+mcp>=2.0,<3.0
 # Process management
 psutil>=5.9.0,<8.0
 # DNS — OSINT email verification

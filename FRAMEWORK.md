@@ -156,6 +156,40 @@ skills:
 
 ---
 
+## 4.1 扩展点配置与验证
+
+**第三方 plugin**：放到 `~/.agentbase/plugins/<id>/`（`plugin.yaml` + `__init__.py` 的
+`register(ctx)`），在 `~/.agentbase/config.yaml` 写：
+
+```yaml
+plugins:
+  enabled:
+    - <id>
+```
+
+**MCP server**：写进 `~/.agentbase/config.yaml`：
+
+```yaml
+mcp_servers:
+  filesystem:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+    enabled: true
+```
+
+工具会以 `mcp__<server>__<tool>` 注册进 tools registry。
+
+**一键验证三个扩展点真的能用**：
+
+```bash
+PYTHONPATH=vendor/hermes python scripts/verify_extensions.py
+```
+
+脚本在临时 `HERMES_HOME` 里跑：加载第三方 plugin → 检查 tools registry 发现 →
+连接一个 stdio MCP server 并实际调用。不碰用户数据。
+
+---
+
 ## 5. 目录速览
 
 ```
