@@ -54,3 +54,28 @@ def _isolate_process_globals():
     if chat is not None:
         chat._chat_timestamps.clear()
         chat._last_skill_per_company.clear()
+
+
+@pytest.fixture
+def demo_pack():
+    """把 skill 注册表切到 tests/fixtures/demo-pack，退出时还原。
+
+    框架侧测试**只**依赖这个中性 fixture，不依赖任何业务 skill（见
+    docs/EXTRACTED-CAPABILITIES.md：业务 skill 的覆盖已迁到 trade-business-pack）。
+    """
+    from pathlib import Path as _Path
+
+    from agentbase import skill_registry
+
+    pack = _Path(__file__).resolve().parent / "fixtures" / "demo-pack"
+    previous = os.environ.get("AGENTBASE_SKILL_PACK")
+    os.environ["AGENTBASE_SKILL_PACK"] = str(pack)
+    skill_registry.load_active_pack()
+    try:
+        yield pack
+    finally:
+        if previous is None:
+            os.environ.pop("AGENTBASE_SKILL_PACK", None)
+        else:
+            os.environ["AGENTBASE_SKILL_PACK"] = previous
+        skill_registry.load_active_pack()

@@ -2,7 +2,7 @@
 # 结构完全对齐真实 pack 契约，见 FRAMEWORK.md。
 name: demo-pack
 version: 0.0.1
-description: 框架测试用的最小 skill pack（2 个中性 skill）。
+description: 框架测试用的最小 skill pack（3 个中性 skill，其中 1 个被禁用）。
 registry: registry.yaml
 
 doc_task_skills:
@@ -11,3 +11,4 @@ doc_task_skills:
 skills:
   - demo-alpha
   - demo-beta
+  - demo-blocked

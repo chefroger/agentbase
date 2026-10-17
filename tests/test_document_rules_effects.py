@@ -314,9 +314,9 @@ class TestPromptRulesReachModel:
         assert "# Language Policy" in prompt
         assert "当前工作公司" in prompt, "公司身份/公司信息必须一起注入"
 
-    def test_document_task_gets_full_guide(self, env):
+    def test_document_task_gets_full_guide(self, env, demo_pack):
         """文档类任务才注入 FULL（含文档生成指南）。"""
-        prompt, _ = self._build(env, "请帮我生成一份报价单文档")
+        prompt, _ = self._build(env, "beta 文档分析")
 
         assert "Document Generation Guidelines" in prompt
 

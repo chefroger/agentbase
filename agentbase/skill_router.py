@@ -68,25 +68,38 @@ def _get_hermes_skills_dir() -> Path:
 
 
 def _get_skill_dir(skill_name: str) -> Path | None:
-    """返回已安装 skill 的目录路径，或 None。
+    """返回 skill 的目录路径，或 None。
 
-    查找顺序：~/.hermes/skills/ → package skills/
+    查找顺序：
+      1. `$HERMES_HOME/skills/`（安装后的运行时副本）
+      2. 当前激活的 skill pack 的 `skills/`
+      3. 框架自带的 `skills/`（只有 chat-memory 这类内置 skill）
     """
-    # 优先查找已安装的 skill
     skill_path = _get_hermes_skills_dir() / skill_name
     if (skill_path / "SKILL.md").is_file():
         return skill_path
 
-    # Fallback：查找 package 内置的 skill
+    roots: list[Path] = []
+    try:
+        from agentbase.skill_registry import active_skill_pack
+
+        pack = active_skill_pack()
+        if pack is not None:
+            roots.append(pack / "skills")
+    except Exception:
+        # 包解析异常时静默降级，不影响主流程
+        pass
     try:
         import agentbase
-        pkg_root = Path(agentbase.__file__).parent.parent
-        pkg_skill = pkg_root / "skills" / skill_name
-        if (pkg_skill / "SKILL.md").is_file():
-            return pkg_skill
+
+        roots.append(Path(agentbase.__file__).parent.parent / "skills")
     except Exception:
-        # 导入或路径解析异常时静默降级，不影响主流程
         pass
+
+    for root in roots:
+        candidate = root / skill_name
+        if (candidate / "SKILL.md").is_file():
+            return candidate
     return None
 
 
@@ -209,12 +222,22 @@ _EXPLICIT_SCORE = 9999  # 显式调用（如 "用 b2b-osint"）获得绝对最�
 _BOUNDARY_WEIGHT = 3   # 词边界匹配（如独立词"背景调查"）
 _SUBSTRING_WEIGHT = 1  # 宽松子串匹配（如"做一下背景调查再联系"）
 
-# ── 预编译触发词正则（模块加载时一次性构建，避免每次 query 重复 re.compile）──
+# ── 预编译触发词正则（注册表变化时重建，避免每次 query 重复 re.compile）──
 # 结构：[(skill_idx, skill_name, [(trigger_text, boundary_re, substring_re_or_None), ...]), ...]
+#
+# **必须能重建**：skill 注册表来自运行时加载的 skill pack（business.yaml），
+# 而模块 import 时注册表可能是空的。旧实现在 import 时构建一次后就再也不更新，
+# 结果「加载了 pack 但路由永远匹配不到」—— 只有测试里 stale 状态才暴露得出来。
 _PRECOMPILED: list[tuple[int, str, list[tuple[str, re.Pattern, re.Pattern | None]]]] = []
-for _idx, _skill in enumerate(_SKILLS):
-    _triggers = _skill.get("triggers", [])
-    if _triggers:
+_PRECOMPILED_VERSION = -1
+
+
+def _build_precompiled() -> list[tuple[int, str, list[tuple[str, re.Pattern, re.Pattern | None]]]]:
+    built: list[tuple[int, str, list[tuple[str, re.Pattern, re.Pattern | None]]]] = []
+    for _idx, _skill in enumerate(_SKILLS):
+        _triggers = _skill.get("triggers", [])
+        if not _triggers:
+            continue
         _patterns: list[tuple[str, re.Pattern, re.Pattern | None]] = []
         for _kw in _triggers:
             _esc = re.escape(_kw)
@@ -228,7 +251,22 @@ for _idx, _skill in enumerate(_SKILLS):
                 re.compile(r'\b' + _esc + r'\b', re.IGNORECASE),
                 None if _disable_substring else re.compile(_esc, re.IGNORECASE),
             ))
-        _PRECOMPILED.append((_idx, _skill["name"], _patterns))
+        built.append((_idx, _skill["name"], _patterns))
+    return built
+
+
+def _ensure_precompiled() -> None:
+    """注册表变了就重建预编译正则（注册表是运行时从 skill pack 加载的）。"""
+    global _PRECOMPILED, _PRECOMPILED_VERSION
+    from agentbase import skill_registry as _reg
+
+    version = getattr(_reg, "REGISTRY_VERSION", 0)
+    if version != _PRECOMPILED_VERSION:
+        _PRECOMPILED = _build_precompiled()
+        _PRECOMPILED_VERSION = version
+
+
+_ensure_precompiled()
 
 
 def _score_skills(query: str) -> list[dict]:
@@ -266,6 +304,7 @@ def _score_skills(query: str) -> list[dict]:
             }]
 
     # ── 策略 2：逐触发词评分（使用预编译正则 _PRECOMPILED，无 re.compile 开销）──
+    _ensure_precompiled()
     normed = _norm(query)
     results = []
 

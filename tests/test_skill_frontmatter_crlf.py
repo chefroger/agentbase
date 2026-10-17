@@ -28,7 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agentbase.skill_router import _parse_frontmatter
 
-SKILL = Path(__file__).resolve().parent.parent / "skills" / "b2b-short-video" / "SKILL.md"
+SKILL = (
+    Path(__file__).resolve().parent
+    / "fixtures" / "demo-pack" / "skills" / "demo-alpha" / "SKILL.md"
+)
 
 
 def _crlf(text: str) -> str:
@@ -42,7 +45,7 @@ class TestCrlfFrontmatter:
         """前置条件：LF 能正常解析（否则这个测试文件本身失效）。"""
         fm, _ = _parse_frontmatter(SKILL.read_text(encoding="utf-8"))
 
-        assert fm.get("name") == "b2b-short-video"
+        assert fm.get("name") == "demo-alpha"
         assert fm.get("injection_prompt"), "LF 下应当能拿到 injection_prompt"
 
     def test_crlf_parses_same_keys(self):

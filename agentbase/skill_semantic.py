@@ -100,6 +100,8 @@ class SemanticSkillRouter:
     """语义 skill 检索器。线程安全；rebuild() 后可并发 search()。"""
 
     def __init__(self, skills: list[dict] | None = None, backend=None):
+        # 显式传入 skills（测试 / 调用方自带语料）时，不跟注册表版本联动
+        self._skills_explicit = skills is not None
         self.skills = skills if skills is not None else _load_registry_skills()
         # scope 隔离：客户向量检索会在**自己的 fit 语料**上重建词表，共用实例会把
         # 这里的矩阵作废（实测：客户索引重建后本模块命中全变 0.0，静默失效）。
@@ -112,9 +114,17 @@ class SemanticSkillRouter:
         self._names: list[str] = []
         self._matrix: list[list[float]] = []
         self._built = False
+        # 注册表版本：skill pack 是运行时加载的，加载后索引必须重建，
+        # 否则「装了包但语义检索永远命中 0」。
+        self._registry_version = -1
 
     def rebuild(self) -> int:
         """重建索引。返回索引的 skill 数量。"""
+        from agentbase import skill_registry as _reg
+
+        if not self._skills_explicit:
+            self.skills = _load_registry_skills()
+            self._registry_version = getattr(_reg, "REGISTRY_VERSION", 0)
         docs = build_documents(self.skills)
         with self._lock:
             self._names = [name for name, _ in docs]
@@ -127,9 +137,15 @@ class SemanticSkillRouter:
             return len(self._names)
 
     def _ensure_built(self):
-        if not self._built:
+        from agentbase import skill_registry as _reg
+
+        stale = (
+            not self._skills_explicit
+            and getattr(_reg, "REGISTRY_VERSION", 0) != self._registry_version
+        )
+        if not self._built or stale:
             with self._lock:
-                if not self._built:
+                if not self._built or stale:
                     self.rebuild()
 
     def search(

@@ -1,5 +1,6 @@
 version: 1
-blocked_skills: []
+blocked_skills:
+  - demo-blocked
 skills:
   - name: demo-alpha
     triggers:
@@ -26,3 +27,12 @@ skills:
       你是 demo-beta 技能。用户提到 beta 或需要文档分析时按以下步骤处理：
       1. 读取文档
       2. 输出分析结果
+  - name: demo-blocked
+    triggers:
+      - blocked
+      - 禁用演示
+    aliases: []
+    input_fmt: 任意
+    output_fmt: 任意
+    augment_prompt: |
+      这个 skill 已在 blocked_skills 中登记，框架不应触发它。

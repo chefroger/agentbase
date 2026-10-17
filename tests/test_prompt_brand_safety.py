@@ -133,16 +133,16 @@ class TestNeedsFullPrompt:
 
         assert needs_full_prompt(explicit_paths=["/tmp/quote.xlsx"]) is True
 
-    def test_document_skill_matched(self):
+    def test_document_skill_matched(self, demo_pack):
         from agentbase.prompts import needs_full_prompt
 
-        assert needs_full_prompt(matched_name="b2b-document") is True
+        assert needs_full_prompt(matched_name="demo-beta") is True
 
-    def test_plain_chat_does_not_need_full(self):
+    def test_plain_chat_does_not_need_full(self, demo_pack):
         """普通闲聊不应背上 5700 token 的文档指南。"""
         from agentbase.prompts import needs_full_prompt
 
-        assert needs_full_prompt(matched_name="b2b-market-analysis") is False
+        assert needs_full_prompt(matched_name="demo-alpha") is False
         assert needs_full_prompt() is False
 
 

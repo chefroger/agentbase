@@ -41,6 +41,11 @@ _SKILLS: list[dict] = []
 # 禁用的 skill：系统不触发这些技能，仅保留为引用记录。由 pack 提供。
 _BLOCKED_SKILLS: frozenset = frozenset()
 
+# 注册表版本号：每次 load_active_pack() 自增。
+# 消费方（skill_router 的预编译正则、semantic 索引）据此判断是否需要重建 ——
+# 注册表是运行时从 skill pack 加载的，模块 import 时可能是空的。
+REGISTRY_VERSION = 0
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Skill pack 解析与加载
@@ -135,10 +140,11 @@ def load_pack(pack_dir: Path | None) -> tuple[list[dict], frozenset]:
 
 def load_active_pack() -> int:
     """按 business.yaml 重新加载注册表，返回加载到的 skill 数。"""
-    global _BLOCKED_SKILLS
+    global _BLOCKED_SKILLS, REGISTRY_VERSION
     skills, blocked = load_pack(active_skill_pack())
     _SKILLS[:] = skills          # 就地修改 —— 见文件顶部说明
     _BLOCKED_SKILLS = blocked
+    REGISTRY_VERSION += 1        # 让消费方重建缓存
     return len(skills)
 
 

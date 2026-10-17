@@ -1,178 +1,160 @@
-"""测试 _BLOCKED_SKILLS 过滤逻辑。
+"""Skill 路由的**框架级机制**测试。
 
-验证 auto-smtp-email 在任何匹配路径下都不会被触发。
+只依赖 `tests/fixtures/demo-pack`（中性 fixture），不依赖任何业务 skill ——
+业务路由断言的覆盖在 trade-business-pack 仓库里，见 docs/EXTRACTED-CAPABILITIES.md。
+
+覆盖：blocked 过滤、注册表完整性、QA 对解析/评分/注入。
 """
+
+from __future__ import annotations
 
 
 class TestBlockedSkills:
-    """测试被禁用的 skill 不会被系统匹配。"""
+    """`blocked_skills` 里的 skill 不得被任何匹配路径触发。"""
 
-    def test_auto_smtp_email_not_scored(self):
-        """auto-smtp-email 不应出现在评分结果中。"""
+    def test_blocked_skill_not_scored(self, demo_pack):
         from agentbase.skill_router import _score_skills
 
-        # 直接使用其触发词
-        results = _score_skills("发邮件")
+        results = _score_skills("禁用演示")
         names = [r["skill_name"] for r in results]
-        assert "auto-smtp-email" not in names, (
-            f"auto-smtp-email 不应出现在结果中，但得到: {names}"
-        )
+        assert "demo-blocked" not in names, f"blocked skill 出现在评分结果中: {names}"
 
-    def test_auto_smtp_email_not_matched_by_match_skill(self):
-        """match_skill 不应返回 auto-smtp-email。"""
+    def test_blocked_skill_not_matched_by_match_skill(self, demo_pack):
         from agentbase.skill_router import match_skill
 
-        result = match_skill("帮我发邮件")
-        assert result is None or result["name"] != "auto-smtp-email"
+        result = match_skill("blocked")
+        assert result is None or result["name"] != "demo-blocked"
 
-    def test_auto_smtp_email_not_matched_by_match_skills(self):
-        """match_skills 不应包含 auto-smtp-email。"""
+    def test_blocked_skill_not_matched_by_match_skills(self, demo_pack):
         from agentbase.skill_router import match_skills
 
-        results = match_skills("群发邮件")
+        results = match_skills("禁用演示 blocked")
         names = [r["skill_name"] for r in results]
-        assert "auto-smtp-email" not in names
+        assert "demo-blocked" not in names
 
-    def test_blocked_skill_name_in_registry(self):
-        """auto-smtp-email 应在注册表中被标记为禁用。"""
+    def test_blocked_skill_is_registered_as_blocked(self, demo_pack):
         from agentbase.skill_registry import _BLOCKED_SKILLS
 
-        assert "auto-smtp-email" in _BLOCKED_SKILLS
-
-    def test_other_email_skills_not_blocked(self):
-        """b2b-email-intel 和 b2b-email-imitation 不应被禁用。"""
-        from agentbase.skill_registry import _BLOCKED_SKILLS
-
-        assert "b2b-email-intel" not in _BLOCKED_SKILLS
-        assert "b2b-email-imitation" not in _BLOCKED_SKILLS
+        assert "demo-blocked" in _BLOCKED_SKILLS
+        # 没被 block 的同类 skill 不应被误伤（旧实现的子串匹配曾误伤 chat-memory-pro）
+        assert "demo-alpha" not in _BLOCKED_SKILLS
+        assert "demo-beta" not in _BLOCKED_SKILLS
 
 
-class TestSkillCount:
-    """测试技能注册表的数量。"""
+class TestRegistryLoading:
+    """注册表来自 pack，加载结果必须与 pack 声明一致。"""
 
-    def test_all_skills_registered(self):
-        """skill_registry 应有 39 个条目。"""
+    def test_all_skills_loaded_from_pack(self, demo_pack):
         from agentbase.skill_registry import _SKILLS
 
-        assert len(_SKILLS) == 39
+        assert len(_SKILLS) == 3
 
-    def test_all_skill_names_unique(self):
-        """所有 skill 名称不能重复。"""
+    def test_skill_names_unique(self, demo_pack):
         from agentbase.skill_registry import _SKILLS
 
         names = [s["name"] for s in _SKILLS]
-        assert len(names) == len(set(names)), (
-            f"重复的 skill 名称: {[n for n in names if names.count(n) > 1]}"
-        )
+        assert len(names) == len(set(names))
 
-    def test_new_skills_present(self):
-        """新增的 7 个技能应存在于注册表中。"""
-        from agentbase.skill_registry import skill_names
+    def test_empty_registry_without_pack(self, monkeypatch):
+        """没有配置 skill pack 时注册表为空 —— 框架照常可用（降级，不是错误）。"""
+        from agentbase import skill_registry
 
-        names = set(skill_names())
-        for expected in (
-            "b2b-kol-imitation", "b2b-reddit-engagement", "b2b-seo-aeo",
-            "b2b-short-video", "b2b-exhibition", "b2b-product-description",
-            "b2b-six-thinking-hats", "b2b-inquiry-training",
-        ):
-            assert expected in names, f"缺少技能: {expected}"
+        monkeypatch.delenv("AGENTBASE_SKILL_PACK", raising=False)
+        before = list(skill_registry._SKILLS)
+        try:
+            monkeypatch.setattr(skill_registry, "active_skill_pack", lambda: None)
+            count = skill_registry.load_active_pack()
+            assert count == 0
+            assert skill_registry.skill_names() == []
+        finally:
+            skill_registry._SKILLS[:] = before
+            skill_registry._BLOCKED_SKILLS = frozenset()
+
+    def test_missing_pack_dir_degrades_to_empty(self, monkeypatch, tmp_path):
+        """pack 路径写错不应抛异常 —— 只是没有业务技能。"""
+        from agentbase import skill_registry
+
+        monkeypatch.setenv("AGENTBASE_SKILL_PACK", str(tmp_path / "does-not-exist"))
+        assert skill_registry.skill_names() == []
+        assert skill_registry.load_pack(tmp_path / "does-not-exist") == ([], frozenset())
+
+    def test_pack_manifest_exposes_doc_task_skills(self, demo_pack):
+        from agentbase.skill_registry import pack_manifest
+
+        assert pack_manifest().get("doc_task_skills") == ["demo-beta"]
 
 
 class TestQAPairs:
-    """测试 QA 对加载、解析、评分和注入。"""
+    """QA 对的解析、加载、评分与注入（机制，与业务内容无关）。"""
 
     def test_parse_qa_pairs(self):
-        """解析标准格式的 QA 对。"""
         from agentbase.skill_router import _parse_qa_pairs
 
-        content = """## Q1: 如何做客户背调？
-**答案**: 核心目标是转化为发球权。
-**标签**: 背调原则, 客户筛选
-**场景**: 任何客户背调
-**关键词**: 背调, 发球权, 信息不对称
+        content = """## Q1: alpha 的核心目标是什么？
+**答案**: 把输入整理成结构化摘要。
+**标签**: 摘要原则, 结构化
+**场景**: 任何 alpha 任务
+**关键词**: alpha, 摘要, 结构化
 
-## Q2: 如何写开发信？
-**答案**: 高回复率公式 = 初步调查 + 避开SPAM。
-**标签**: 开发信公式
-**场景**: 写开发信前
-**关键词**: 高回复率, SPAM, 标题
+## Q2: alpha 如何处理长文本？
+**答案**: 先分段，再逐段提取要点。
+**标签**: 长文本
+**场景**: 输入很长时
+**关键词**: 长文本, 分段, 要点
 """
         pairs = _parse_qa_pairs(content)
         assert len(pairs) == 2
-        assert pairs[0]["q"] == "如何做客户背调？"
-        assert pairs[0]["tags"] == ["背调原则", "客户筛选"]
-        assert pairs[0]["keywords"] == ["背调", "发球权", "信息不对称"]
-        assert pairs[1]["q"] == "如何写开发信？"
-        assert "高回复率" in pairs[1]["a"]
+        assert pairs[0]["q"] == "alpha 的核心目标是什么？"
+        assert pairs[0]["tags"] == ["摘要原则", "结构化"]
+        assert pairs[0]["keywords"] == ["alpha", "摘要", "结构化"]
+        assert pairs[1]["q"] == "alpha 如何处理长文本？"
 
     def test_parse_qa_pairs_empty(self):
-        """空内容返回空列表。"""
         from agentbase.skill_router import _parse_qa_pairs
 
         assert _parse_qa_pairs("") == []
         assert _parse_qa_pairs("只是一些文字没有QA格式") == []
 
-    def test_load_qa_pairs_real_skill(self):
-        """加载真实 skill 的 QA 对（b2b-osint 应有 15 条）。"""
+    def test_load_qa_pairs_from_pack(self, demo_pack):
+        """QA 对必须能从 skill pack 的 references/ 里加载。"""
         from agentbase.skill_router import _load_qa_pairs
 
-        pairs = _load_qa_pairs("b2b-osint")
-        assert len(pairs) == 15
-        # 验证结构完整性
+        pairs = _load_qa_pairs("demo-alpha")
+        assert len(pairs) == 2
         for p in pairs:
-            assert p["q"], "QA pair missing question"
-            assert p["a"], "QA pair missing answer"
+            assert p["q"] and p["a"]
             assert isinstance(p["tags"], list)
             assert isinstance(p["keywords"], list)
 
-    def test_load_qa_pairs_nonexistent(self):
-        """不存在的 skill 或没有 QA 文件的 skill 返回空。"""
+    def test_load_qa_pairs_nonexistent(self, demo_pack):
         from agentbase.skill_router import _load_qa_pairs
 
         assert _load_qa_pairs("nonexistent-skill") == []
-        # b2b-document 没有 qa_pairs.md
-        assert _load_qa_pairs("b2b-document") == []
+        # demo-beta 没有 qa_pairs.md
+        assert _load_qa_pairs("demo-beta") == []
 
-    def test_score_qa_relevance_chinese(self):
-        """中文查询匹配中文 QA 对。"""
+    def test_score_qa_relevance_chinese(self, demo_pack):
         from agentbase.skill_router import _load_qa_pairs, _score_qa_relevance
 
-        pairs = _load_qa_pairs("b2b-osint")
-        relevant = _score_qa_relevance("帮我背调一下这个客户", pairs)
-        assert len(relevant) > 0, "Should find relevant QA pairs for 背调 query"
-        assert len(relevant) <= 5, "Should return at most 5 pairs"
-        # 最高分的应该是背调相关的
-        assert any("背调" in r["q"] or "背调" in r["a"] for r in relevant)
-
-    def test_score_qa_relevance_english(self):
-        """英文查询匹配英文 QA 对。"""
-        from agentbase.skill_router import _load_qa_pairs, _score_qa_relevance
-
-        pairs = _load_qa_pairs("b2b-cold-outreach")
-        relevant = _score_qa_relevance("write a cold email to US client", pairs)
+        pairs = _load_qa_pairs("demo-alpha")
+        relevant = _score_qa_relevance("alpha 怎么处理长文本", pairs)
         assert len(relevant) > 0
+        assert len(relevant) <= 5
 
-    def test_score_qa_relevance_no_match(self):
-        """完全不相关的查询返回空。"""
+    def test_score_qa_relevance_no_match(self, demo_pack):
         from agentbase.skill_router import _load_qa_pairs, _score_qa_relevance
 
-        pairs = _load_qa_pairs("b2b-osint")
-        relevant = _score_qa_relevance("今天天气真好", pairs)
-        assert len(relevant) == 0
+        pairs = _load_qa_pairs("demo-alpha")
+        assert _score_qa_relevance("今天天气真好", pairs) == []
 
-    def test_augment_query_includes_qa(self):
-        """augment_query 匹配到有 QA 对的 skill 时应注入相关知识块。"""
+    def test_augment_query_includes_qa(self, demo_pack):
         from agentbase.skill_router import augment_query
 
-        result = augment_query("帮我背调一下")
-        assert "相关知识（精准匹配）" in result, "Should inject QA section"
-        assert "发球权" in result or "背调" in result
+        result = augment_query("alpha 怎么处理长文本")
+        assert "相关知识（精准匹配）" in result
 
-    def test_augment_query_no_qa_for_skill_without_pairs(self):
-        """没有 QA 文件的 skill 不注入 QA 块。"""
+    def test_augment_query_no_qa_for_skill_without_pairs(self, demo_pack):
         from agentbase.skill_router import augment_query
 
-        # b2b-document 没有 qa_pairs.md
-        result = augment_query("读报价单")
-        # 可能匹配到 skill 但不应该有 QA 注入
-        assert "相关知识（精准匹配）" not in result or "b2b-document" not in result
+        result = augment_query("beta 文档分析")
+        assert "相关知识（精准匹配）" not in result
