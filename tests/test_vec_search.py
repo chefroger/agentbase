@@ -240,18 +240,6 @@ class TestCustomerIndexHooks:
         assert created.get("id"), "索引失败把建客户也带崩了"
 
 
-def test_search_endpoint_declared_before_dynamic_route():
-    """`/customers/search` 必须声明在 `/customers/{customer_id}` 之前。
-
-    否则 FastAPI 会把 "search" 拿去转 int → 422，端点等于不存在
-    （项目里 `/customers/duplicates` 就是按这个顺序排的）。
-    """
-    import pathlib
-
-    src = pathlib.Path("agentbase/api/customers.py").read_text(encoding="utf-8")
-    assert src.index('"/customers/search"') < src.index('"/customers/{customer_id}"')
-
-
 @needs_vec
 def test_default_threshold_keeps_weak_but_real_matches(conn):
     """默认阈值的**召回侧**：弱相关但真实的命中不得被切掉（否则用户搜不到）。

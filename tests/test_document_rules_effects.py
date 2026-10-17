@@ -64,7 +64,7 @@ class ScriptedAgent:
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
-    """临时库 + 公司；库内含 1 个文本文件与 1 个 xlsx（都需完整读取）。"""
+    """临时 workspace + 数据目录；目录内含 1 个文本文件与 1 个 xlsx（都需完整读取）。"""
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
     monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
@@ -83,17 +83,15 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(co, "_setup_work_directory", _setup)
     company = co.create(name="Rules Co", slug="rules-co")
 
-    lib_dir = tmp_path / "lib"
-    lib_dir.mkdir()
-    (lib_dir / "合同.txt").write_text("甲\n乙\n丙\n", encoding="utf-8")
-    (lib_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "合同.txt").write_text("甲\n乙\n丙\n", encoding="utf-8")
+    (data_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
 
-    import agentbase.library as lib
-    library = lib.create("规则库", str(lib_dir), company_id=company["id"])
-    return {"cid": company["id"], "library": library, "dir": lib_dir}
+    return {"cid": company["id"], "dir": data_dir}
 
 
-async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, library_id=True):
+async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, gate=True):
     """跑一次真实 app()，返回响应体。"""
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
@@ -115,10 +113,10 @@ async def _run_chat(env, script, *, query=STRICT_QUERY, saved=None, library_id=T
          patch.object(chat, "snapshot_read_coverage", return_value=None), \
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", side_effect=_save):
-        payload = ChatRequest(
-            query=query,
-            library_id=(env["library"]["id"] if library_id else None),
-        )
+        # 文档闸门现在由「用户点名的目录」触发（没有文档库概念了）
+        if gate and query == STRICT_QUERY:
+            query = f"{STRICT_QUERY} {env['dir']}"
+        payload = ChatRequest(query=query)
         return await chat.app(payload, env["cid"])
 
 
@@ -267,9 +265,9 @@ async def test_gate_not_enforced_for_normal_chat(env):
     assert "analysis_note" not in result, "门禁没启用时不应附加任何门禁说明"
 
 
-async def test_gate_not_enforced_without_library(env):
-    """规则：没选文档库 → 门禁不介入。"""
-    result = await _run_chat(env, [], library_id=False)
+async def test_gate_not_enforced_without_explicit_dir(env):
+    """规则：问题里没有点名目录 → 门禁不介入。"""
+    result = await _run_chat(env, [], gate=False)
 
     assert result["response"] == "分析完成"
     assert "analysis_incomplete" not in result
@@ -282,14 +280,14 @@ async def test_gate_not_enforced_without_library(env):
 class TestPromptRulesReachModel:
     """「逐个文件完整扫描」等规则必须真的出现在最终 prompt 里。"""
 
-    def _build(self, env, query, *, library_id=None, calls=1):
+    def _build(self, env, query, *, calls=1):
         """连续调用 build_query（第 2 次起走「非首轮」档），返回最后一次结果。"""
         import agentbase.helpers as helpers
 
         result = None
         for _ in range(calls):
             result = helpers.build_query(
-                env["cid"], library_id, query,
+                env["cid"], query,
             )
         return result
 
@@ -325,13 +323,6 @@ class TestPromptRulesReachModel:
         prompt, _ = self._build(env, "你好")
 
         assert "Document Generation Guidelines" not in prompt
-
-    def test_library_context_forces_full_scan(self, env):
-        """选了文档库时，必须注入「强制扫描此目录所有文件」的上下文指令。"""
-        prompt, _ = self._build(env, "看看这批文件", library_id=env["library"]["id"])
-
-        assert "强制扫描" in prompt
-        assert "不允许跳过任何文件" in prompt
 
     def test_explicit_path_forces_read(self, env):
         """问题里点名了具体文件时，注入最高优先级的强制读取指令。"""

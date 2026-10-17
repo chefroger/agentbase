@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from agentbase.database import (
     SCHEMA_SQL,
     _add_spare_columns,
-    _migrate_from_v0,
     get_connection,
 )
 
@@ -39,8 +38,7 @@ class TestSchemaCreation:
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         ).fetchall()
         table_names = {t[0] for t in tables}
-        expected = {"companies", "agentbase_companies", "libraries", "customers",
-                    "customer_libraries", "conversations"}
+        expected = {"companies", "agentbase_companies", "conversations", "usage_ledger"}
         assert expected.issubset(table_names), f"Missing tables: {expected - table_names}"
 
         # 验证索引
@@ -49,8 +47,7 @@ class TestSchemaCreation:
         ).fetchall()
         index_names = {i[0] for i in indexes}
         expected_indexes = {
-            "idx_libraries_company", "idx_customers_company",
-            "idx_conversations_company", "idx_conversations_library",
+            "idx_conversations_company",
             "idx_conversations_created",
         }
         assert expected_indexes.issubset(index_names), \
@@ -65,9 +62,9 @@ class TestSchemaCreation:
         conn.executescript(SCHEMA_SQL)
         conn.commit()
 
-        # 插入违反外键的数据（library 不存在的 company_id）
-        conn.execute("INSERT INTO libraries (name, root_path, company_id) VALUES (?, ?, ?)",
-                     ("Test", "/tmp/test", 999))
+        # 插入违反外键的数据（不存在的 company_id）
+        conn.execute("INSERT INTO conversations (company_id, query) VALUES (?, ?)",
+                     (999, "q"))
         # SQLite 默认不强制外键（需要 PRAGMA），但 get_connection 会启用
         conn.close()
 
@@ -76,15 +73,14 @@ class TestSchemaCreation:
         # 注：完整的外键测试在业务层测试中
 
     def test_all_tables_have_spare_columns(self, tmp_path):
-        """所有 6 张表应有 extra1/extra2/extra3 备用列。"""
+        """所有框架表应有 extra1/extra2/extra3 备用列。"""
         db_path = tmp_path / "test_spare.db"
         conn = sqlite3.connect(str(db_path))
         conn.executescript(SCHEMA_SQL)
         _add_spare_columns(conn)
         conn.commit()
 
-        for table in ["companies", "agentbase_companies", "libraries", "customers",
-                      "customer_libraries", "conversations"]:
+        for table in ["companies", "agentbase_companies", "conversations", "usage_ledger"]:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             for extra_col in ["extra1", "extra2", "extra3"]:
                 assert extra_col in cols, f"{table} missing column: {extra_col}"
@@ -128,122 +124,10 @@ class TestSpareColumnsIdempotency:
         conn.commit()
 
         # 验证各表的列只出现一次
-        for table in ["companies", "libraries", "customers"]:
+        for table in ["companies", "conversations"]:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             extra_count = sum(1 for c in cols if c.startswith("extra"))
             assert extra_count == 3, f"{table} has {extra_count} extra columns (expected 3)"
-
-        conn.close()
-
-
-class TestV0ToV1Migration:
-    """测试 v0（单公司）→ v1（多公司）迁移。"""
-
-    def _create_v0_schema(self, conn):
-        """创建 v0 版本的旧 schema（无 company_id 列）。"""
-        conn.executescript("""
-            CREATE TABLE libraries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                root_path TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                created_at TEXT DEFAULT (datetime('now', 'localtime')),
-                updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-            CREATE TABLE customers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                contact TEXT DEFAULT '',
-                note TEXT DEFAULT '',
-                created_at TEXT DEFAULT (datetime('now', 'localtime')),
-                updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-            CREATE TABLE conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                library_id INTEGER,
-                query TEXT NOT NULL,
-                response TEXT DEFAULT '',
-                files_read TEXT DEFAULT '[]',
-                created_at TEXT DEFAULT (datetime('now', 'localtime'))
-            );
-        """)
-        # 插入一些 v0 格式数据
-        conn.execute("INSERT INTO libraries (name, root_path) VALUES (?, ?)",
-                     ("Old Library", "/tmp/old"))
-        conn.execute("INSERT INTO customers (name, contact) VALUES (?, ?)",
-                     ("Old Customer", "old@test.com"))
-        conn.commit()
-
-    def test_migration_detects_v0(self, tmp_path):
-        """应检测到 v0 schema（libraries 无 company_id 列）。"""
-        db_path = tmp_path / "test_migrate_detect.db"
-        conn = sqlite3.connect(str(db_path))
-        self._create_v0_schema(conn)
-
-        # 验证迁移前状态
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(libraries)").fetchall()}
-        assert "company_id" not in cols
-
-        # 执行迁移
-        migrated = _migrate_from_v0(conn)
-        assert migrated is True, "Migration should have been performed"
-
-        conn.close()
-
-    def test_migration_idempotent(self, tmp_path):
-        """已迁移的数据库不应重复执行迁移。"""
-        db_path = tmp_path / "test_migrate_idempotent.db"
-        conn = sqlite3.connect(str(db_path))
-
-        # 使用完整 schema（已包含 company_id）
-        conn.executescript(SCHEMA_SQL)
-        conn.commit()
-
-        # 调用迁移 → 应返回 False（已是 v1）
-        migrated = _migrate_from_v0(conn)
-        assert migrated is False, "Already-migrated DB should return False"
-
-        conn.close()
-
-    def test_existing_data_preserved(self, tmp_path):
-        """迁移后 v0 旧数据不应丢失，全部归属默认公司。"""
-        db_path = tmp_path / "test_migrate_data.db"
-        conn = sqlite3.connect(str(db_path))
-        self._create_v0_schema(conn)
-
-        _migrate_from_v0(conn)
-        conn.commit()
-
-        # 旧 library 数据应保留且 company_id=1
-        lib = conn.execute("SELECT name, company_id FROM libraries WHERE id=1").fetchone()
-        assert lib[0] == "Old Library"
-        assert lib[1] == 1
-
-        # 旧 customer 数据应保留且 company_id=1
-        cust = conn.execute("SELECT name, contact, company_id FROM customers WHERE id=1").fetchone()
-        assert cust[0] == "Old Customer"
-        assert cust[1] == "old@test.com"
-        assert cust[2] == 1
-
-        conn.close()
-
-    def test_default_company_created(self, tmp_path):
-        """迁移应创建默认公司 '我的公司' (slug=default)。"""
-        db_path = tmp_path / "test_migrate_company.db"
-        conn = sqlite3.connect(str(db_path))
-        self._create_v0_schema(conn)
-
-        _migrate_from_v0(conn)
-        conn.commit()
-
-        company = conn.execute("SELECT name, slug FROM companies WHERE id=1").fetchone()
-        assert company[0] == "我的公司"
-        assert company[1] == "default"
-
-        # 应有 agentbase_companies 记录
-        tc = conn.execute("SELECT company_id, is_active FROM agentbase_companies WHERE company_id=1").fetchone()
-        assert tc is not None
-        assert tc[1] == 1
 
         conn.close()
 

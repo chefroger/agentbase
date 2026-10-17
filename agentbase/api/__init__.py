@@ -14,13 +14,10 @@ from agentbase.api.chat import router as chat_router
 from agentbase.api.companies import router as companies_router
 from agentbase.api.conversations import router as conversations_router
 from agentbase.api.cron import router as cron_router
-from agentbase.api.customers import router as customers_router
 from agentbase.api.deps import opt_company, require_company, require_session
-from agentbase.api.libraries import router as libraries_router
+from agentbase.api.files import router as files_router
 from agentbase.api.memory import router as memory_router
 from agentbase.api.onboarding import router as onboarding_router
-from agentbase.api.orders import router as orders_router
-from agentbase.api.templates import router as templates_router
 
 
 def _enforce_company_binding(
@@ -69,17 +66,14 @@ router = APIRouter(
     dependencies=[Depends(require_session), Depends(_enforce_company_binding)],
 )
 
-# 按业务域挂载子路由
+# 框架域子路由（业务 API 由 skill 包自带，不在此挂载）
 router.include_router(companies_router)
 router.include_router(onboarding_router)
-router.include_router(orders_router)
-router.include_router(libraries_router)
-router.include_router(customers_router)
 router.include_router(conversations_router)
 router.include_router(chat_router)
 router.include_router(memory_router)
 router.include_router(cron_router)
-router.include_router(templates_router)
+router.include_router(files_router)
 
 # 便捷导出
 __all__ = [

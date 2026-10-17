@@ -177,13 +177,13 @@ class TestChatEndpointHTTP:
         import agentbase.helpers
         monkeypatch.setattr(agentbase.helpers, "check_provider", lambda: None)
         monkeypatch.setattr(agentbase.helpers, "get_agent_kwargs", lambda: {"provider":"x","model":"x","base_url":"","api_key":""})
-        monkeypatch.setattr(agentbase.helpers, "build_query", lambda c, l, q, **kw: q)
+        monkeypatch.setattr(agentbase.helpers, "build_query", lambda c, q, **kw: q)
         monkeypatch.setattr(agentbase.helpers, "create_agent", lambda **kw: _A())
 
         # chat.py 在模块级别 import create_agent，已被其他测试缓存，需 patch 两处
         import agentbase.api.chat as chat_mod
         monkeypatch.setattr(chat_mod, "create_agent", lambda **kw: _A())
-        monkeypatch.setattr(chat_mod, "build_query", lambda c, l, q, **kw: q)
+        monkeypatch.setattr(chat_mod, "build_query", lambda c, q, **kw: q)
         monkeypatch.setattr(chat_mod.chat_memory, "save_with_context", lambda **kw: {"id": 1})
 
         from agentbase.api.deps import set_session_token

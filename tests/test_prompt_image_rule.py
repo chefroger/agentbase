@@ -153,7 +153,7 @@ class TestImageRuleReachesModel:
 
         result = None
         for _ in range(calls):
-            result = helpers.build_query(env["id"], None, query)
+            result = helpers.build_query(env["id"], query)
         return result
 
     def test_plain_chat_carrying_an_image_path_gets_the_rule(self, company_env):

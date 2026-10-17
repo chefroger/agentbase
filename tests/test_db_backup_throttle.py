@@ -50,7 +50,7 @@ class TestNeedsSchemaWork:
 
         db = _fresh_db(tmp_path)
         conn = sqlite3.connect(db)
-        conn.execute("DROP TABLE orders")
+        conn.execute("DROP TABLE usage_ledger")
         conn.commit()
         try:
             assert _needs_schema_work(conn) is True

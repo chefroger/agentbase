@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 对话记录 API 路由。
+AgentBase — 对话记录 API 路由。
 
 端点：
   GET    /conversations                   — 列出当前公司的对话
@@ -15,7 +15,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from agentbase import chat_memory
-from agentbase import library as library_module
 from agentbase.api.deps import require_company
 from agentbase.api.models import ConversationRate, ConversationSave, ConversationUpdate
 
@@ -24,16 +23,13 @@ router = APIRouter(tags=["conversations"])
 
 @router.get("/conversations")
 def list_conversations(
-    library_id: int | None = None,
     context: str | None = None,
     limit: int = 50,
     x_company_id: int = Depends(require_company),
 ):
-    """列出当前公司的最近对话，可按文档库或上下文过滤。"""
+    """列出当前公司的最近对话，可按上下文过滤。"""
     if context:
         return chat_memory.list_by_context(x_company_id, context, limit)
-    if library_id is not None:
-        return chat_memory.list_by_library(x_company_id, library_id, limit)
     return chat_memory.list_by_company(x_company_id, limit)
 
 
@@ -57,16 +53,10 @@ def save_conversation(
     x_company_id: int = Depends(require_company),
 ):
     """保存对话回合到 SQLite + Hindsight 长期记忆。"""
-    lib_name = payload.library_name
-    if payload.library_id and not lib_name:
-        lib = library_module.get(payload.library_id, company_id=x_company_id)
-        if lib:
-            lib_name = lib["name"]
-
     return chat_memory.save_with_context(
-        company_id=x_company_id, library_id=payload.library_id,
+        company_id=x_company_id,
         query=payload.query, response=payload.response,
-        files_read=payload.files_read, library_name=lib_name,
+        files_read=payload.files_read,
         context=payload.context or "",
         skill=payload.skill or "",
     )

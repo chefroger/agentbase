@@ -12,11 +12,8 @@ from pathlib import Path
 
 from agentbase import chat_memory as _cm
 from agentbase import company as _company
-from agentbase import customer as _cust
-from agentbase import library as _lib
 from agentbase import prompts as _prompts
 from agentbase import skill_router as _skill_router
-from agentbase.order import search_orders
 
 # ── 一致性温度分流 ────────────────────────────────────────────────────────────
 # 创作类 skill 豁免清单：输出需要多样性（A/B 变体、内容创意），保持 provider 默认温度。
@@ -466,23 +463,21 @@ def _extract_explicit_paths(query: str) -> list[str]:
 
 def build_query(
     company_id: int,
-    library_id: int | None,
     query: str,
-    customer_id: int | None = None,
     *,
     last_skill_name: str | None = None,
     language: str = "zh",
 ) -> tuple[str, str | None]:
-    """组装完整的用户 prompt：公司身份 + 文档库上下文 + Skill 注入。
+    """组装完整的用户 prompt：workspace 身份 + 工作目录上下文 + Skill 注入。
 
-    返回 (user_message, skill_system_hint)，其中 skill_system_hint 是给 OSINT 等
-    场景的辅助系统指令（非 OSINT skill 时为 None），由 chat.py 通过
-    agent.run_conversation(system_message=...) 传入，与 user message 分层处理。
+    返回 (user_message, skill_system_hint)，其中 skill_system_hint 是给需要
+    独立 system 层指令的 skill 用的（无则为 None），由 chat.py 通过
+    agent.run_conversation(system_message=...) 传入。
 
-    company_id 决定注入哪家公司身份到 system prompt。
-    library_id 可选地添加文档库上下文。
-    customer_id 可选地添加客户上下文（客户名称、关联文档库）。
+    company_id 决定注入哪个 workspace 的身份。
     last_skill_name 上次使用的 skill 名称，连续同 skill 时跳过重复注入。
+
+    业务上下文（客户简报 / 订单 / 文档库）不在这里注入 —— 它们属于 skill 包的能力。
     """
 
     # 0. Skill auto-detection — 评分排序后取最高置信度 skill
@@ -516,7 +511,7 @@ def build_query(
     explicit_paths = _extract_explicit_paths(query)
 
     if _prompts.needs_full_prompt(
-        matched_name=matched_name, library_id=library_id, explicit_paths=explicit_paths
+        matched_name=matched_name, explicit_paths=explicit_paths
     ):
         # 文档处理类任务：注入完整档（含文档生成指南、文档分析协议等，
         # 约 22674 字符 ≈ 5700 token）—— 只在真正需要时才付这个成本
@@ -577,26 +572,7 @@ def build_query(
         if brand_safety:
             system_prompt += f"\n\n{brand_safety}"
 
-    # 2. Customer context — AI 客户简报（身份 + 联系方式 + 历史 + 订单 + 数据完整度）
-    customer_context = ""
-    if customer_id:
-        briefing = _cust.build_briefing(customer_id, company_id=company_id)
-        if briefing:
-            customer_context = briefing
-        # 追加关联文档库信息
-        linked_libs = _cust.get_libraries(customer_id, company_id=company_id)
-        if linked_libs:
-            lib_names = "、".join(l["name"] for l in linked_libs)
-            customer_context += f"\n关联文档库：{lib_names}。"
-
-    # 3. Order context — 按 3 层优先级搜索订单并注入
-    order_context = ""
-    if company_id:
-        order_text = search_orders(company_id, query)
-        if order_text:
-            order_context = order_text
-
-    # 4. Library document context — 所有栏目均告知可用文档库，Agent 自行判断是否读取
+    # 2. 工作目录上下文 —— 告知 Agent 可用目录，由它自行判断是否读取
     #    读取时必须遵守完整扫描规则：逐个文件、不跳过、不截断
     doc_context = ""
 
@@ -618,20 +594,7 @@ def build_query(
             f"4. 全部读取完成后，综合所有文件内容回答用户问题\n\n"
         )
 
-    if library_id:
-        # 用户明确选择了文档库 → 强制完整读取，并保留用户指定路径的更高优先级指令
-        lib = _lib.get(library_id, company_id=company_id)
-        if lib:
-            doc_context += (
-                f"\n## 文档库上下文（强制扫描）\n"
-                f"用户正在文档库「{lib['name']}」({lib['root_path']}) 中提问。\n"
-                f"**你必须先扫描此目录中的所有文件：**\n"
-                f"1. 使用 list_files 列出 {lib['root_path']} 下的所有文件\n"
-                f"2. 逐个使用 read_file 完整读取每个文件，不允许跳过任何文件\n"
-                f"3. 每个文件必须读到末尾，如果被截断则用 offset 继续读取\n"
-                f"4. 全部读完后才能开始回答用户问题\n"
-            )
-    elif company_id:
+    if company_id:
         # 收集工作目录 + 所有文档库，告知 Agent 可用目录，Agent 自行判断是否需要读取
         dirs_to_scan: list[str] = []
         tc = _company.get_trade_company(company_id)
@@ -644,12 +607,6 @@ def build_query(
                 wd = extra.get("work_dir", "")
                 if wd and Path(wd).is_dir() and wd not in dirs_to_scan:
                     dirs_to_scan.append(wd)
-        company_libs = _lib.list_by_company(company_id)
-        for l in company_libs:
-            rp = l.get("root_path", "")
-            if rp and Path(rp).is_dir() and rp not in dirs_to_scan:
-                dirs_to_scan.append(rp)
-
         if dirs_to_scan:
             dir_lines = "\n".join(f"  - {d}" for d in dirs_to_scan)
             # 必须用 += 追加：用 = 会把上面「用户指定文件（强制读取 — 最高优先级）」
@@ -674,13 +631,13 @@ def build_query(
     history_block = ""
     # 估算已有 prompt 长度，动态决定注入多少条历史
     pre_history_chars = (
-        len(system_prompt) + len(customer_context) + len(doc_context) +
+        len(system_prompt) + len(doc_context) +
         len(augmented_query) + 200
     )
     history_block, _ = _get_history_block(company_id, pre_history_chars)
 
     # 8. Assemble final user message：system → 客户 → 订单 → 文档库 → 历史 → 查询
-    final_prompt = system_prompt + customer_context + order_context + doc_context
+    final_prompt = system_prompt + doc_context
     if history_block:
         # 有历史时才注入，避免多余空行
         final_prompt = f"{final_prompt}\n\n{history_block}"

@@ -173,7 +173,6 @@ def create(
     """
     from agentbase.company.workdir import (
         _ensure_data_dir,
-        _register_work_libraries,
         _setup_work_directory,
         _slugify,
         _validate_slug,
@@ -231,14 +230,10 @@ def create(
         )
         conn.commit()
 
-        # 5) 注册桌面工作目录下的文档库
-        libs = _register_work_libraries(company_id, work_dir)
-
         result = get(company_id)
         if result:
             result["work_dir"] = str(work_dir)
             result["work_dir_is_new"] = is_new
-            result["libraries"] = libs
         return result
 
     except Exception:

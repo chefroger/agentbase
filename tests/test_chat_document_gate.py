@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
-    """准备临时数据库、公司和文档库。"""
+    """准备临时数据库、workspace 和数据目录。"""
     monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     import agentbase.database as _db
     monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
@@ -32,16 +32,14 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(co, "_setup_work_directory", _setup)
     company = co.create(name="Gate Co", slug="gate-co")
 
-    lib_dir = tmp_path / "lib"
-    lib_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
     # 纯文本：不依赖文档解析器，适合验证「agent 漏读」判定
-    (lib_dir / "合同.txt").write_text("甲\n乙\n", encoding="utf-8")
-    (lib_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
-    (lib_dir / ".DS_Store").write_bytes(b"\x00\x01")
+    (data_dir / "合同.txt").write_text("甲\n乙\n", encoding="utf-8")
+    (data_dir / "报价.xlsx").write_bytes(b"PK\x03\x04demo")
+    (data_dir / ".DS_Store").write_bytes(b"\x00\x01")
 
-    import agentbase.library as lib
-    library = lib.create("报价库", str(lib_dir), company_id=company["id"])
-    return {"cid": company["id"], "library": library, "dir": lib_dir}
+    return {"cid": company["id"], "dir": data_dir}
 
 
 @pytest.fixture
@@ -67,7 +65,7 @@ async def _call_chat(env, agent_stub, query, evidence, saved):
          patch.object(chat, "snapshot_read_coverage", return_value=evidence), \
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", side_effect=_save):
-        payload = ChatRequest(query=query, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{query} {env['dir']}")
         return await chat.app(payload, env["cid"])
 
 
@@ -120,7 +118,7 @@ async def test_incomplete_returns_reason_as_answer_and_keeps_question(env, agent
     assert "未读完" in result["response"]
     assert result["analysis_incomplete"] is True
     assert len(saved) == 1
-    assert saved[0]["query"] == STRICT_QUERY
+    assert saved[0]["query"].startswith(STRICT_QUERY)
 
 
 @pytest.mark.asyncio
@@ -193,7 +191,7 @@ async def test_gate_falls_back_to_callbacks_without_hermes_api(env):
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
-        payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{STRICT_QUERY} {env['dir']}")
         result = await chat.app(payload, env["cid"])
 
     assert result["response"] == "分析完成"
@@ -219,7 +217,7 @@ async def test_callback_gate_blocks_skipped_file(env):
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
-        payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{STRICT_QUERY} {env['dir']}")
         result = await chat.app(payload, env["cid"])
 
     assert "报价.xlsx" in result["response"]
@@ -252,7 +250,7 @@ async def test_hermes_snapshot_wins_over_callbacks(env):
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context",
                       side_effect=lambda **k: saved.append(k) or {"id": 1}):
-        payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{STRICT_QUERY} {env['dir']}")
         result = await chat.app(payload, env["cid"])
 
     assert result["response"] == "分析完成"
@@ -289,7 +287,7 @@ async def test_gate_releases_hermes_task_record(env, agent_stub):
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}):
         from agentbase.api.models import ChatRequest
-        payload = ChatRequest(query=STRICT_QUERY, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{STRICT_QUERY} {env['dir']}")
         await chat.app(payload, env["cid"])
 
     assert released and released[0].startswith("agentbase-doc-")
@@ -310,7 +308,7 @@ async def _collect_stream(env, agent_stub, query, evidence):
          patch.object(chat, "release_read_coverage"), \
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", return_value={"id": 1}):
-        payload = ChatRequest(query=query, library_id=env["library"]["id"])
+        payload = ChatRequest(query=f"{query} {env['dir']}")
         response = await chat.chat_stream(payload, env["cid"])
         async for chunk in response.body_iterator:
             text = chunk.decode() if isinstance(chunk, bytes) else chunk

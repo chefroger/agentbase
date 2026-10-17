@@ -13,12 +13,12 @@ import json as _json
 import logging
 import threading
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from agentbase import chat_memory
-from agentbase import library as library_module
 from agentbase.api.deps import require_company
 from agentbase.api.models import ChatRequest
 from agentbase.document_task import (
@@ -26,7 +26,7 @@ from agentbase.document_task import (
     format_incomplete_report,
     should_enforce_document_gate,
 )
-from agentbase.helpers import build_query, create_agent
+from agentbase.helpers import _extract_explicit_paths, build_query, create_agent
 from agentbase.hermes_compat import release_read_coverage, snapshot_read_coverage
 from agentbase.read_evidence import ReadEvidenceCollector
 
@@ -153,17 +153,18 @@ async def app(
         last_skill = _last_skill_per_company.get(cid)
 
     full_query, skill_hint = build_query(
-        cid, payload.library_id, query, customer_id=payload.customer_id,
+        cid, query,
         last_skill_name=last_skill, language=payload.language or "zh",
     )
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
     document_task = None
-    if payload.library_id and should_enforce_document_gate(query):
-        library = library_module.get(payload.library_id, company_id=cid)
-        if library:
-            document_task = DocumentTask.from_root(library["root_path"])
+    if should_enforce_document_gate(query):
+        # 没有文档库概念后，只有用户点名了**目录**时才做完整扫描校验。
+        _dirs = [p for p in _extract_explicit_paths(query) if Path(p).is_dir()]
+        if _dirs:
+            document_task = DocumentTask.from_root(_dirs[0])
             if document_task.truncated or not document_task.files:
                 # 目录过大或没有可分析文件：无法可靠判定完整性，退回普通问答。
                 _log.info("Document gate skipped (truncated=%s, files=%d)",
@@ -250,15 +251,9 @@ async def app(
             # 释放 Hermes 侧该请求的读取记录，避免长驻进程内无限累积。
             release_read_coverage(request_task_id)
 
-    lib_name = ""
-    if payload.library_id:
-        lib = library_module.get(payload.library_id, company_id=cid)
-        if lib:
-            lib_name = lib["name"]
-
     conv = chat_memory.save_with_context(
-        company_id=cid, library_id=payload.library_id, query=query,
-        response=response, library_name=lib_name,
+        company_id=cid, query=query,
+        response=response,
         files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
                     if gate_result else None),
         context=payload.context or "",
@@ -304,17 +299,18 @@ async def chat_stream(
         last_skill = _last_skill_per_company.get(cid)
 
     full_query, skill_hint = build_query(
-        cid, payload.library_id, query, customer_id=payload.customer_id,
+        cid, query,
         last_skill_name=last_skill, language=payload.language or "zh",
     )
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
     document_task = None
-    if payload.library_id and should_enforce_document_gate(query):
-        library = library_module.get(payload.library_id, company_id=cid)
-        if library:
-            document_task = DocumentTask.from_root(library["root_path"])
+    if should_enforce_document_gate(query):
+        # 没有文档库概念后，只有用户点名了**目录**时才做完整扫描校验。
+        _dirs = [p for p in _extract_explicit_paths(query) if Path(p).is_dir()]
+        if _dirs:
+            document_task = DocumentTask.from_root(_dirs[0])
             if document_task.truncated or not document_task.files:
                 # 目录过大或没有可分析文件：无法可靠判定完整性，退回普通问答。
                 _log.info("Document gate skipped (truncated=%s, files=%d)",
@@ -414,19 +410,12 @@ async def chat_stream(
                         # 释放 Hermes 侧该请求的读取记录，避免长驻进程内无限累积。
                         release_read_coverage(request_task_id)
 
-                lib_name = ""
-                if payload.library_id:
-                    lib = library_module.get(payload.library_id, company_id=cid)
-                    if lib:
-                        lib_name = lib["name"]
-
                 # 先保存对话，再发送响应 —— 确保前端能拿到 conversation_id 做评分
                 conv_id = None
                 try:
                     conv = chat_memory.save_with_context(
-                        company_id=cid, library_id=payload.library_id,
+                        company_id=cid,
                         query=query, response=result or "",
-                        library_name=lib_name,
                         files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
                                     if gate_result else None),
                         context=payload.context or "",

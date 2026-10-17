@@ -273,14 +273,13 @@ class TestRouterAssembly:
         for route in all_routes:
             if hasattr(route, 'path'):
                 p = route.path
-                for keyword in ['companies', 'libraries', 'customers', 'conversations',
+                for keyword in ['companies', 'files', 'conversations',
                                 'chat', 'memory', 'onboarding', 'models']:
                     if keyword in p:
                         key_routes.add(keyword)
 
         assert 'companies' in key_routes
-        assert 'libraries' in key_routes
-        assert 'customers' in key_routes
+        assert 'files' in key_routes
         assert 'chat' in key_routes
 
     def test_all_endpoints_registered(self, setup_mocks):
@@ -330,28 +329,6 @@ class TestCompanyEndpoints:
 # ── Library Endpoint Functions ──────────────────────────────────────────────
 
 
-class TestLibraryEndpoints:
-    """测试文档库端点函数。"""
-
-    def test_create_and_list(self, test_db, company_id, setup_mocks):
-        from agentbase import library
-        Path("/tmp/eplib").mkdir(parents=True, exist_ok=True)
-        lib = library.create("Endpoint Lib", "/tmp/eplib", company_id=company_id)
-        assert lib["name"] == "Endpoint Lib"
-
-        libs = library.list_by_company(company_id)
-        assert any(l["id"] == lib["id"] for l in libs)
-
-    def test_company_scoped_access(self, test_db, company_id, setup_mocks):
-        from agentbase import company, library
-        other = company.create(name="Other Co", slug="other-co-lib")
-        Path("/tmp/mylib").mkdir(parents=True, exist_ok=True)
-        lib = library.create("My Lib", "/tmp/mylib", company_id=company_id)
-
-        # Other company shouldn't see this library
-        assert library.get(lib["id"], company_id=other["id"]) is None
-
-
 class TestWorkDirUpload:
     """测试拖拽文件上传到公司工作目录子目录。"""
 
@@ -377,7 +354,7 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from agentbase.api.libraries import upload_to_work_dir
+        from agentbase.api.files import upload_to_work_dir
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"hello world"))
         result = self._run(upload_to_work_dir(
@@ -405,7 +382,7 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from agentbase.api.libraries import upload_to_work_dir
+        from agentbase.api.files import upload_to_work_dir
 
         f1 = UploadFile(filename="sub/a.txt", file=io.BytesIO(b"aaa"))
         f2 = UploadFile(filename="sub/deep/b.txt", file=io.BytesIO(b"bbb"))
@@ -423,7 +400,7 @@ class TestWorkDirUpload:
 
         from fastapi import UploadFile
 
-        from agentbase.api.libraries import upload_to_work_dir
+        from agentbase.api.files import upload_to_work_dir
 
         f = UploadFile(filename="test.txt", file=io.BytesIO(b"test"))
         with pytest.raises(Exception) as exc:
@@ -450,7 +427,7 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.company.update_trade_company",
                            lambda cid, **kw: None)
 
-        from agentbase.api.libraries import upload_to_work_dir
+        from agentbase.api.files import upload_to_work_dir
 
         f = UploadFile(filename="../escape.txt", file=io.BytesIO(b"bad"))
         result = self._run(upload_to_work_dir(
@@ -463,21 +440,6 @@ class TestWorkDirUpload:
 
 
 # ── Customer Endpoint Functions ─────────────────────────────────────────────
-
-
-class TestCustomerEndpoints:
-    """测试客户端点函数。"""
-
-    def test_create_and_list(self, test_db, company_id, setup_mocks):
-        from agentbase import customer
-        cust = customer.create("Endpoint Customer", company_id=company_id)
-        assert cust["name"] == "Endpoint Customer"
-
-        custs = customer.list_by_company(company_id)
-        assert any(c["id"] == cust["id"] for c in custs)
-
-
-# ── Conversation Endpoint Functions ─────────────────────────────────────────
 
 
 class TestConversationEndpoints:

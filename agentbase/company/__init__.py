@@ -32,7 +32,6 @@ from agentbase.company.crud import (
 from agentbase.company.workdir import (
     _WORK_DIR_CATEGORIES,
     _ensure_data_dir,
-    _register_work_libraries,
     _setup_work_directory,
     _slugify,
     _validate_slug,

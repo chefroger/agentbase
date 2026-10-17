@@ -2,7 +2,6 @@
 Trade AI Assistant — 公司工作目录管理。
 
 负责在用户桌面创建按外贸业务流程分类的目录结构，复制 .agentbase-template 模板骨架，
-并将 workspace 子目录自动注册为 Hermes document library。
 """
 
 from __future__ import annotations
@@ -12,8 +11,6 @@ import re
 import shutil
 import sys
 from pathlib import Path
-
-from agentbase import library as _library_module
 
 # ── 工作目录分类 ──────────────────────────────────────────────────────────
 
@@ -262,29 +259,3 @@ def _setup_work_directory(
         (work_dir / cat_name).mkdir(parents=True, exist_ok=True)
 
     return work_dir, is_new
-
-
-def _register_work_libraries(company_id: int, work_dir: Path) -> list[dict]:
-    """将工作目录的每个子目录注册为 Hermes document library。
-
-    为 _WORK_DIR_CATEGORIES 中定义的每个分类目录创建一条 library 记录，
-    使 Hermes Agent 能通过 read_file / list_dir 工具访问这些目录。
-
-    Args:
-        company_id: 公司数据库 ID
-        work_dir: 工作目录根路径
-
-    Returns:
-        创建的 library 记录列表（每个元素含 id/name/root_path 等字段）
-    """
-    libraries = []
-    for cat_name, cat_desc in _WORK_DIR_CATEGORIES:
-        cat_path = work_dir / cat_name
-        lib = _library_module.create(
-            name=cat_name,
-            root_path=str(cat_path),
-            description=cat_desc,
-            company_id=company_id,
-        )
-        libraries.append(lib)
-    return libraries

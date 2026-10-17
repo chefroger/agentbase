@@ -2,7 +2,7 @@
 Trade AI Assistant — SQLite 数据库层。
 
 提供独立的数据库 (data/agentbase.db) 用于 B2B 业务表：
-libraries、customers、customer_libraries、conversations。
+conversations / usage_ledger 等框架表。
 
 不干预 Hermes Agent 的会话数据库。
 """
@@ -86,79 +86,17 @@ CREATE TABLE IF NOT EXISTS agentbase_companies (
     license_data      TEXT    DEFAULT '{}'   -- {"first_launch_at":"","activated":false,"expires_at":null}
 );
 
-CREATE TABLE IF NOT EXISTS libraries (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id   INTEGER REFERENCES companies(id) ON DELETE CASCADE,
-    name         TEXT    NOT NULL,
-    root_path    TEXT    NOT NULL,
-    description  TEXT    DEFAULT '',
-    created_at   TEXT    DEFAULT (datetime('now', 'localtime')),
-    updated_at   TEXT    DEFAULT (datetime('now', 'localtime')),
-    extra1       TEXT    DEFAULT '{}',  -- spare: {"scan_depth":3, "file_count":0, "last_scan":""}
-    extra2       TEXT    DEFAULT '{}',  -- spare: {"indexed":false, "index_version":1}
-    extra3       TEXT    DEFAULT '{}'   -- spare: reserved for future use
-);
-
-CREATE TABLE IF NOT EXISTS customers (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id  INTEGER REFERENCES companies(id) ON DELETE CASCADE,
-    name        TEXT    NOT NULL,
-    contact     TEXT    DEFAULT '',
-    note        TEXT    DEFAULT '',
-    created_at  TEXT    DEFAULT (datetime('now', 'localtime')),
-    updated_at  TEXT    DEFAULT (datetime('now', 'localtime')),
-    extra1      TEXT    DEFAULT '{}',  -- spare: {"country":"","tier":"","linkedin_url":"","company_website":"","social_media":{},"buyer_type":"","main_category":"","match_score":0}
-    extra2      TEXT    DEFAULT '{}',  -- spare: {"title":"","email":"","backup_email":"","phone":"","whatsapp":"","wechat":"","source":"","follow_up_note":""}
-    extra3      TEXT    DEFAULT '{}'   -- spare: reserved for future use
-);
-
-CREATE TABLE IF NOT EXISTS customer_libraries (
-    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    library_id  INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-    extra1      TEXT    DEFAULT '{}',  -- spare: {"relevance_score":0.0, "notes":""}
-    extra2      TEXT    DEFAULT '{}',  -- spare: reserved for future use
-    extra3      TEXT    DEFAULT '{}',  -- spare: reserved for future use
-    PRIMARY KEY (customer_id, library_id)
-);
-
 CREATE TABLE IF NOT EXISTS conversations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id  INTEGER REFERENCES companies(id) ON DELETE CASCADE,
-    library_id  INTEGER REFERENCES libraries(id) ON DELETE SET NULL,
     query       TEXT    NOT NULL,
     response    TEXT    DEFAULT '',
     files_read  TEXT    DEFAULT '[]',  -- JSON array: [{"file":"...","pages":[1,2]}]
-    context     TEXT    DEFAULT '',    -- chat context: daily|lead|platform|social|linkedin|customs|docs|docgen|osint
+    context     TEXT    DEFAULT '',    -- chat context label
     created_at  TEXT    DEFAULT (datetime('now', 'localtime')),
     extra1      TEXT    DEFAULT '{}',  -- spare: {"tokens_used":0, "model":"", "duration_ms":0}
     extra2      TEXT    DEFAULT '{}',  -- spare: {"rating":null, "feedback":"", "rated_at":""}
     extra3      TEXT    DEFAULT '{}'   -- spare: {"skill":""} 对话匹配到的技能名（供质量统计聚合）
-);
-
--- Orders (lightweight order tracking per customer)
-CREATE TABLE IF NOT EXISTS orders (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id      INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    customer_id     INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    order_no        TEXT    DEFAULT '',     -- user-defined order number
-    product_name    TEXT    NOT NULL,        -- e.g. "预绞丝 / ADSS光缆"
-    quantity        REAL    DEFAULT 0,
-    unit            TEXT    DEFAULT '',      -- 套 / 米 / 吨
-    unit_price      REAL    DEFAULT 0,
-    currency        TEXT    DEFAULT 'USD',
-    total_amount    REAL    DEFAULT 0,
-    status          TEXT    DEFAULT '报价中', -- 报价中 / 已下单 / 已出货 / 已完成
-    delivery_date   TEXT    DEFAULT '',
-    payment_terms   TEXT    DEFAULT '',
-    notes           TEXT    DEFAULT '',
-    created_at      TEXT    DEFAULT (datetime('now', 'localtime')),
-    updated_at      TEXT    DEFAULT (datetime('now', 'localtime'))
-);
-
-CREATE TABLE IF NOT EXISTS order_libraries (
-    order_id   INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-    PRIMARY KEY (order_id, library_id)
 );
 
 CREATE TABLE IF NOT EXISTS usage_ledger (
@@ -176,12 +114,7 @@ CREATE TABLE IF NOT EXISTS usage_ledger (
     extra3            TEXT    NOT NULL DEFAULT ''
 );
 
-CREATE INDEX IF NOT EXISTS idx_libraries_company   ON libraries(company_id);
-CREATE INDEX IF NOT EXISTS idx_customers_company    ON customers(company_id);
-CREATE INDEX IF NOT EXISTS idx_orders_company      ON orders(company_id);
-CREATE INDEX IF NOT EXISTS idx_orders_customer     ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_library ON conversations(library_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_created  ON conversations(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_ts    ON usage_ledger(ts);
 CREATE INDEX IF NOT EXISTS idx_usage_skill ON usage_ledger(skill);
@@ -212,13 +145,10 @@ def _add_spare_columns(conn: sqlite3.Connection) -> None:
     for table, extras in [
         ("companies",        ["extra1", "extra2", "extra3"]),
         ("agentbase_companies",  ["extra1", "extra2", "extra3", "license_data"]),
-        ("libraries",       ["extra1", "extra2", "extra3"]),
-        ("customers",       ["extra1", "extra2", "extra3"]),
-        ("customer_libraries", ["extra1", "extra2", "extra3"]),
         ("conversations",   ["extra1", "extra2", "extra3"]),
         ("usage_ledger",    ["extra1", "extra2", "extra3"]),
     ]:
-        # 跳过还不存在的表（如 v0 schema 中没有 customer_libraries）
+        # 跳过还不存在的表
         if table not in existing_tables:
             continue
         existing_cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -246,92 +176,8 @@ def _add_context_column(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
-def _migrate_from_v0(conn: sqlite3.Connection) -> bool:
-    """将 v0（单公司）schema 迁移到 v1（多公司）。
-
-    检查旧表是否缺少 company_id 列。
-    如果缺少，则添加 company_id 列并创建一个 slug='default' 的默认公司，
-    由 Trade 系统拥有。
-    如果已执行迁移则返回 True，如果已是 v1 则返回 False。
-    """
-    # 通过检查 libraries 表是否缺少 company_id 列来检测旧 schema
-    cur = conn.execute("PRAGMA table_info(libraries)")
-    cols = {row[1] for row in cur.fetchall()}
-    # 如果已有 company_id 列，说明已是 v1 schema，无需迁移
-    if "company_id" in cols:
-        return False  # 已是 v1
-
-    print("  检测到 v0 schema — 正在迁移到多公司 v1 …")
-
-    # 先创建 companies + agentbase_companies 表
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS companies (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            name         TEXT    NOT NULL,
-            slug         TEXT    NOT NULL UNIQUE,
-            logo_url     TEXT    DEFAULT '',
-            website      TEXT    DEFAULT '',
-            contact_name TEXT    DEFAULT '',
-            contact_email TEXT   DEFAULT '',
-            address      TEXT    DEFAULT '',
-            is_active    INTEGER DEFAULT 1,
-            created_at   TEXT    DEFAULT (datetime('now', 'localtime')),
-            updated_at   TEXT    DEFAULT (datetime('now', 'localtime')),
-            extra1       TEXT    DEFAULT '{}',
-            extra2       TEXT    DEFAULT '{}',
-            extra3       TEXT    DEFAULT '{}'
-        );
-
-        CREATE TABLE IF NOT EXISTS agentbase_companies (
-            company_id        INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
-            data_dir          TEXT    NOT NULL,
-            agent_identity_md TEXT    DEFAULT '',
-            is_active         INTEGER DEFAULT 1,
-            created_at        TEXT    DEFAULT (datetime('now', 'localtime')),
-            extra1            TEXT    DEFAULT '{}',
-            extra2            TEXT    DEFAULT '{}',
-            extra3            TEXT    DEFAULT '{}'
-        );
-
-        INSERT OR IGNORE INTO companies (name, slug, is_active)
-        VALUES ('我的公司', 'default', 1);
-
-        INSERT OR IGNORE INTO agentbase_companies (company_id, data_dir, is_active)
-        VALUES (1, '', 1);
-    """)
-
-    # 向现有 v0 表添加 company_id 列
-    conn.execute("ALTER TABLE libraries ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE")
-    # 将所有现有记录关联到默认公司 (id=1)
-    conn.execute("UPDATE libraries SET company_id = 1")
-
-    conn.execute("ALTER TABLE customers ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE")
-    # 将所有现有客户关联到默认公司 (id=1)
-    conn.execute("UPDATE customers SET company_id = 1")
-
-    conn.execute("ALTER TABLE conversations ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE")
-    # 将所有现有会话关联到默认公司 (id=1)
-    conn.execute("UPDATE conversations SET company_id = 1")
-
-    # 添加新索引
-    conn.executescript("""
-        CREATE INDEX IF NOT EXISTS idx_libraries_company    ON libraries(company_id);
-        CREATE INDEX IF NOT EXISTS idx_customers_company     ON customers(company_id);
-        CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id);
-    """)
-
-    # 向所有现有表添加备用列（v1 DB 原地升级，或全新 v1 安装）。
-    # 使用 ALTER TABLE ADD COLUMN 是幂等的 — 即使列已存在也可以安全调用。
-    _add_spare_columns(conn)
-
-    conn.commit()
-    print("  迁移完成。已创建默认公司 '我的公司' (slug=default)。")
-    return True
-
-
 _EXPECTED_TABLES = frozenset({
-    "companies", "agentbase_companies", "libraries", "customers",
-    "customer_libraries", "conversations", "orders", "usage_ledger",
+    "companies", "agentbase_companies", "conversations", "usage_ledger",
 })
 
 
@@ -357,8 +203,7 @@ def _needs_schema_work(conn: sqlite3.Connection) -> bool:
         if "schema_migrations" not in existing:
             return True
         # 备用列缺失 → ALTER TABLE（清单必须与 _add_spare_columns 保持一致）
-        for table in ("companies", "agentbase_companies", "libraries", "customers",
-                      "customer_libraries", "conversations", "usage_ledger"):
+        for table in ("companies", "agentbase_companies", "conversations", "usage_ledger"):
             cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             if not {"extra1", "extra2", "extra3"} <= cols:
                 return True
@@ -455,8 +300,8 @@ def _apply_pending_migrations(conn: sqlite3.Connection) -> int:
     # 定义所有已知迁移: (version, name, sql)
     migrations: list[tuple[int, str, str]] = [
         # Future migrations go here. Example:
-        # (2, "add_customer_email_index",
-        #  "CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(contact);"),
+        # (2, "example_migration",
+        #  "ALTER TABLE conversations ADD COLUMN example TEXT DEFAULT '';"),
     ]
 
     # 获取已应用的版本
@@ -509,12 +354,8 @@ def init_db() -> Path:
     conn = get_connection()
     try:
         conn.executescript(SCHEMA_SQL)
-        migrated = _migrate_from_v0(conn)
-        # 如果未发生迁移（已是 v1 或全新安装），仍然确保备用列存在
-        if not migrated:
-            # 已是 v1（或全新安装）— 仍然确保备用列存在
-            _add_spare_columns(conn)
-            conn.commit()
+        _add_spare_columns(conn)
+        conn.commit()
         # 检查并添加 conversations 表的 context 列（向后兼容）
         _add_context_column(conn)
         # 执行增量迁移（从 schema_migrations 表驱动）

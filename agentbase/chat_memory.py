@@ -54,7 +54,6 @@ def save(
     company_id: int,
     query: str,
     response: str = "",
-    library_id: int | None = None,
     files_read: list[dict] | None = None,
     context: str = "",
     skill: str = "",
@@ -70,11 +69,10 @@ def save(
         # extra3 记录匹配到的 skill（空则不写，保持旧行为兼容）
         extra3 = json.dumps({"skill": skill}, ensure_ascii=False) if skill else "{}"
         cur = conn.execute(
-            "INSERT INTO conversations (company_id, library_id, query, response, files_read, context, extra3) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO conversations (company_id, query, response, files_read, context, extra3) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 company_id,
-                library_id,
                 query,
                 response,
                 json.dumps(files_read or [], ensure_ascii=False),
@@ -92,7 +90,7 @@ def save(
         # 极端兜底：返回最小可用字典（字段类型与 _row_to_dict 输出一致）
         return {
             "id": new_id, "company_id": company_id,
-            "library_id": library_id, "query": query, "response": response,
+            "query": query, "response": response,
             "files_read": files_read or [], "created_at": None, "context": context,
             "extra1": {}, "extra2": {}, "extra3": {},
         }
@@ -127,22 +125,6 @@ def list_by_company(company_id: int, limit: int = 50) -> list[dict]:
         rows = conn.execute(
             "SELECT * FROM conversations WHERE company_id = ? ORDER BY id DESC LIMIT ?",
             (company_id, limit),
-        ).fetchall()
-        return [_row_to_dict(r) for r in rows]
-    finally:
-        conn.close()
-
-
-def list_by_library(
-    company_id: int, library_id: int, limit: int = 50
-) -> list[dict]:
-    """返回指定公司内某个资料库最近的对话记录，按最新在前排序。"""
-    conn = get_connection()
-    try:
-        rows = conn.execute(
-            "SELECT * FROM conversations WHERE company_id = ? AND library_id = ? "
-            "ORDER BY id DESC LIMIT ?",
-            (company_id, library_id, limit),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
     finally:
@@ -309,10 +291,8 @@ def save_with_context(
     company_id: int | None,
     query: str,
     response: str = "",
-    library_id: int | None = None,
     files_read: list[dict] | None = None,
     *,
-    library_name: str = "",
     customer_name: str = "",
     retain_to_memory: bool = True,
     context: str = "",
@@ -320,10 +300,10 @@ def save_with_context(
 ) -> dict:
     """保存一条对话记录到 SQLite，并可选择同步到 Hindsight 长期记忆。
 
-    这是 B2B 对话日志记录推荐使用的入口函数。
+    这是对话日志记录推荐使用的入口函数。
     skill 记录本次匹配到的技能名，供质量统计（get_quality_stats）按技能聚合评分。
     """
-    result = save(company_id, query, response, library_id, files_read, context=context, skill=skill)
+    result = save(company_id, query, response, files_read, context=context, skill=skill)
 
     if retain_to_memory:
         # 只有当调用方要求保留到记忆时才执行，避免不必要的 I/O
@@ -336,7 +316,6 @@ def save_with_context(
                 retained = retain_conversation(
                     query=query,
                     response=response,
-                    library_name=library_name,
                     customer_name=customer_name,
                     company_id=company_id,
                 )
@@ -358,7 +337,6 @@ def save_with_context(
                     query=query,
                     response=response,
                     company_name=company_name,
-                    library_name=library_name,
                     customer_name=customer_name,
                 )
             except Exception as exc:
@@ -414,7 +392,7 @@ def get_recent(company_id: int, limit: int = 20) -> list[dict]:
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT id, company_id, library_id, query, response, files_read, created_at "
+            "SELECT id, company_id, query, response, files_read, created_at "
             "FROM conversations WHERE company_id = ? AND query IS NOT NULL "
             "ORDER BY id DESC LIMIT ?",
             (company_id, limit),
@@ -577,7 +555,7 @@ def search_history(
 
         if start is None and end is None:
             rows = conn.execute(
-                "SELECT id, company_id, library_id, query, response, files_read, created_at "
+                "SELECT id, company_id, query, response, files_read, created_at "
                 "FROM conversations WHERE company_id = ? "
                 "ORDER BY id ASC LIMIT ?",
                 (company_id, limit),
@@ -594,7 +572,7 @@ def search_history(
                 params.append(end.strftime("%Y-%m-%d %H:%M:%S"))
             params.append(limit)
             rows = conn.execute(
-                f"SELECT id, company_id, library_id, query, response, files_read, created_at "
+                f"SELECT id, company_id, query, response, files_read, created_at "
                 f"FROM conversations WHERE {' AND '.join(clauses)} "
                 f"ORDER BY id ASC LIMIT ?",
                 params,
@@ -610,7 +588,6 @@ def _row_to_dict(row) -> dict:
     result = {
         "id": row["id"],
         "company_id": row["company_id"],
-        "library_id": row["library_id"],
         "query": row["query"],
         "response": row["response"],
         "files_read": json.loads(row["files_read"]) if row["files_read"] else [],
@@ -639,7 +616,6 @@ if __name__ == "__main__":
 
     conv = save(
         company_id=1,
-        library_id=None,
         query="去年营收怎么样？",
         response="根据2024年度销售额数据...",
         files_read=[{"file": "2024_report.xlsx", "pages": [1, 2]}],

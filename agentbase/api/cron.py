@@ -304,16 +304,6 @@ def api_update_skills(request: Request):
     return _capture_output(_do_update)
 
 
-@router.get("/cron/health")
-def get_customer_health_audit(cid: int = Depends(require_company)):
-    """客户健康审计：检测僵尸客户、高价值未转化、数据不完整等维度。
-
-    可由 b2b-daily-automation 技能在定时任务中调用，生成早安简报中的客户健康概览。
-    """
-    from agentbase import customer as customer_module
-    return customer_module.health_audit(cid)
-
-
 def _find_cron_output(task_name: str, today: str) -> str | None:
     if not _CRON_OUTPUT.is_dir():
         return None
