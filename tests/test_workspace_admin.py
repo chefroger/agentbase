@@ -1,4 +1,4 @@
-"""`trade workspace` —— 作者用的公司清理命令。
+"""`agentbase workspace` —— 作者用的公司清理命令。
 
 ## 为什么需要它
 
@@ -16,7 +16,7 @@
 
   - 不带 `--yes` 只打印计划、退出码 1，绝不动手（远程 shell 里交互确认不可靠）
   - 只删 AGENT_HOME 下与桌面下的目录，别处一律跳过并如实告知
-  - `purge-dir` 只处理带 Trade 目录指纹的文件夹，不做通用删除工具
+  - `purge-dir` 只处理带 AgentBase 目录指纹的文件夹，不做通用删除工具
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ class TestDirGuard:
 
         outside = tmp_path / "elsewhere" / "错误公司"
         (outside / "documents").mkdir(parents=True)
-        crud.update_trade_workspace(
+        crud.update_workspace_record(
             env["workspace"]["id"], extra1=json.dumps({"work_dir": str(outside)})
         )
 
@@ -244,7 +244,7 @@ class TestPurgeDir:
         assert not orphan.exists()
 
     def test_refuses_arbitrary_directory(self, env, tmp_path):
-        """不能变成通用删除工具 —— 只处理带 Trade 目录指纹的文件夹。"""
+        """不能变成通用删除工具 —— 只处理带 AgentBase 目录指纹的文件夹。"""
         plain = tmp_path / "重要资料"
         plain.mkdir()
         (plain / "报价单.xlsx").write_text("x", encoding="utf-8")
@@ -267,7 +267,7 @@ class TestPurgeDir:
 
 class TestDispatch:
     def test_workspace_subcommand_dispatched(self, monkeypatch, env):
-        """`trade workspace list` 要被 bootstrap 认出来并退出，不起服务。"""
+        """`agentbase workspace list` 要被 bootstrap 认出来并退出，不起服务。"""
         from agentbase import bootstrap
 
         monkeypatch.setattr(sys, "argv", ["agentbase", "workspace", "list"])
@@ -313,7 +313,7 @@ class TestOrphanMustNotFlagLiveCompanies:
         from agentbase.workspace import crud
 
         # 模拟老数据：清掉 work_dir 记录（公司本身仍在用）
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
         # 清掉记录后重建同名文件夹（模拟现场）
         import shutil
 
@@ -329,7 +329,7 @@ class TestOrphanMustNotFlagLiveCompanies:
     def test_folder_matching_slug_is_not_orphan(self, env):
         from agentbase.workspace import crud
 
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
@@ -358,7 +358,7 @@ class TestPurgeDirRefusesLiveCompanyFolder:
 
         assert code == 1, "删掉了在用公司的桌面文件夹"
         assert (env["desktop"] / "错误公司").is_dir()
-        assert "purge" in text, "要告诉用户先删公司（trade workspace purge）"
+        assert "purge" in text, "要告诉用户先删公司（agentbase workspace purge）"
 
 
 class TestPurgeFindsUnrecordedWorkDir:
@@ -373,7 +373,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         from agentbase.workspace import crud
 
         # 模拟老数据：清掉 work_dir 记录，文件夹仍在
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
 
         text, _ = workspace_admin.purge_workspace("wrong-co")
 
@@ -383,7 +383,7 @@ class TestPurgeFindsUnrecordedWorkDir:
     def test_purge_actually_deletes_name_matched_dir(self, env):
         from agentbase.workspace import crud
 
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
         desktop_dir = env["desktop"] / "错误公司"
         assert desktop_dir.is_dir(), "前置条件：桌面文件夹存在"
 
@@ -395,10 +395,10 @@ class TestPurgeFindsUnrecordedWorkDir:
         )
 
     def test_does_not_match_unrelated_same_name_dir(self, env, tmp_path):
-        """同名但没有 Trade 目录结构 → 不是它的工作目录，不能删。"""
+        """同名但没有 AgentBase 目录结构 → 不是它的工作目录，不能删。"""
         from agentbase.workspace import crud
 
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
@@ -414,7 +414,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         """确实删公司时，同名普通文件夹不能跟着消失。"""
         from agentbase.workspace import crud
 
-        crud.update_trade_workspace(env["workspace"]["id"], extra1="{}")
+        crud.update_workspace_record(env["workspace"]["id"], extra1="{}")
         import shutil
 
         shutil.rmtree(env["desktop"] / "错误公司")
@@ -645,7 +645,7 @@ class TestWindowsPathCaseInsensitivity:
 
         workspace, desktop_dir = self._live_workspace_with_odd_dir_name(env)
         # 模拟记录里存的是另一种大小写的路径
-        crud.update_trade_workspace(
+        crud.update_workspace_record(
             workspace["id"],
             extra1=json.dumps({"work_dir": str(desktop_dir).upper()}),
         )
@@ -662,7 +662,7 @@ class TestWindowsPathCaseInsensitivity:
         from agentbase.workspace import crud
 
         workspace, desktop_dir = self._live_workspace_with_odd_dir_name(env)
-        crud.update_trade_workspace(
+        crud.update_workspace_record(
             workspace["id"],
             extra1=json.dumps({"work_dir": str(desktop_dir).upper()}),
         )
@@ -707,7 +707,7 @@ class TestWindowsRobustness:
     """
 
     def _orphan_dir(self, env) -> Path:
-        """造一个带 Trade 指纹的孤儿目录（数据库里没有的公司）。"""
+        """造一个带 AgentBase 指纹的孤儿目录（数据库里没有的公司）。"""
         from agentbase.workspace.workdir import _WORK_DIR_CATEGORIES
 
         d = env["desktop"] / "残留公司"

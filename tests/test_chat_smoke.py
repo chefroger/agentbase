@@ -22,7 +22,7 @@ class TestRequireCompanyInjection:
         # Mock the workspace lookup
         import agentbase.workspace as co
         from agentbase.api.deps import require_workspace
-        monkeypatch.setattr(co, "get_trade_workspace", lambda cid: {"workspace_id": cid, "is_active": 1})
+        monkeypatch.setattr(co, "get_workspace_record", lambda cid: {"workspace_id": cid, "is_active": 1})
 
         # A valid header string should parse to int 1
         result = require_workspace("1")
@@ -171,7 +171,7 @@ class TestChatEndpointHTTP:
             co.create(name="Smoke Test Co", slug="smoke-test")
         except ValueError:
             pass
-        monkeypatch.setattr(co, "get_trade_workspace",
+        monkeypatch.setattr(co, "get_workspace_record",
                             lambda cid: {"workspace_id": cid, "data_dir": str(tmp_path), "agent_identity_md": "", "is_active": 1})
 
         import agentbase.helpers

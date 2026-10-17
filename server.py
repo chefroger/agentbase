@@ -1,5 +1,5 @@
 """
-Foreign Trade Assistant — standalone FastAPI server.
+AgentBase — standalone FastAPI server.
 
 Start:
     python server.py

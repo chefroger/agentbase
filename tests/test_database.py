@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 
-# 将 trade 加入 PYTHONPATH（如果通过 pytest 直接运行）
+# 将 agentbase 加入 PYTHONPATH（如果通过 pytest 直接运行）
 import sys
 from pathlib import Path
 

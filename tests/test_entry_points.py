@@ -1,7 +1,7 @@
 """命令行入口的打包正确性测试。
 
-历史缺陷：`[project.scripts]` 里 `trade = server:main`、`desktop = desktop:main`
-指向**仓库根的顶层模块**，而 `packages.find` 只收 `trade` 包、也没有声明 `py-modules`
+历史缺陷：`[project.scripts]` 里 `agentbase = server:main`、`desktop = desktop:main`
+指向**仓库根的顶层模块**，而 `packages.find` 只收 `agentbase` 包、也没有声明 `py-modules`
 → 任何 pip 安装后这两个命令都是 `ModuleNotFoundError`（实测 `~/.agentbase/venv/bin/agentbase`
 报 `No module named 'server'`）。
 

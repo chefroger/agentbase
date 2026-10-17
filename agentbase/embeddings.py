@@ -1,5 +1,5 @@
 """
-Smart Trade AI — 本地 Embedding 后端抽象（优化路线 P0-1 / P0-2 共用基础）。
+AgentBase — 本地 Embedding 后端抽象（优化路线 P0-1 / P0-2 共用基础）。
 
 设计目标：
 1. 零依赖默认可用：TfidfBackend 纯标准库实现，字符 n-gram 同时支持

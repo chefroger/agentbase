@@ -44,7 +44,7 @@ async def upload_to_work_dir(
         raise HTTPException(status_code=404, detail="workspace 不存在")
 
     work_dir = None
-    tc = _co.get_trade_workspace(x_workspace_id)
+    tc = _co.get_workspace_record(x_workspace_id)
     if tc and tc.get("extra1"):
         import json as _json
 
@@ -65,7 +65,7 @@ async def upload_to_work_dir(
         try:
             import json as _json
 
-            _co.update_trade_workspace(
+            _co.update_workspace_record(
                 x_workspace_id, extra1=_json.dumps({"work_dir": str(work_dir)})
             )
         except Exception:

@@ -177,5 +177,5 @@ class TestVersionUpperBound:
         assert pic.MIN_COMPATIBLE_VERSION == _MIN_HERMES_VERSION
 
     def test_no_upper_bound(self):
-        """上限已取消：新版 Hermes 都要跟，卡上限只会把 Trade 自己锁死。"""
+        """上限已取消：新版 Hermes 都要跟，卡上限只会把 AgentBase 自己锁死。"""
         assert not hasattr(pic, "MAX_COMPATIBLE_VERSION")

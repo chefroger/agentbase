@@ -1,7 +1,7 @@
 """
-测试全局配置 — 必须在任何 trade 模块 import 之前执行。
+测试全局配置 — 必须在任何 agentbase 模块 import 之前执行。
 
-设置 AGENT_HOME 环境变量，防止 _setup_work_directory 和 _get_trade_home 触碰真实桌面。
+设置 AGENT_HOME 环境变量，防止 _setup_work_directory 和 get_agent_home 触碰真实桌面。
 """
 import os
 import tempfile

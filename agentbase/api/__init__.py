@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — REST API Router。
+AgentBase AI Assistant — REST API Router。
 
 组装所有子路由模块，对外暴露统一的 router。
 所有路由默认受 session token 保护。
@@ -28,7 +28,7 @@ def _enforce_workspace_binding(
 ) -> None:
     """session 级活跃公司绑定：防止修改 header 跨公司越权。
 
-    作为全局 trade router 的依赖，在每个业务请求前自动执行。
+    作为全局 agentbase router 的依赖，在每个业务请求前自动执行。
     首次携带 workspace_id 的请求自动绑定 session 到该公司；
     后续请求必须携带匹配的 workspace_id。
     """

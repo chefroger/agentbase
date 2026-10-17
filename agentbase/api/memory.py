@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 记忆与模型 API 路由。
+AgentBase AI Assistant — 记忆与模型 API 路由。
 
 端点：
   GET /memory/status         — Hindsight 长期记忆可用性

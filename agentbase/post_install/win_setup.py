@@ -2,7 +2,7 @@
 
 ## 为什么需要这个模块
 
-客户的部署流程是「先装 Hermes，再让 Hermes 装 Trade」——**不经过 install.ps1**，
+客户的部署流程是「先装 Hermes，再让 Hermes 装 AgentBase」——**不经过 install.ps1**，
 所以脚本里配好的自启拿不到，只能每次人工交代。这里把三件事收敛成一份代码，
 由 install.ps1、`agentbase update`、以及**服务启动时**共同调用。
 
@@ -17,10 +17,10 @@
 
 ## 统一后的结构
 
-    agentbase-autostart.bat   把 trade 的输出重定向到 trade-autostart.log（失败可查）
+    agentbase-autostart.bat   把 agentbase 的输出重定向到 agentbase-autostart.log（失败可查）
     agentbase-autostart.vbs   以隐藏窗口启动上面的 bat（不弹终端）
-    计划任务 SmartTradeAI  登录时运行 wscript.exe "<vbs>"（隐藏窗口）
-    桌面快捷方式          指向 agentbase-open.vbs → `trade open`（起服务 + 开浏览器）
+    计划任务 AgentBase  登录时运行 wscript.exe "<vbs>"（隐藏窗口）
+    桌面快捷方式          指向 agentbase-open.vbs → `agentbase open`（起服务 + 开浏览器）
 
 日志重定向很关键：隐藏窗口之后就看不到 stdout 了，没有日志文件等于把排查能力
 一起藏了。
@@ -33,9 +33,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-TASK_NAME = "SmartTradeAI"
+TASK_NAME = "AgentBase"
 # 文档里的手动方案用的注册表项名。检测到就清掉，避免和计划任务双重启动。
-LEGACY_RUN_VALUE = "TradeAutoStart"
+LEGACY_RUN_VALUE = "AgentbaseAutoStart"
 
 
 # ── 纯逻辑（可测，不碰系统） ──────────────────────────────────────────────
@@ -78,8 +78,8 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
-def resolve_trade_command(agentbase_dir: Path, *, executable: str | None = None) -> str:
-    """返回启动 Trade 的**完整命令行**（不含参数，已做 batch 安全转换）。
+def resolve_command(agentbase_dir: Path, *, executable: str | None = None) -> str:
+    """返回启动 AgentBase 的**完整命令行**（不含参数，已做 batch 安全转换）。
 
     优先用与当前解释器同目录的 `agentbase.exe`（console script，在 venv 的 Scripts 里）——
     与文档里「用完整路径、不依赖 PATH」的做法一致，开机早期 PATH 未加载完也能跑。
@@ -211,7 +211,7 @@ def ensure_launcher_scripts(agentbase_dir: Path) -> dict:
     autostart_log = to_batch_path(d / "agentbase-autostart.log")
     open_log = to_batch_path(d / "agentbase-open.log")
 
-    command = resolve_trade_command(agentbase_dir)
+    command = resolve_command(agentbase_dir)
 
     _write_script(autostart_bat, build_autostart_bat(command, autostart_log))
     _write_script(autostart_vbs, build_hidden_vbs(autostart_bat))
@@ -289,7 +289,7 @@ def find_stray_desktop_launchers(desktop: Path) -> list[Path]:
 
 
 def ensure_desktop_shortcut(open_vbs: Path) -> str:
-    """在**真实桌面**创建 Trade 快捷方式（指向 VBS → `trade open`）。
+    """在**真实桌面**创建 AgentBase 快捷方式（指向 VBS → `agentbase open`）。
 
     用 PowerShell 的 WScript.Shell COM 创建 .lnk —— 不引入 pywin32 依赖。
     桌面路径用 workdir._get_desktop_path()（Windows 走 SHGetFolderPathW），
@@ -301,14 +301,14 @@ def ensure_desktop_shortcut(open_vbs: Path) -> str:
     if not desktop.is_dir():
         return "⚠ 未找到桌面目录，跳过快捷方式"
 
-    lnk = desktop / "Trade.lnk"
+    lnk = desktop / "AgentBase.lnk"
     ps = (
         "$ws = New-Object -ComObject WScript.Shell; "
         f"$sc = $ws.CreateShortcut('{lnk}'); "
         f"$sc.TargetPath = 'wscript.exe'; "
         f"$sc.Arguments = '\"{open_vbs}\"'; "
         "$sc.WorkingDirectory = $env:USERPROFILE; "
-        "$sc.Description = '打开 Trade 外贸 AI 助手'; "
+        "$sc.Description = '打开 AgentBase'; "
         "$sc.Save()"
     )
     result = _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps])

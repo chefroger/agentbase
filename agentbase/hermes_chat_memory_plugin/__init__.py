@@ -2,10 +2,10 @@
 
 与 google_meet 相同的 register 模式：ctx.register_tool(name, toolset, schema, handler)。
 
-为什么 trade 自己**写**这个插件而不是用 google_meet 那种 pip 装：
-- 插件是 trade 特有的（conversations 表只在 trade 的 SQLite 里），跟 trade 一起发布更顺
+为什么 agentbase 自己**写**这个插件而不是用 google_meet 那种 pip 装：
+- 插件是 agentbase 特有的（conversations 表只在 agentbase 的 SQLite 里），跟 agentbase 一起发布更顺
 - 不需要再开一个 pip 包、增加发布摩擦
-- 同步在 trade 的 setup() 与 install.sh 里，**用户装 trade 的路径自洽**
+- 同步在 agentbase 的 setup() 与 install.sh 里，**用户装 agentbase 的路径自洽**
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import logging
 
 # 用绝对路径而非相对导入 —— 相对导入 `from .tools` 在 importlib.util 直接加载时
 # 会报 `No module named 'chat_memory_plugin'`，因为单文件 spec 没有父包。
-# 绝对路径要求 trade 是 installed package（pip install -e . 满足）。
+# 绝对路径要求 agentbase 是 installed package（pip install -e . 满足）。
 from agentbase.hermes_chat_memory_plugin.tools import (
     CHAT_MEMORY_LIST_SCHEMA,
     handle_chat_memory_list,
@@ -32,7 +32,7 @@ def register(ctx) -> None:
     """插件加载器调一次。注册工具，不做其它副作用。
 
     不在这里 import agentbase.chat_memory —— 等到 handler 真正被调才 import，
-    理由：插件加载阶段不应触发 trade 进程的副作用（log 噪声、可能误升级等）。
+    理由：插件加载阶段不应触发 agentbase 进程的副作用（log 噪声、可能误升级等）。
     """
     for name, schema, handler, emoji in _TOOLS:
         ctx.register_tool(

@@ -3,7 +3,7 @@ AgentBase — 公司数据层 CRUD。
 
 管理两张表：
   - workspaces: 公司基本信息（名称、slug、联系方式、激活状态）
-  - agentbase_workspaces: Trade 业务扩展信息（数据目录、Agent 身份、会话状态）
+  - agentbase_workspaces: AgentBase 业务扩展信息（数据目录、Agent 身份、会话状态）
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from agentbase.database import get_connection
 
 # ── 模块级常量 ────────────────────────────────────────────────────────────────
 
-# Trade 用户数据目录
+# AgentBase 用户数据目录
 # 优先级: AGENT_HOME 环境变量 > Windows %LOCALAPPDATA% > ~/.agentbase/
 _AGENT_HOME_RAW = os.environ.get("AGENT_HOME", "").strip()
 if _AGENT_HOME_RAW:
@@ -207,7 +207,7 @@ def create(
         # 1) 创建 ~/.agentbase/{slug}/ 数据目录
         data_dir = str(_ensure_data_dir(slug, AGENT_HOME))
 
-        # 2) 创建桌面工作目录（含外贸分类子目录）
+        # 2) 创建桌面工作目录（分类来自 business.yaml）
         work_dir, is_new = _setup_work_directory(
             name, slug, suggested_name=work_dir_name
         )
@@ -352,7 +352,7 @@ def purge(workspace_id: int) -> bool:
     仅管理员调用。不可逆操作。执行前先写入审计日志。
     返回 True 表示删除成功。
     """
-    tc = get_trade_workspace(workspace_id)
+    tc = get_workspace_record(workspace_id)
     workspace = get(workspace_id)
     slug = workspace["slug"] if workspace else None
     data_dir_str = tc["data_dir"] if tc else None
@@ -427,10 +427,10 @@ def purge(workspace_id: int) -> bool:
 
 # ── agentbase_workspaces 表 CRUD ────────────────────────────────────────────────────
 
-def get_trade_workspace(workspace_id: int) -> dict | None:
+def get_workspace_record(workspace_id: int) -> dict | None:
     """返回公司对应的 agentbase_workspaces 记录，未找到时返回 None。
 
-    agentbase_workspaces 表存储 Trade 业务扩展数据：data_dir、agent_identity_md 等。
+    agentbase_workspaces 表存储 AgentBase 业务扩展数据：data_dir、agent_identity_md 等。
     """
     conn = get_connection()
     try:
@@ -444,7 +444,7 @@ def get_trade_workspace(workspace_id: int) -> dict | None:
         conn.close()
 
 
-def update_trade_workspace(
+def update_workspace_record(
     workspace_id: int,
     data_dir: str | None = None,
     agent_identity_md: str | None = None,
@@ -485,7 +485,7 @@ def update_trade_workspace(
             )
             conn.commit()
 
-        return get_trade_workspace(workspace_id)
+        return get_workspace_record(workspace_id)
     finally:
         conn.close()
 
@@ -503,7 +503,7 @@ def get_agent_identity(workspace_id: int) -> str:
 
     Agent 身份文本会被注入到系统提示词中，让 AI 知道自己在为哪家公司服务。
     """
-    tc = get_trade_workspace(workspace_id)
+    tc = get_workspace_record(workspace_id)
     if not tc:
         return ""
 

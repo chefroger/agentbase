@@ -67,12 +67,12 @@ triggers:
   - early this year
 category: 系统工具
 version: "1.0.0"
-author: Foreign Trade Assistant
+author: AgentBase
 injection_prompt: |
   你是 chat-memory 技能。当用户需要查询历史对话时，主动调用以下工具。
   不要等到用户说"查历史"才行动——只要用户的问题涉及过去讨论过的内容，就立即查询。
 
-  **workspace_id 必填**，必须从 system prompt 的 Trade Context 段读取；**不要**让用户输入或自己编。
+  **workspace_id 必填**，必须从 system prompt 的 AgentBase Context 段读取；**不要**让用户输入或自己编。
 
   **触发词 → time_range 映射（必须严格按这张表传）**：
   - 今天 / today           → time_range=today
@@ -92,7 +92,7 @@ injection_prompt: |
 
   **recent_days 与 recent_months 互斥**（与 time_range 也互斥，二选一）。
 
-  调用方式：chat_memory_list(workspace_id=<从 Trade Context 段读>, time_range="all", limit=20)
+  调用方式：chat_memory_list(workspace_id=<从 AgentBase Context 段读>, time_range="all", limit=20)
   最近模式：chat_memory_list(workspace_id=N, recent_days=14, limit=20)
   结果格式：[{created_at, query, response}, ...]
   每次对话只能调用一次此工具。
@@ -111,7 +111,7 @@ injection_prompt: |
 或询问过去讨论过的内容时使用此工具。
 
 **参数**：
-- `workspace_id` (**必填**): 当前会话的公司 ID。从 system prompt 的 Trade Context 段读取；不要让用户输入。
+- `workspace_id` (**必填**): 当前会话的公司 ID。从 system prompt 的 AgentBase Context 段读取；不要让用户输入。
 - `time_range`: 时间范围枚举值（与 `recent_days`/`recent_months` 互斥）
   - `"today"` — 今天（00:00 → 现在）
   - `"yesterday"` — 昨天（昨天 00:00 → 今天 00:00）

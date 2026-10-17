@@ -1,7 +1,7 @@
 """
 AgentBase — SQLite 数据库层。
 
-提供独立的数据库 (data/agentbase.db) 用于 B2B 业务表：
+提供独立的数据库 (data/agentbase.db) 用于框架表：
 conversations / usage_ledger 等框架表。
 
 不干预 Hermes Agent 的会话数据库。
@@ -16,7 +16,7 @@ from pathlib import Path
 
 # 数据库路径: ~/.agentbase/data/agentbase.db（macOS/Linux）或 %LOCALAPPDATA%\agentbase\data\agentbase.db（Windows）
 def _get_db_path() -> Path:
-    """解析用户 Trade 数据目录下的 agentbase.db 路径。
+    """解析用户 AgentBase 数据目录下的 agentbase.db 路径。
 
     优先级: AGENT_HOME 环境变量 → ~/.agentbase/（macOS/Linux）或 %LOCALAPPDATA%\\agentbase\\（Windows）。
     """
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     extra3       TEXT    DEFAULT '{}'   -- spare: reserved for future use
 );
 
--- Trade-level workspace config (links workspace to Trade system)
+-- AgentBase-level workspace config (links workspace to AgentBase system)
 CREATE TABLE IF NOT EXISTS agentbase_workspaces (
     workspace_id        INTEGER PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
     data_dir          TEXT    NOT NULL,   -- absolute path to ~/.agentbase/{slug}/
@@ -258,7 +258,7 @@ def prune_old_backups(backup_dir: Path, keep: int = _BACKUP_KEEP) -> list[Path]:
     """只保留最近 `keep` 份自动备份，其余删除。返回被删列表。
 
     只处理形如 `agentbase-YYYYMMDD-HHMMSS.db` 的自动备份；**手工备份
-    （如 trade-before-restore-*.db）一律不动** —— 那是用户特意留的。
+    （如 agentbase-before-restore-*.db）一律不动** —— 那是用户特意留的。
     """
     import re as _re
 

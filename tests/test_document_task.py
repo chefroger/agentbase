@@ -1,4 +1,4 @@
-"""Trade 文档分析完成度任务测试。"""
+"""AgentBase 文档分析完成度任务测试。"""
 
 from __future__ import annotations
 

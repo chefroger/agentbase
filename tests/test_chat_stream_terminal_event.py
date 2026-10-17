@@ -4,7 +4,7 @@
 
 客户做「公司网站诊断」时前端只显示 `⚠️ Agent 未返回有效回复`。真实原因是
 Hermes 的 `hermes_bootstrap.py` 把 server.py 重新 exec 到它自带的 store python
-（那里没有 trade 包），子进程 ModuleNotFoundError 退出，父进程 `raise RelaunchExit(1)`。
+（那里没有 agentbase 包），子进程 ModuleNotFoundError 退出，父进程 `raise RelaunchExit(1)`。
 
 `RelaunchExit` 继承 **SystemExit**，属 BaseException 而非 Exception，于是：
 

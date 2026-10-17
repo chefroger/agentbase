@@ -161,7 +161,7 @@ def create_first_workspace(
     )
 
     # Step 2: 将 agent_identity_md 写入 agentbase_workspaces（覆盖空值）
-    agentbase_workspace = _workspace_module.update_trade_workspace(
+    agentbase_workspace = _workspace_module.update_workspace_record(
         workspace_id=workspace["id"],
         agent_identity_md=agent_identity,
     )

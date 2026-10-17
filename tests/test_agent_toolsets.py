@@ -2,7 +2,7 @@
 
 ## 为什么需要这个文件（实测踩出来的）
 
-2026-09-29 用户让 Trade 识别界面截图，agent 没走视觉通道，而是自写 Swift 脚本调
+2026-09-29 用户让 AgentBase 识别界面截图，agent 没走视觉通道，而是自写 Swift 脚本调
 macOS Apple Vision 框架 OCR（会话 20260929_084156_4120c8）。当时的成因判断错了一次：
 我拿 `tools/vision_tools.py` 的 `check_vision_requirements()` 当依据，说「vision_analyze
 可用」—— 但那个函数是工具的**能力门控**（`check_fn`），只在工具已经由 toolset 启用之后
@@ -27,7 +27,7 @@ class TestDefaultEnabledToolsets:
         """`vision` 必须在默认列表里 —— 否则 agent 完全没有看图能力。
 
         Hermes 的 `vision_analyze` 注册在 `toolset="vision"` 下
-        （tools/vision_tools.py 的 registry.register），而 Trade 是**显式**传
+        （tools/vision_tools.py 的 registry.register），而 AgentBase 是**显式**传
         enabled_toolsets 的，不会继承 config.yaml 里的 toolsets。
         """
         from agentbase.helpers import DEFAULT_ENABLED_TOOLSETS

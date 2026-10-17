@@ -1,9 +1,9 @@
 """chat-memory 插件的工具实现。
 
 为何需要把 search_history 薄封装一次，而不是让 LLM 直接调 agentbase.chat_memory：
-- 该模块期望在**trade 进程内**被 import（从 agentbase.chat_memory 路径）—— 在 Hermes 进程里
-  import 是 Hermes 自己的 trade 安装副本（如果有），未必一致。
-- 通过插件 __init__.py 把 trade 注入到 Hermes 进程的 sys.path 后再 import；这里是**接缝**。
+- 该模块期望在**agentbase 进程内**被 import（从 agentbase.chat_memory 路径）—— 在 Hermes 进程里
+  import 是 Hermes 自己的 agentbase 安装副本（如果有），未必一致。
+- 通过插件 __init__.py 把 agentbase 注入到 Hermes 进程的 sys.path 后再 import；这里是**接缝**。
 """
 
 from __future__ import annotations
@@ -50,15 +50,15 @@ _RECENT_MONTHS_DESCRIPTION = (
 
 CHAT_MEMORY_LIST_SCHEMA = _schema(
     "chat_memory_list",
-    "查 trade 用户的对话历史（SQLite，按 workspace_id 严格隔离）。"
-    "**workspace_id 必填**——必须传用户在 system prompt 的 Trade Context 段里写明的那个数字，"
+    "查 agentbase 用户的对话历史（SQLite，按 workspace_id 严格隔离）。"
+    "**workspace_id 必填**——必须传用户在 system prompt 的 AgentBase Context 段里写明的那个数字，"
     "**不能**从用户消息推断，传错会读到其他公司的数据。"
     "时间范围默认 'all'；给具体枚举值能精确窗口；recent_days/recent_months 用来表达枚举外的相对区间。",
     {
         "workspace_id": {
             "type": "integer",
             "description": (
-                "当前会话的公司 ID。从 system prompt 的 'Trade Context' 段读取；"
+                "当前会话的公司 ID。从 system prompt 的 'AgentBase Context' 段读取；"
                 "**不要**让用户输入这个值。传错会读到其他公司数据（严重 bug）。"
             ),
         },
@@ -106,7 +106,7 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
     if not isinstance(workspace_id, int) or workspace_id <= 0:
         return _err(
             "workspace_id is required and must be a positive integer — "
-            "read it from the system prompt's 'Trade Context' section, "
+            "read it from the system prompt's 'AgentBase Context' section, "
             "do not invent a value or read it from the user's message."
         )
 
@@ -138,9 +138,9 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
         from agentbase.chat_memory import search_history
     except ImportError as exc:
         return _err(
-            f"trade package not importable from Hermes process: {exc}. "
-            "This usually means the chat-memory plugin was loaded outside a Trade context — "
-            "check that trade-bootstrap adds Trade to sys.path before Hermes loads plugins."
+            f"agentbase package not importable from Hermes process: {exc}. "
+            "This usually means the chat-memory plugin was loaded outside a AgentBase context — "
+            "check that agentbase-bootstrap adds AgentBase to sys.path before Hermes loads plugins."
         )
 
     try:
@@ -153,7 +153,7 @@ def handle_chat_memory_list(args: dict[str, Any], **_kw) -> str:
         )
     except Exception:
         # 异常不外抛（plugins/AGENTS.md: handler 失败返回 tool_error）—— 给 LLM 可读的错误
-        # 而不是 Python traceback（traceback 里有 trade 内部路径，泄漏内部）
+        # 而不是 Python traceback（traceback 里有 agentbase 内部路径，泄漏内部）
         return _err(f"search_history failed: {traceback.format_exc(limit=2)}")
 
     return _json({

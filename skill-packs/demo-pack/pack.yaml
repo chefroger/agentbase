@@ -1,0 +1,11 @@
+# 示例业务包：1 个中性 skill，用来验证「接入新业务 = 填配置 + 放包」。
+name: demo-pack
+version: 0.1.0
+description: AgentBase 示例业务包（1 个 skill）
+registry: registry.yaml
+
+doc_task_skills: []
+creative_skills: []
+
+skills:
+  - demo-skill

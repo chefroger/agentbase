@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — FastAPI application factory.
+AgentBase AI Assistant — FastAPI application factory.
 
 不依赖 Hermes 初始化副作用，可被 pytest 安全导入。
 """
@@ -101,9 +101,9 @@ def _is_gateway_running() -> bool:
 
 
 def _find_hermes_binary(*, executable: str | None = None) -> str:
-    """定位 hermes 可执行文件，**优先当前解释器所在目录（即 Trade 的 venv）**。
+    """定位 hermes 可执行文件，**优先当前解释器所在目录（即 AgentBase 的 venv）**。
 
-    为什么不能只查 PATH：Hermes 装在 Trade 自己的 venv 里，而
+    为什么不能只查 PATH：Hermes 装在 AgentBase 自己的 venv 里，而
       - Windows 的计划任务、Linux 的 systemd user unit 都不带 venv 的 bin/Scripts
       - macOS 的 launchd plist 恰好显式设了 PATH（含 venv/bin），所以开发机正常
 
@@ -131,7 +131,7 @@ def _find_hermes_binary(*, executable: str | None = None) -> str:
 
 
 def _ensure_gateway_running() -> None:
-    """如果 Gateway 未运行，启动它。Gateway 独立于 Trade 生命周期。"""
+    """如果 Gateway 未运行，启动它。Gateway 独立于 AgentBase 生命周期。"""
     if _is_gateway_running():
         print("  Hermes Gateway → running (cron scheduler active)")
         return
@@ -178,8 +178,8 @@ def _ensure_gateway_running() -> None:
         print(f"  ⚠️  Hermes Gateway 启动失败: {e}")
 
 
-def _get_trade_data_dir() -> Path:
-    """返回 Trade 数据目录（跨平台），与 database._get_db_path 逻辑一致。"""
+def _get_agent_data_dir() -> Path:
+    """返回 AgentBase 数据目录（跨平台），与 database._get_db_path 逻辑一致。"""
     agentbase_home = os.environ.get("AGENT_HOME", "").strip()
     if not agentbase_home:
         if os.name == "nt":
@@ -190,8 +190,8 @@ def _get_trade_data_dir() -> Path:
     return Path(agentbase_home) / "data"
 
 
-def _get_trade_home_path() -> Path:
-    """返回 Trade 根目录（不带 /data 后缀），与 _get_trade_data_dir 逻辑一致。"""
+def _get_agent_home_path() -> Path:
+    """返回 AgentBase 根目录（不带 /data 后缀），与 _get_agent_data_dir 逻辑一致。"""
     agentbase_home = os.environ.get("AGENT_HOME", "").strip()
     if not agentbase_home:
         if os.name == "nt":
@@ -269,7 +269,7 @@ def _write_version_marker() -> str:
     if not version:
         return ""
     try:
-        data_dir = _get_trade_data_dir()
+        data_dir = _get_agent_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "version.txt").write_text(version, encoding="utf-8")
     except Exception:
@@ -283,7 +283,7 @@ def _resolve_reported_version() -> str:
     以 version.txt（= 运行版本）为准；缺失时只读回退到 pyproject.toml，绝不写盘。
     """
     try:
-        _vf = _get_trade_data_dir() / "version.txt"
+        _vf = _get_agent_data_dir() / "version.txt"
         if _vf.is_file():
             _v = _vf.read_text(encoding="utf-8").strip()
             if _v:
@@ -302,7 +302,7 @@ def _kill_gateway() -> None:
     try:
         if os.name == "nt":
             # Windows: taskkill 不直接支持命令行匹配，回退到通过端口找进程
-            # （需 psutil；没有就跳过——下次启动时新 Trade 启动会判端口已占用而跳过启动新 Gateway）
+            # （需 psutil；没有就跳过——下次启动时新 AgentBase 启动会判端口已占用而跳过启动新 Gateway）
             try:
                 import psutil
                 for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -325,7 +325,7 @@ def _kill_gateway() -> None:
 
 
 def _perform_restart() -> None:
-    """终止当前 Trade 进程并以独立子进程启动新实例。
+    """终止当前 AgentBase 进程并以独立子进程启动新实例。
 
     核心策略：不杀自己（不可靠——uvicorn graceful shutdown 可能卡住）。
     而是通过独立 shell 子进程去等待、杀旧、启新。
@@ -367,7 +367,7 @@ def _perform_restart() -> None:
         except Exception:
             pass
 
-    agentbase_data = _get_trade_data_dir()
+    agentbase_data = _get_agent_data_dir()
     pid_file = agentbase_data / "agentbase.pid"
     old_pid = os.getpid()  # 直接用自己的 PID，不从文件读（更可靠）
 
@@ -418,11 +418,11 @@ def _perform_restart() -> None:
 
 # ── 运行环境重建（venv 的 Python 版本不对时）──────────────────────────────────
 #
-# 什么时候会用到：2026-10-14 之前装的机器，trade 的 venv 跑的是 Python 3.11~3.13，
+# 什么时候会用到：2026-10-14 之前装的机器，agentbase 的 venv 跑的是 Python 3.11~3.13，
 # 而 Hermes 从 v0.21.6 起只发 3.14 的依赖集（见 COMPATIBILITY.md）。这类机器升级
-# trade 之后必然进降级模式（agent 起不来），必须重建 venv 才能恢复。
+# agentbase 之后必然进降级模式（agent 起不来），必须重建 venv 才能恢复。
 #
-# **为什么不放在 update_trade() 里顺带做**：重建要停机 5~10 分钟。用户点「系统更新」
+# **为什么不放在 update_agentbase() 里顺带做**：重建要停机 5~10 分钟。用户点「系统更新」
 # 时被顺带停掉一次服务，体验上等于「点了个按钮软件就没了」——必须让他先看到说明、
 # 主动确认（界面上的「开始重建」按钮），这也是当初把「系统更新」按钮藏起来的同一个理由。
 #
@@ -431,9 +431,9 @@ def _perform_restart() -> None:
 # 「派一个不受自己存亡影响的子进程，然后退出」，重建与新服务的启动都归子进程。
 
 
-def _trade_runtime_dir() -> Path:
+def _runtime_dir() -> Path:
     """运行时仓库目录（`~/.agentbase/agentbase`）。"""
-    return _get_trade_home_path() / "agentbase"
+    return _get_agent_home_path() / "agentbase"
 
 
 def _venv_rebuild_script() -> tuple[list[str], str] | None:
@@ -441,13 +441,13 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
 
     子进程做的事，顺序不能变：
       1. 等 2 秒 —— 让本次 HTTP 响应先发回浏览器（否则前端只看到连接被掐断）
-      2. 杀掉当前 Trade 进程（腾出 venv 与端口）
+      2. 杀掉当前 AgentBase 进程（腾出 venv 与端口）
       3. 跑安装脚本重建运行环境（脚本本身是原子的，失败会保留旧 venv）
-      4. 无论成败都启动 Trade —— 失败了也要用旧环境把服务拉回来，
+      4. 无论成败都启动 AgentBase —— 失败了也要用旧环境把服务拉回来，
          否则用户面对的是一台彻底打不开的机器，比升级前还糟
     """
-    agentbase_dir = _trade_runtime_dir()
-    agentbase_home = _get_trade_home_path()
+    agentbase_dir = _runtime_dir()
+    agentbase_home = _get_agent_home_path()
     log_dir = agentbase_home / "logs"
     log_file = log_dir / "rebuild-venv.log"
 
@@ -496,7 +496,7 @@ def _venv_rebuild_script() -> tuple[list[str], str] | None:
         # 重建失败不阻止启动 —— 安装脚本是原子的，失败时旧 venv 原样可用
         f"if /bin/bash {sh!r}; then echo \"[rebuild] 重建成功\"; "
         f"else echo \"[rebuild] 重建失败（退出码 $?），将用原环境启动\"; fi; "
-        f"echo \"[rebuild] 启动 Trade\"; "
+        f"echo \"[rebuild] 启动 AgentBase\"; "
         f"exec {launcher!r} --no-browser"
     )
     return (["/bin/sh", "-c", script], str(log_file))
@@ -570,8 +570,8 @@ def _create_system_router() -> APIRouter:
     router = APIRouter(tags=["system"], dependencies=[Depends(require_session)])
 
     @router.post("/system/update")
-    def api_update_trade(background_tasks: BackgroundTasks, request: Request):
-        """一键更新 Trade 系统。
+    def api_update_system(background_tasks: BackgroundTasks, request: Request):
+        """一键更新 AgentBase 系统。
 
         升级成功后通过 BackgroundTasks 调度全量重启。
         返回 {"ok": bool, "version": str, "errors": list, "restart_scheduled": bool}
@@ -581,7 +581,7 @@ def _create_system_router() -> APIRouter:
             from fastapi import HTTPException
             raise HTTPException(status_code=429, detail="系统端点请求过于频繁，请稍后重试。")
 
-        from agentbase.post_install import update_trade as _do_update
+        from agentbase.post_install import update_agentbase as _do_update
         result = _do_update()  # 现在返回结构化 dict，不再依赖 _capture_output
 
         if result["ok"]:
@@ -591,20 +591,20 @@ def _create_system_router() -> APIRouter:
         return result
 
     @router.post("/system/backup")
-    def api_backup_trade(request: Request):
-        """备份 Trade 数据为 tar.gz。"""
+    def api_backup(request: Request):
+        """备份 AgentBase 数据为 tar.gz。"""
         _tk = request.headers.get("X-Hermes-Session-Token", "")
         if _tk and not _check_system_rate_limit(_tk[:16]):
             from fastapi import HTTPException
             raise HTTPException(status_code=429, detail="系统端点请求过于频繁，请稍后重试。")
 
         from agentbase.api.cron import _capture_output
-        from agentbase.post_install import backup_trade as _do_backup
+        from agentbase.post_install import backup_agentbase as _do_backup
         return _capture_output(_do_backup)
 
     @router.post("/system/restart")
-    def api_restart_trade(request: Request):
-        """重启 Trade 服务（跨平台）。
+    def api_restart_service(request: Request):
+        """重启 AgentBase 服务（跨平台）。
 
         委托给 _perform_restart()——含三层 PID 安全校验和 Gateway 协同重启。
         """
@@ -636,7 +636,7 @@ def _create_system_router() -> APIRouter:
             "version": state.get("version"),
             "python": state.get("python"),
             "reason": state.get("reason"),
-            # 补救方向：界面据此决定是显示「升级 Hermes」还是「重建 Trade 运行环境」。
+            # 补救方向：界面据此决定是显示「升级 Hermes」还是「重建 AgentBase 运行环境」。
             # 两种动作完全不同，给错会让用户白折腾。
             "fix": state.get("fix"),
             # 不可用时附带可照做的步骤（与终端提示共用同一份文案）
@@ -645,9 +645,9 @@ def _create_system_router() -> APIRouter:
 
     @router.post("/system/rebuild-venv")
     def api_rebuild_venv(request: Request):
-        """一键重建 Trade 的运行环境（venv 的解释器不是 3.14 时）。
+        """一键重建 AgentBase 的运行环境（venv 的解释器不是 3.14 时）。
 
-        为什么要有这个端点：这类机器（2026-10-14 前装的）升级 trade 后必然进降级
+        为什么要有这个端点：这类机器（2026-10-14 前装的）升级 agentbase 后必然进降级
         模式，而旧界面给用户的是一行 `curl … | bash` 让他自己去终端粘 —— 客群是
         电脑小白，这一行就等于「软件坏了」。改成按钮后，用户只需点一次。
 
@@ -664,7 +664,7 @@ def _create_system_router() -> APIRouter:
         from agentbase.bootstrap import hermes_compat_state
 
         state = hermes_compat_state()
-        if state.get("fix") != "rebuild_trade_venv":
+        if state.get("fix") != "rebuild_venv":
             return {
                 "ok": False,
                 "error": "当前运行环境不需要重建。",
@@ -678,7 +678,7 @@ def _create_system_router() -> APIRouter:
             }
         return {
             "ok": True,
-            "message": "重建已开始，Trade 会在完成后自动恢复（约 5~10 分钟）。",
+            "message": "重建已开始，AgentBase 会在完成后自动恢复（约 5~10 分钟）。",
         }
 
     return router
@@ -725,7 +725,7 @@ def create_app() -> FastAPI:
     # 挂载 system 路由（需要 session token）
     app.include_router(_create_system_router(), prefix="/api/agentbase")
 
-    # 挂载 Trade API 路由
+    # 挂载 AgentBase API 路由
     from agentbase.api import router as api_router
     app.include_router(api_router, prefix="/api/agentbase")
 
@@ -749,8 +749,8 @@ def create_app() -> FastAPI:
                 import urllib.request as _ur
                 try:
                     _req = _ur.Request(
-                        "https://api.github.com/repos/chefroger/smart-trade-ai/releases/latest",
-                        headers={"Accept": "application/vnd.github+json", "User-Agent": "Trade-Status/1.0"},
+                        "https://api.github.com/repos/chefroger/agentbase/releases/latest",
+                        headers={"Accept": "application/vnd.github+json", "User-Agent": "AgentBase-Status/1.0"},
                     )
                     with _ur.urlopen(_req, timeout=5) as _resp:
                         import json as _json
@@ -770,7 +770,7 @@ def create_app() -> FastAPI:
                 latest = None
 
         # 上次自检结果（首次启动后台跑，结果落盘）。只读，不影响状态码 ——
-        # 自检失败时 Trade 仍在运行，界面据此提示用户去修而不是把服务判死。
+        # 自检失败时 AgentBase 仍在运行，界面据此提示用户去修而不是把服务判死。
         try:
             from agentbase.doctor import load_doctor_result
 
@@ -797,7 +797,7 @@ def serve_app(app: FastAPI) -> None:
         _STATIC_DIR = Path(sys._MEIPASS) / "static"
     else:
         # 运行时目录（~/.agentbase/agentbase/static/）
-        _runtime_static = _get_trade_home_path() / "agentbase" / "static"
+        _runtime_static = _get_agent_home_path() / "agentbase" / "static"
         if _runtime_static.is_dir():
             _STATIC_DIR = _runtime_static
         else:
@@ -810,7 +810,7 @@ def serve_app(app: FastAPI) -> None:
 
     @app.get("/agentbase", response_class=HTMLResponse, include_in_schema=False)
     async def agentbase_chat_ui(request: Request):
-        """Serve the B2B chat interface with session token injected.
+        """Serve the chat interface with session token injected.
 
         非本机来源不下发 token（见 _client_may_receive_token）：token 是唯一凭据，
         而本页面无需鉴权即可获取它，绑定 0.0.0.0 时照常下发等于把 API 交给整个局域网。
@@ -818,7 +818,7 @@ def serve_app(app: FastAPI) -> None:
         """
         if not _APP_HTML.exists():
             return HTMLResponse(
-                content='<html><body style="font-family:sans-serif;padding:2rem;"><h1>Trade chat UI not found</h1><p>The frontend file <code>static/app.html</code> is missing.</p></body></html>',
+                content='<html><body style="font-family:sans-serif;padding:2rem;"><h1>AgentBase chat UI not found</h1><p>The frontend file <code>static/app.html</code> is missing.</p></body></html>',
                 status_code=404,
             )
         if not _client_may_receive_token(request):
@@ -843,7 +843,7 @@ def serve_app(app: FastAPI) -> None:
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    """`trade` console script 入口 + `python server.py` 入口。"""
+    """`agentbase` console script 入口 + `python server.py` 入口。"""
     import argparse
 
     parser = argparse.ArgumentParser(description="AgentBase")
@@ -855,7 +855,7 @@ def main() -> None:
 
     # 写入 PID 文件（0600 权限防止被其他用户篡改）
     import atexit
-    pid_dir = _get_trade_data_dir()
+    pid_dir = _get_agent_data_dir()
     pid_dir.mkdir(parents=True, exist_ok=True)
     pid_file = pid_dir / "agentbase.pid"
     pid_file.write_text(str(os.getpid()))
@@ -868,7 +868,7 @@ def main() -> None:
     _install_cors(app, args.port)
 
     # 降级模式（Hermes 不可用）不拉 Gateway：旧 Hermes 在当前 Python 上根本起不来，
-    # 拉起来也是立刻死，还会在日志里刷错误让用户以为 Trade 坏了
+    # 拉起来也是立刻死，还会在日志里刷错误让用户以为 AgentBase 坏了
     from agentbase.bootstrap import hermes_is_usable
     if not args.no_gateway and hermes_is_usable():
         _ensure_gateway_running()

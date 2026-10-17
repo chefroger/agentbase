@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — Skill Router（匹配引擎 + 注入逻辑）。
+AgentBase AI Assistant — Skill Router（匹配引擎 + 注入逻辑）。
 
 从 skill_registry 读取 skill 注册表数据，提供：
   - match_skill(query)  — 关键词匹配，返回匹配的 skill dict 或 None
@@ -216,7 +216,7 @@ def _norm(text: str) -> str:
 # 核心匹配：评分计算
 # ─────────────────────────────────────────────────────────────────────────────
 
-_EXPLICIT_SCORE = 9999  # 显式调用（如 "用 b2b-osint"）获得绝对最高分
+_EXPLICIT_SCORE = 9999  # 显式调用（如 "用 demo-alpha"）获得绝对最高分
 
 # 匹配权重
 _BOUNDARY_WEIGHT = 3   # 词边界匹配（如独立词"背景调查"）
@@ -273,7 +273,7 @@ def _score_skills(query: str) -> list[dict]:
     """对每个注册 skill 逐触发词计算匹配得分，返回排序后的评分列表。
 
     匹配策略：
-      1. 显式调用（"用 b2b-xxx"）→ 该 skill 得 _EXPLICIT_SCORE，直接返回
+      1. 显式调用（"用 skill 名"）→ 该 skill 得 _EXPLICIT_SCORE，直接返回
       2. 关键词匹配 → 逐触发词检查：
          - 词边界匹配 (\b{trigger}\b) → 3 分
          - 宽松子串匹配 ({trigger})    → 1 分
@@ -375,7 +375,7 @@ def match_skill(query: str) -> dict | None:
     需要全部匹配结果时使用 match_skills()。
 
     匹配策略（按优先级）：
-      1. 显式调用："用 b2b-email-intel" → 绝对优先（score=9999）
+      1. 显式调用："用 skill 名" → 绝对优先（score=9999）
       2. 关键词匹配：逐触发词评分，词边界 3 分 + 子串 1 分 → 取最高分
 
     参数：
@@ -627,7 +627,7 @@ def augment_query(
     参数：
         query:      用户原始输入
         skill_name: 可选的显式 skill 名称（传入时覆盖自动匹配）
-        workspace_id: 可选的公司 ID（用于 b2b-data-directory 等需要注入路径的 skill）
+        workspace_id: 可选的公司 ID（保留参数以兼容旧调用）
 
     返回：
         注入后的完整 query（含 [SKILL AUGMENTATION] 标记块）。
@@ -672,19 +672,6 @@ def augment_query(
                 qa_lines.append(f"**A{i+1}**: {r['a']}\n")
             qa_injection = "\n".join(qa_lines)
 
-    # 路径相关 skill：注入公司数据目录路径
-    data_dir_hint = ""
-    if name == "b2b-data-directory" and workspace_id:
-        from agentbase import workspace as _co
-        tc = _co.get_trade_workspace(workspace_id)
-        if tc and tc.get("data_dir"):
-            # slug 在 workspaces 表中，不在 agentbase_workspaces 表中
-            slug = _co.slug_from_id(workspace_id) or "unknown"
-            data_dir_hint = (
-                f"\n公司数据目录路径：{tc['data_dir']}\n"
-                f"完整路径示例：~/.agentbase/workspaces/{slug}/"
-            )
-
     # 组装注入块（含 QA 对精准匹配）
     injection = (
         f"\n"
@@ -692,7 +679,6 @@ def augment_query(
         f"## 技能触发：{name}\n"
         f"{SKILL_EXPLICIT_MARKER if skill_name else ''}\n"
         f"{augment}"
-        f"{data_dir_hint}"
         f"{qa_injection}"
         f"## 用户原始问题\n{query}\n"
         f"{SKILL_INJECTION_MARKER}\n"

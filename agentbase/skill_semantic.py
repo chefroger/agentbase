@@ -1,5 +1,5 @@
 """
-Smart Trade AI — 混合 Skill 路由：关键词快路径 + 语义兜底（优化路线 P0-1）。
+AgentBase — 混合 Skill 路由：关键词快路径 + 语义兜底（优化路线 P0-1）。
 
 背景：现有 skill_router  pure 关键词打分（词边界 3 分 / 子串 1 分），
 用户换个说法就匹配不上。本模块在其之上加一层语义检索：
@@ -255,7 +255,7 @@ def match_skill_hybrid(query: str) -> tuple[dict | None, list[dict]]:
       alternatives: 其余候选（供前端"是不是想找…"提示）。
 
     决策链：
-      1. 显式调用（用 b2b-xxx）→ 绝对优先（沿用原逻辑）；
+      1. 显式调用（用 skill 名）→ 绝对优先（沿用原逻辑）；
       2. 关键词 top 分 >= 高置信阈值 → 纯关键词结果；
       3. 否则语义检索 + 加权融合。
     任何异常 → 回退纯关键词，保证永不抛错。

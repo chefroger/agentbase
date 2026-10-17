@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — Cron 任务 API。
+AgentBase AI Assistant — Cron 任务 API。
 
 读取 Hermes cron 输出和 jobs.json，返回今日任务清单及已激活任务列表。
 """
@@ -50,20 +50,8 @@ def get_today_cron(_cid: int = Depends(require_workspace)):
 
     # 从 jobs.json 读取实际激活的任务
     active_jobs = _load_active_jobs()
-    if active_jobs:
-        tasks = active_jobs
-    else:
-        # 回退到内置标准任务列表
-        tasks = [
-            {"name": "早安简报", "time": "09:00"},
-            {"name": "邮件处理与跟进", "time": "09:00-10:30"},
-            {"name": "精准加人 (LinkedIn)", "time": "10:00-11:30"},
-            {"name": "评论互动与私信致谢", "time": "11:30-12:00"},
-            {"name": "LinkedIn 内容发布", "time": "15:30"},
-            {"name": "B2B 平台检查", "time": "15:30-17:00"},
-            {"name": "客户开发", "time": "13:30-15:30"},
-            {"name": "每日工作总结", "time": "17:00"},
-        ]
+    # 框架不内置业务任务表：没有 cron 任务时就是空列表
+    tasks = active_jobs or []
 
     completed = []
     pending = []
@@ -295,7 +283,7 @@ def _check_skills_rate_limit(key: str) -> bool:
 
 @router.post("/skills/update")
 def api_update_skills(request: Request):
-    """从 GitHub 拉取最新 B2B skill 定义。"""
+    """更新业务 skill pack。"""
     _tk = request.headers.get("X-Hermes-Session-Token", "")
     if _tk and not _check_skills_rate_limit(_tk[:16]):
         raise HTTPException(status_code=429, detail="Skills 更新请求过于频繁，请稍后重试。")

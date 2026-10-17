@@ -1,12 +1,12 @@
 """
-Trade AI Assistant — 系统数据备份与还原。
+AgentBase AI Assistant — 系统数据备份与还原。
 
 备份范围：
   - ~/.agentbase/data/agentbase.db（SQLite 数据库）
   - ~/.agentbase/workspaces/{slug}/（公司数据目录）
   - ~/.agentbase/prompts/（系统提示词文件）
   - ~/.hermes/memories/（Hermes 记忆文件）
-  - ~/.hermes/skills/b2b-*/（B2B skill 定义）
+  - ~/.hermes/skills/*/（skill 定义）
 
 输出格式：tar.gz 压缩包，文件名格式 agentbase-backup-YYYY-MM-DD-HHMM.tar.gz
 """
@@ -21,19 +21,19 @@ import tempfile
 from datetime import datetime as _real_datetime
 from pathlib import Path
 
-from agentbase.post_install.skills import _get_hermes_home, _get_trade_home
+from agentbase.post_install.skills import _get_hermes_home, get_agent_home
 
 # ── 系统备份 ──────────────────────────────────────────────────────────────
 
-def backup_trade(output_dir: str | None = None) -> str:
-    """备份 Trade 系统数据为 tar.gz 压缩包。
+def backup_agentbase(output_dir: str | None = None) -> str:
+    """备份 AgentBase 系统数据为 tar.gz 压缩包。
 
     备份内容：
       - SQLite 数据库（仅有该文件即是最小可恢复备份）
       - 公司数据目录（workspaces/）
       - 系统提示词（prompts/）
       - Hermes 记忆文件（.md / .json / .txt）
-      - B2B skill 定义（SKILL.md）
+      - skill 定义（SKILL.md）
 
     Args:
         output_dir: 输出目录（默认桌面）
@@ -57,7 +57,7 @@ def backup_trade(output_dir: str | None = None) -> str:
     filename = f"agentbase-backup-{timestamp}.tar.gz"
     out_path = Path(output_dir) / filename
 
-    agentbase_home = _get_trade_home()
+    agentbase_home = get_agent_home()
     hermes_home = _get_hermes_home()
 
     # 收集需要打包的文件路径列表
@@ -94,11 +94,11 @@ def backup_trade(output_dir: str | None = None) -> str:
                     (f, f".hermes/memories/{f.relative_to(memories_dir)}")
                 )
 
-    # 5) B2B skill 定义（每个 b2b-* 目录下的 SKILL.md）
+    # 5) skill 定义（每个 skill 目录下的 SKILL.md）
     skills_dir = hermes_home / "skills"
     if skills_dir.is_dir():
         for skill_dir in skills_dir.iterdir():
-            if skill_dir.is_dir() and skill_dir.name.startswith("b2b-"):
+            if skill_dir.is_dir():
                 skill_md = skill_dir / "SKILL.md"
                 if skill_md.is_file():
                     sources.append(
@@ -122,15 +122,15 @@ def backup_trade(output_dir: str | None = None) -> str:
 
 # ── 系统还原 ──────────────────────────────────────────────────────────────
 
-def restore_trade(backup_file: str = "") -> str:
+def restore_agentbase(backup_file: str = "") -> str:
     """从 tar.gz 备份文件还原系统数据。
 
     还原步骤：
       1. 解压 tar.gz 到临时目录
       2. SQLite 完整性检查（PRAGMA integrity_check）
-      3. 备份当前数据（trade-before-restore-{timestamp}.db）
+      3. 备份当前数据（agentbase-before-restore-{timestamp}.db）
       4. 替换 data/ + workspaces/
-      5. 重启 Trade 服务
+      5. 重启 AgentBase 服务
 
     Args:
         backup_file: tar.gz 备份文件路径
@@ -142,7 +142,7 @@ def restore_trade(backup_file: str = "") -> str:
     if not src.is_file():
         return f"✗ 备份文件不存在: {backup_file}"
 
-    agentbase_home = _get_trade_home()
+    agentbase_home = get_agent_home()
 
     # 步骤 1: 解压到临时目录（使用内建 tarfile，跨平台兼容）
     print(f"[restore] 解压 {src.name} ...")
@@ -163,7 +163,7 @@ def restore_trade(backup_file: str = "") -> str:
 
     # 步骤 2: 定位备份内容的根目录
     #
-    # 备份写入的 arcname 带 `.agentbase/` 前缀（见本文件 backup_trade 的
+    # 备份写入的 arcname 带 `.agentbase/` 前缀（见本文件 backup_agentbase 的
     # ".agentbase/data/agentbase.db"、".agentbase/{rel}"）。解压后内容在
     # `tmp_dir/.agentbase/...`，而历史上还原代码找的是 `tmp_dir/workspaces`、
     # `tmp_dir/data/agentbase.db` —— 永远不存在，于是 if exists() 静默跳过、
@@ -241,7 +241,7 @@ def restore_trade(backup_file: str = "") -> str:
 
     # 步骤 7: 重启服务
     print("[restore] 数据已还原，正在重启服务 ...")
-    _restart_trade_service()
+    _restart_service()
 
     msg = f"✓ 已从 {src.name} 还原（{'、'.join(restored)}），服务已重启"
     if missing:
@@ -268,8 +268,8 @@ def _resolve_backup_root(tmp_dir: Path) -> Path:
 
 # ── 服务重启（跨平台） ────────────────────────────────────────────────────
 
-def _restart_trade_service() -> None:
-    """重启 Trade 服务进程（跨平台实现）。
+def _restart_service() -> None:
+    """重启 AgentBase 服务进程（跨平台实现）。
 
     重启策略（按优先级）：
       1. 通过 PID 文件查找旧进程 → kill + 重新启动（推荐）
@@ -287,7 +287,7 @@ def _restart_trade_service() -> None:
     sys_name = platform.system()
 
     # ── 策略 1：通过 PID 文件终止旧进程，然后启动新进程 ──
-    agentbase_home = _get_trade_home()
+    agentbase_home = get_agent_home()
     pid_file = agentbase_home / "data" / "agentbase.pid"
     old_pid = None
     if pid_file.is_file():
@@ -333,7 +333,7 @@ def _restart_trade_service() -> None:
             except OSError:
                 pass
 
-    # ── 策略 2：重新启动 Trade（继承原始启动参数） ──
+    # ── 策略 2：重新启动 AgentBase（继承原始启动参数） ──
     cmd = _build_restart_command()
     try:
         kwargs = {
@@ -345,7 +345,7 @@ def _restart_trade_service() -> None:
         else:
             kwargs["start_new_session"] = True  # 独立进程会话，脱离父进程生命周期
         _sp.Popen(cmd, **kwargs)
-        print("  ↻ Trade 服务已重新启动")
+        print("  ↻ AgentBase 服务已重新启动")
         return
     except Exception as e:
         print(f"  ⚠ 自动重启失败: {e}")
@@ -375,7 +375,7 @@ def _build_restart_command() -> list[str]:
     **不要用 `-m agentbase`**：那需要 `agentbase/__main__.py`，而本仓库没有这个文件
     （console script 是指向 `agentbase.cli:run_server` 的）。历史上这里返回
     `-m agentbase`，子进程以 `No module named agentbase.__main__` 秒退，但 Popen 本身
-    成功 → 照样打印「↻ Trade 服务已重新启动」，用户被告知服务已起、实际已下线。
+    成功 → 照样打印「↻ AgentBase 服务已重新启动」，用户被告知服务已起、实际已下线。
     """
     # 通过 sys.argv 推断启动方式
     if len(sys.argv) > 0 and "server.py" in sys.argv[0]:
@@ -384,7 +384,7 @@ def _build_restart_command() -> list[str]:
         if server_py.is_file():
             return [sys.executable, str(server_py)]
 
-    # 默认：调用包内的真实入口（等价于 console script `trade`）
+    # 默认：调用包内的真实入口（等价于 console script `agentbase`）
     return [sys.executable, "-c", "from agentbase.cli import run_server; run_server()"]
 
 
@@ -404,7 +404,7 @@ def _try_launchd_restart(label: str) -> None:
             [_launchctl, "load", str(plist)],
             capture_output=True, timeout=10,
         )
-        print("  ↻ Trade 后台服务已重新加载（launchd）")
+        print("  ↻ AgentBase 后台服务已重新加载（launchd）")
     except Exception:
         pass  # launchd 失败时静默 fallthrough
 
@@ -417,15 +417,15 @@ def _try_systemd_restart(label: str) -> None:
     ):
         r = _sp.run(cmd, capture_output=True, timeout=10)
         if r.returncode == 0:
-            print("  ↻ Trade 后台服务已重新启动（systemd）")
+            print("  ↻ AgentBase 后台服务已重新启动（systemd）")
             return
 
 
 def _print_manual_restart_instructions(sys_name: str, label: str) -> None:
     """当所有自动重启方式都失败时，打印明确的手动操作指引。"""
-    print("  💡 Trade 代码已更新。请重启 Trade 以应用更改：")
+    print("  💡 AgentBase 代码已更新。请重启 AgentBase 以应用更改：")
     if sys_name == "Windows":
-        print("     关闭当前 Trade 窗口后重新运行 agentbase 命令")
+        print("     关闭当前 AgentBase 窗口后重新运行 agentbase 命令")
     elif sys_name == "Darwin":
         print(f"     launchctl unload ~/Library/LaunchAgents/{label}.plist")
         print(f"     launchctl load ~/Library/LaunchAgents/{label}.plist")

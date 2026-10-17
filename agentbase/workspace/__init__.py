@@ -20,12 +20,12 @@ from agentbase.workspace.crud import (
     get,
     get_agent_identity,
     get_by_slug,
-    get_trade_workspace,
+    get_workspace_record,
     list_all,
     purge,
     slug_from_id,
     update,
-    update_trade_workspace,
+    update_workspace_record,
 )
 
 # 从 workdir 模块导出工作目录管理的公开函数和常量
@@ -51,8 +51,8 @@ __all__ = [
     "delete",
     "purge",
     # agentbase_workspaces 表 CRUD
-    "get_trade_workspace",
-    "update_trade_workspace",
+    "get_workspace_record",
+    "update_workspace_record",
     "get_agent_identity",
     # 工作目录管理
     "_WORK_DIR_CATEGORIES",

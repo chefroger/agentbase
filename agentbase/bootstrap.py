@@ -30,7 +30,7 @@ _warnings.filterwarnings("ignore", message=r".*Could not import tool module.*")
 _warnings.filterwarnings("ignore", message=r".*No module named 'hermes_cli\.tools'.*")
 
 
-# ── sys.path 调整：Trade 包优先于 Hermes ──────────────────────────────────
+# ── sys.path 调整：AgentBase 包优先于 Hermes ──────────────────────────────────
 # Hermes 也有 `agentbase/` 包；我们的 `agentbase/` 必须优先。
 # NOTE: 当 hermes-agent 作为独立 pip 包发布后，此块可移除。
 def _resolve_hermes_checkout() -> str:
@@ -83,18 +83,18 @@ def _adjust_sys_path():
     # PyInstaller 打包后 sys.frozen=True，不需要 sys.path 调整
     if getattr(sys, "frozen", False):
         return
-    _trade_root = str(Path(__file__).resolve().parent.parent)
-    if _trade_root not in sys.path:
-        sys.path.insert(0, _trade_root)
+    _pkg_root = str(Path(__file__).resolve().parent.parent)
+    if _pkg_root not in sys.path:
+        sys.path.insert(0, _pkg_root)
 
     _hermes_checkout = _resolve_hermes_checkout()
     if _hermes_checkout and _hermes_checkout not in sys.path:
-        # Hermes 放在第 1 位，Trade 仍在第 0 位（避免 agentbase/ 包名冲突）
+        # Hermes 放在第 1 位，AgentBase 仍在第 0 位（避免 agentbase/ 包名冲突）
         sys.path.insert(1, _hermes_checkout)
 
     # ── HERMES_HOME 统一指向 AGENT_HOME（任务书 v2 §10.7）────────────────
     # vendored Hermes 的数据根必须落在 ~/.agentbase，**永不读写用户的 ~/.hermes**。
-    # 这里**强制覆盖**继承来的 HERMES_HOME：旧 trade 启动器可能把它设成 ~/.hermes，
+    # 这里**强制覆盖**继承来的 HERMES_HOME：旧 agentbase 启动器可能把它设成 ~/.hermes，
     # 放行就会串到用户自己的 Hermes 数据。
     os.environ["HERMES_HOME"] = _agent_home()
 
@@ -123,14 +123,14 @@ def dispatch_subcommands() -> bool:
         return False
 
     if cmd == "update":
-        from agentbase.post_install import update_trade
-        update_trade()
+        from agentbase.post_install import update_agentbase
+        update_agentbase()
     elif cmd == "backup":
-        from agentbase.post_install import backup_trade
-        print(backup_trade())
+        from agentbase.post_install import backup_agentbase
+        print(backup_agentbase())
     elif cmd == "open":
-        from agentbase.opener import open_trade
-        print(open_trade())
+        from agentbase.opener import open_agentbase
+        print(open_agentbase())
     elif cmd == "workspace":
         from agentbase.workspace_admin import main as workspace_main
         sys.exit(workspace_main(sys.argv[2:]))
@@ -159,7 +159,7 @@ def dispatch_subcommands() -> bool:
 
 
 # ── Hermes 共存状态（启动降级用）─────────────────────────────────────────
-# 旧版 Hermes 与当前 Python 互斥时，Trade 不能再像以前那样直接 `sys.exit(1)`：
+# 旧版 Hermes 与当前 Python 互斥时，AgentBase 不能再像以前那样直接 `sys.exit(1)`：
 # 桌面端（desktop）会开出一个空白窗口，用户一句解释都看不到。改为「记录状态 +
 # 降级启动」——跳过所有会碰 Hermes 的步骤，让服务照常起来，由界面显示升级面板。
 _hermes_compat_state: dict | None = None
@@ -180,8 +180,8 @@ def hermes_is_usable() -> bool:
 
     两种明确不可用：
       - `too_old`        —— Hermes 版本低于共存下限（去升级 Hermes）
-      - `python_too_old` —— Hermes 够新但它需要 3.14，而 Trade 的解释器更老
-                            （去重装 Trade；升级 Hermes 在这里毫无用处）
+      - `python_too_old` —— Hermes 够新但它需要 3.14，而 AgentBase 的解释器更老
+                            （去重装 AgentBase；升级 Hermes 在这里毫无用处）
     「未知」按可用处理（识别失败不等于不兼容，与既有门禁口径一致，避免误拦可用环境）。
     """
     return hermes_compat_state().get("verdict") not in ("too_old", "python_too_old")
@@ -210,13 +210,13 @@ def check_hermes_version() -> bool:
         return False
 
     if verdict == "python_too_old":
-        # 问题在 Trade 这一侧（venv 太老），升级 Hermes 解决不了 —— 所以给的是重装指引。
+        # 问题在 AgentBase 这一侧（venv 太老），升级 Hermes 解决不了 —— 所以给的是重装指引。
         # 这条分支的存在本身就是一次事故的产物：漏掉它会让界面只显示
         # 「AI Agent 模块未加载」，用户完全无从下手。
         from agentbase.hermes_compat import incompatible_rebuild_steps
 
-        print(f"  ✗ Trade 的运行环境需要重建：{state.get('reason')}")
-        print(f"    Hermes: {state.get('version') or '未知'}    Trade 的 Python: {state.get('python')}")
+        print(f"  ✗ AgentBase 的运行环境需要重建：{state.get('reason')}")
+        print(f"    Hermes: {state.get('version') or '未知'}    AgentBase 的 Python: {state.get('python')}")
         for line in incompatible_rebuild_steps():
             print(f"    {line}")
         return False
@@ -286,7 +286,7 @@ def check_native_architecture(auto_repair: bool = True) -> bool:
 
     在 Apple Silicon (arm64) Mac 上尤为重要：如果 Python 是 x86_64 (Rosetta)，
     pip 会安装 x86_64 的 C 扩展（pydantic-core, psutil 等），导致 Hermes 无法
-    加载，Trade API 返回 422。
+    加载，AgentBase API 返回 422。
 
     当 auto_repair=True 且找到 arm64 Python 时，自动重启进程（execve），用户无感。
 
@@ -419,14 +419,14 @@ def _disable_hermes_lazy_installs() -> None:
     必须在**任何 Hermes 导入之前**生效 —— 子命令（doctor/osint/workspace/update）与
     版本检查都发生在 `load_env_and_set_yolo()` 之前，而新版本 Hermes 会在 import 时
     发现「当前解释器 ≠ 托管解释器」并重拉进程（runpy 重跑当前命令）；重拉环境里没有
-    trade 包，进程直接以 ModuleNotFoundError 崩掉（2026-10-14 实测：本机升级到
+    agentbase 包，进程直接以 ModuleNotFoundError 崩掉（2026-10-14 实测：本机升级到
     Hermes main 后 `agentbase doctor` 每次 2 秒内即崩，见 COMPATIBILITY.md）。
     `load_env_and_set_yolo()` 在 dotenv 之后会**再设一次**（防用户的 .env 顶掉）。
     """
     os.environ["HERMES_DISABLE_LAZY_INSTALLS"] = "1"
 
 
-def _trade_site_packages() -> str:
+def _agentbase_site_packages() -> str:
     """当前解释器的 site-packages 目录（取不到返回空串）。"""
     try:
         if os.name == "nt":
@@ -453,23 +453,23 @@ def _trade_site_packages() -> str:
     return ""
 
 
-def _activate_hermes_env_and_restore_trade_paths() -> None:
-    """显式触发 Hermes 的 pm 激活，然后立刻把 Trade 自己的 site-packages 补回 sys.path。
+def _activate_hermes_env_and_restore_paths() -> None:
+    """显式触发 Hermes 的 pm 激活，然后立刻把 AgentBase 自己的 site-packages 补回 sys.path。
 
     **为什么必须显式触发**：`pm/environments.py::activate_dependencies()` 在
     `import hermes_bootstrap` 时把 `sys.path` 整体换成 Hermes 托管环境的 site-packages，
-    **按目录名剥掉进程原有的全部 site-packages**（Trade 的依赖就此全灭），并覆盖
+    **按目录名剥掉进程原有的全部 site-packages**（AgentBase 的依赖就此全灭），并覆盖
     `PYTHONPATH`。让它「晚一点在某个 import 里发生」会让失败点飘忽 —— 历史事故就是
     agent 线程静默死亡、前端只显示「Agent 未返回有效回复」。所以这里主动触发一次，
     紧接着把路径补回去，让时序可预期。
 
-    **为什么补在末尾**：Trade 与 Hermes 的依赖版本是 lockstep 的（`requirements.txt`
+    **为什么补在末尾**：AgentBase 与 Hermes 的依赖版本是 lockstep 的（`requirements.txt`
     与上游 pin 对齐），同版本时顺序无关；一旦漂移，让 **Hermes 的托管代际优先胜出**，
-    避免 Trade 的老 pin 把 Hermes 需要的版本压下去。隔离实测确认 `openai` 来自托管代际。
+    避免 AgentBase 的老 pin 把 Hermes 需要的版本压下去。隔离实测确认 `openai` 来自托管代际。
 
     只在 Hermes 可用时调用 —— 降级模式（版本过旧）下绝不该 import Hermes。
     """
-    agentbase_site = _trade_site_packages()
+    agentbase_site = _agentbase_site_packages()
     try:
         import hermes_bootstrap  # noqa: F401 — 导入的副作用即目的
     except Exception:
@@ -477,23 +477,23 @@ def _activate_hermes_env_and_restore_trade_paths() -> None:
         return
 
     # **唯一会「静默降级」的路径**：解析不到自己的 site-packages 时，下面两段补齐
-    # 全部跳过 —— 进程表面还能跑，实际只剩 Hermes 的依赖（Trade 的被激活剥掉了）。
+    # 全部跳过 —— 进程表面还能跑，实际只剩 Hermes 的依赖（AgentBase 的被激活剥掉了）。
     # 2026-10-14 那次事故的现场就是这样：界面只显示「AI Agent 模块未加载」、
     # 完全指不到真因。所以这里必须响亮报出来，不能一声不响地继续。
     if not agentbase_site:
         print(
-            "  ✗ 无法解析 Trade 自身的 site-packages —— Hermes 激活后可能已剥离 "
-            "Trade 的依赖。请把这一行发给技术支持。"
+            "  ✗ 无法解析 AgentBase 自身的 site-packages —— Hermes 激活后可能已剥离 "
+            "AgentBase 的依赖。请把这一行发给技术支持。"
         )
 
-    # 激活剥掉了 Trade 的 site-packages → 补回（放末尾，让 Hermes 的依赖优先）。
+    # 激活剥掉了 AgentBase 的 site-packages → 补回（放末尾，让 Hermes 的依赖优先）。
     # 注意这段是**无条件**执行的：即使 hermes_bootstrap 已在 sys.modules 里、
     # 这次 import 没有任何副作用，也要确认路径在位（幂等）。
     if agentbase_site and agentbase_site not in sys.path:
         sys.path.append(agentbase_site)
 
-    # 激活也用托管环境的路径覆盖了 PYTHONPATH；不补回来的话，Trade 起的子进程
-    # （如走 holehe 的 OSINT Layer 1）会找不到 Trade 自己的依赖
+    # 激活也用托管环境的路径覆盖了 PYTHONPATH；不补回来的话，AgentBase 起的子进程
+    # （如走 holehe 的 OSINT Layer 1）会找不到 AgentBase 自己的依赖
     if agentbase_site:
         existing = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
         if agentbase_site not in existing:
@@ -514,9 +514,9 @@ def load_env_and_set_yolo():
 
     # 禁用 Hermes 的「借用启动」：否则 `from run_agent import AIAgent` 会连带执行
     # hermes_bootstrap.py，它发现当前解释器不是 Hermes 的 store 解释器后，会把
-    # server.py 重新 exec 到 Hermes 自带的 Python —— 那个解释器里没有 trade 包，
+    # server.py 重新 exec 到 Hermes 自带的 Python —— 那个解释器里没有 agentbase 包，
     # 于是子进程以 ModuleNotFoundError 退出，父进程 raise RelaunchExit(1)。
-    # RelaunchExit 继承 SystemExit（BaseException），Trade 的 except Exception 抓不到，
+    # RelaunchExit 继承 SystemExit（BaseException），AgentBase 的 except Exception 抓不到，
     # agent 线程静默死亡，前端只会看到「Agent 未返回有效回复」（客户机实测，2026-10-08）。
     #
     # 这是上游正式的 sealed-venv 开关（Hermes tools/lazy_deps.py）。作用域仅限本进程树，
@@ -559,7 +559,7 @@ def _local_skills_sync():
     """仅做本地 hash 比对同步，不访问 GitHub。
 
     源目录见 _skill_source_roots()。**判定一个目录是不是 skill 只看它有没有
-    SKILL.md** —— 旧版写死 b2b-/auto- 前缀，等于把业务知识焊进框架。
+    SKILL.md** —— 旧版写死业务前缀，等于把业务知识焊进框架。
     """
     from hermes_constants import get_hermes_home
 
@@ -595,7 +595,7 @@ def _local_skills_sync():
         print("  Skills: up-to-date")
 
 
-def sync_b2b_skills():
+def sync_skills():
     """启动时从本地复制 skills 到 Hermes（仅 hash 比对，不访问网络）。
 
     安装/升级时 install-agentbase-skills 已处理初始复制，
@@ -608,7 +608,7 @@ def sync_b2b_skills():
 # ── Hermes 插件同步（chat-memory） ────────────────────────────────────────
 
 def _local_chat_memory_plugin_source() -> Path | None:
-    """定位 chat-memory 插件的"源目录"（即 trade 仓库内自带的那个副本）。
+    """定位 chat-memory 插件的"源目录"（即 agentbase 仓库内自带的那个副本）。
 
     三个候选位置（按"该用谁"优先级）：
       1. PyInstaller _MEIPASS（打包后的运行目录）
@@ -624,16 +624,16 @@ def _local_chat_memory_plugin_source() -> Path | None:
         if cand.is_dir():
             return cand
 
-    _trade_home = os.environ.get("AGENT_HOME", "").strip()
-    if not _trade_home:
+    _agent_home = os.environ.get("AGENT_HOME", "").strip()
+    if not _agent_home:
         if os.name == "nt":
             _local = os.environ.get(
                 "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
             )
-            _trade_home = str(Path(_local) / "agentbase")
+            _agent_home = str(Path(_local) / "agentbase")
         else:
-            _trade_home = str(Path.home() / ".agentbase")
-    cand = Path(_trade_home) / "agentbase" / "agentbase" / "hermes_chat_memory_plugin"
+            _agent_home = str(Path.home() / ".agentbase")
+    cand = Path(_agent_home) / "agentbase" / "agentbase" / "hermes_chat_memory_plugin"
     if cand.is_dir():
         return cand
 
@@ -644,19 +644,19 @@ def _local_chat_memory_plugin_source() -> Path | None:
 
 
 def sync_chat_memory_plugin() -> None:
-    """把 trade 自带的 chat-memory 插件部署到 ~/.hermes/plugins/chat-memory/。
+    """把 agentbase 自带的 chat-memory 插件部署到 ~/.hermes/plugins/chat-memory/。
 
     部署是**幂等**的：文件存在且内容一致就不写。安装脚本与每次 setup() 都调它，
     所以旧版升级时这步会自动让用户的 Hermes 看到新插件。
 
-    副本来自 trade 仓库内的 <repo>/agentbase/hermes_chat_memory_plugin/（_local_chat_memory_plugin_source），
+    副本来自 agentbase 仓库内的 <repo>/agentbase/hermes_chat_memory_plugin/（_local_chat_memory_plugin_source），
     目标位置 ~/.hermes/plugins/chat-memory/。与 _local_skills_sync 同样的"hash 比对、逐文件复制"，
     但因为是**目录级**（不是文件级），且插件要求 plugin.yaml + __init__.py + tools.py 三件同存，
     这里用"全文件 hash 集合相等"的判断避免误判。
     """
     src_root = _local_chat_memory_plugin_source()
     if src_root is None:
-        # 开发环境改了 trade 的目录结构（极少见）；不抛、不影响主流程
+        # 开发环境改了 agentbase 的目录结构（极少见）；不抛、不影响主流程
         print("  chat-memory plugin: source not found, skipping")
         return
 
@@ -716,7 +716,7 @@ def sync_chat_memory_plugin() -> None:
 
 # ── 写 ~/.hermes/config.yaml：仅追加 chat-memory 到 enabled ───────────────
 
-# 重要约束：trade 在 0.21.6+ 起以"插件形式"为 Hermes 提供 chat_memory_list 工具。
+# 重要约束：agentbase 在 0.21.6+ 起以"插件形式"为 Hermes 提供 chat_memory_list 工具。
 # 插件是 opt-in —— 不在 config.yaml 的 plugins.enabled 里写进去，Hermes 不会加载。
 # 这函数只**追加**两个键（plugins.enabled 与 enabled_toolsets），其它键一行不碰：
 # ① 用文件级 read_text/write_text（不走 hermes_cli.config.load_config，避免它的副作用
@@ -850,8 +850,8 @@ def _patch_yaml_list(text: str, key_path: tuple[str, ...], value: str) -> str:
 _CHAT_MEMORY_PLUGIN_KEY = "chat-memory"
 # 没有配置文件时写下的最小骨架（**只**写这一个键，不碰工具集键）
 _FRESH_CONFIG_SKELETON = (
-    "# Written by trade-bootstrap on first install.\n"
-    "# Trade only touches plugins.enabled below; everything else in this file is yours.\n"
+    "# Written by agentbase-bootstrap on first install.\n"
+    "# AgentBase only touches plugins.enabled below; everything else in this file is yours.\n"
     "plugins:\n"
     "  enabled: [chat-memory]\n"
 )
@@ -867,7 +867,7 @@ def ensure_chat_memory_plugin_enabled() -> None:
 
     **为什么不管工具集键**（enabled_toolsets / default_toolsets）：启用插件工具集的键名
     取决于用户自己的 Hermes 配置写法（`default_toolsets` / `enabled_toolsets` /
-    per-profile 各有不同），trade 无法可靠推断；写错只会在用户配置里留下无用段。所以
+    per-profile 各有不同），agentbase 无法可靠推断；写错只会在用户配置里留下无用段。所以
     这里只做「plugins.enabled」这一件确定的事。
 
     安全约束（这是写**用户的**配置，安全性优先于功能）：
@@ -876,7 +876,7 @@ def ensure_chat_memory_plugin_enabled() -> None:
       - `plugins.disabled` 含 chat-memory → 直接跳过（deny-list 总是赢）；
       - 文本级追加（不重新 dump yaml）→ 保留用户的注释、键顺序、缩进；
       - 写盘前留 `.bak`（只留最旧一份，多轮调用不反复覆盖）；
-      - 任何失败只打印警告 —— 写不了配置不能挡住 trade 启动（插件降级为"不生效"）。
+      - 任何失败只打印警告 —— 写不了配置不能挡住 agentbase 启动（插件降级为"不生效"）。
 
     降级模式（Hermes 不可用）也会调它：不碰 Hermes、只写一个 yaml，与"现在能不能加载
     插件"解耦 —— 先把配置写好，等下次 Hermes 启动就生效。
@@ -1077,9 +1077,9 @@ def prepare_hermes_import_paths() -> bool:
     2026-10-15 干净机器实测踩到的两个坑都源于「漏调这一步」：
 
       1. 不调 `_adjust_sys_path()` 就 import → `No module named 'run_agent'`。
-         Hermes 不再装进 Trade 的 venv（见 COMPATIBILITY.md 的「当前策略」），
+         Hermes 不再装进 AgentBase 的 venv（见 COMPATIBILITY.md 的「当前策略」），
          全靠这里把 checkout 插进 sys.path。
-      2. 不调 `_activate_hermes_env_and_restore_trade_paths()` → Hermes 的 pm 激活会
+      2. 不调 `_activate_hermes_env_and_restore_paths()` → Hermes 的 pm 激活会
          按目录名把 venv 的 site-packages 从 sys.path 踢掉且**不会自己恢复**，于是
          后续 `import holehe` / `sqlite_vec` 全部误报「未安装」（其实装了）。
 
@@ -1091,12 +1091,12 @@ def prepare_hermes_import_paths() -> bool:
     usable = hermes_is_usable()
     # 只有明确可用才触发激活：过旧时 import Hermes 只会崩在缺依赖上
     if usable:
-        _activate_hermes_env_and_restore_trade_paths()
+        _activate_hermes_env_and_restore_paths()
     return usable
 
 
 def setup():
-    """执行 Trade 启动所需的所有引导步骤。
+    """执行 AgentBase 启动所需的所有引导步骤。
 
     调用顺序：
     0. Hermes 懒加载守卫（必须最先 —— 它只是设个环境变量，而后面每步都可能 import Hermes）
@@ -1114,7 +1114,7 @@ def setup():
     没有任何人恢复，导致 doctor 自己后面的依赖检查全部误报「未安装」。
 
     第 3 步为什么改成降级而不是退出：桌面端（desktop）先起服务线程再开窗口，
-    一旦在起服务前退出，用户只会看到一个空白窗口、一句解释都没有 —— 而 Trade 的
+    一旦在起服务前退出，用户只会看到一个空白窗口、一句解释都没有 —— 而 AgentBase 的
     用户群基本是电脑小白，这等于让他们以为软件坏了。改为「记录状态 + 跳过碰 Hermes
     的步骤 + 照常起服务」，界面才能显示升级面板把他们引到正确的动作上。
     """
@@ -1146,8 +1146,8 @@ def setup():
         # 旧 Hermes + 新 Python 下都会崩，服务就起不来了，升级面板也就无从显示。
         # 两种不可用的**用户动作完全不同**，提示必须分开，否则会把用户引到白折腾的路上
         _fix = hermes_compat_state().get("fix")
-        if _fix == "rebuild_trade_venv":
-            print("  ⚠️ Trade 的运行环境过旧，本次以降级模式启动：界面会给出重建步骤。")
+        if _fix == "rebuild_venv":
+            print("  ⚠️ AgentBase 的运行环境过旧，本次以降级模式启动：界面会给出重建步骤。")
         else:
             print("  ⚠️ Hermes 不可用，本次以降级模式启动：界面会引导你升级 Hermes。")
         # 剩下这几步本意是「不碰 Hermes、照常跑以保持功能完整」，但它们**间接**仍会
@@ -1155,7 +1155,7 @@ def setup():
         # `ensure_document_deps` 会试 Hermes 的 lazy_deps）。这里逐个兜住：
         # 降级模式唯一不可违反的不变量是**服务必须起得来** —— 任一可选项失败都绝不能
         # 把升级界面挡在门外，那会让用户彻底无从下手。
-        for _optional_step in (sync_b2b_skills, sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled, ensure_document_deps, ensure_desktop_integration):
+        for _optional_step in (sync_skills, sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled, ensure_document_deps, ensure_desktop_integration):
             try:
                 _optional_step()
             except Exception as exc:  # noqa: BLE001 — 见上：降级模式必须走到起服务
@@ -1165,7 +1165,7 @@ def setup():
         return
 
     load_env_and_set_yolo()
-    sync_b2b_skills()
+    sync_skills()
     sync_chat_memory_plugin()
     ensure_chat_memory_plugin_enabled()
     ensure_document_deps()
@@ -1176,12 +1176,12 @@ def setup():
 def start_doctor_if_needed() -> None:
     """首次启动跑一次端到端自检；未通过则每次启动重试。
 
-    为什么放在启动路径：客户的安装流程是「装 Hermes → 让 Hermes 装 Trade」，
+    为什么放在启动路径：客户的安装流程是「装 Hermes → 让 Hermes 装 AgentBase」，
     不会主动去调 `agentbase doctor` —— 只有启动这一步是必然发生的。
 
     为什么放后台线程而不是阻塞启动：
       - 自检要发真实请求（含一次对话回合），会拖慢启动几十秒
-      - 自检失败不该妨碍 Trade 起服务（致命项的后果由 doctor 报告与安装脚本处理）
+      - 自检失败不该妨碍 AgentBase 起服务（致命项的后果由 doctor 报告与安装脚本处理）
     为什么不是每次启动都跑：端到端验活要花 token 和 Tavily 配额，
     所以只在"没跑过 / 上次没过 / 配置变了"时跑（见 doctor.should_run_doctor）。
     """
@@ -1220,7 +1220,7 @@ def ensure_desktop_integration() -> None:
     """Windows：幂等地配好开机自启（隐藏窗口）与桌面快捷方式。
 
     为什么放在**服务启动**而不是只在安装脚本里：客户的部署流程是
-    「装 Hermes → 让 Hermes 装 Trade」，**不经过 install.ps1** —— 只在脚本里配
+    「装 Hermes → 让 Hermes 装 AgentBase」，**不经过 install.ps1** —— 只在脚本里配
     等于没配，用户得每次人工交代。放在这里，任何安装路径都会自动完成。
 
     行为约定：
@@ -1240,5 +1240,5 @@ def ensure_desktop_integration() -> None:
         for msg in ensure_windows_setup(agentbase_dir_from_module()):
             print(f"  {msg}")
     except Exception as e:
-        # 自启配置是便利功能，失败绝不能影响 Trade 本身能不能用
+        # 自启配置是便利功能，失败绝不能影响 AgentBase 本身能不能用
         print(f"  ⚠ 桌面集成设置跳过：{e}")

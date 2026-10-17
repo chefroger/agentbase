@@ -5,7 +5,7 @@
 - **端到端验活**：能发真实请求就发真实请求。特别是 vision 必须让配置好的模型
   真读一张图 —— 历史上"工具不在场"和"模型看不见"两个洞各踩过一次，
   只有真读图能同时覆盖。
-- **分级阻断**：只有"Trade 根本用不了"的项标 fatal（agent 构造不出来、
+- **分级阻断**：只有"AgentBase 根本用不了"的项标 fatal（agent 构造不出来、
   数据库不可写、对话空回复）。搜索/记忆这类降级项不阻断。
 - **捕 BaseException**：客户机事故的异常是 RelaunchExit(SystemExit)，
   `except Exception` 抓不到，自检本身必须避免重蹈。
@@ -62,7 +62,7 @@ class TestHermesRuntimeCheck:
         item = next(r for r in results if r.name == "Agent 构造")
         assert item.status == doctor.STATUS_FAIL
         assert "SystemExit" in item.detail
-        assert item.fatal is True, "agent 构造不出来 = Trade 根本用不了，必须致命"
+        assert item.fatal is True, "agent 构造不出来 = AgentBase 根本用不了，必须致命"
 
     def test_ordinary_exception_is_caught(self):
         def boom():
@@ -129,7 +129,7 @@ class TestTavilyCheck:
         results = doctor.check_tavily()
 
         assert results[0].status == doctor.STATUS_WARN
-        assert results[0].fatal is False, "没配搜索仍能用 Trade，不该阻断"
+        assert results[0].fatal is False, "没配搜索仍能用 AgentBase，不该阻断"
 
     def test_live_search_success(self, monkeypatch):
         monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
@@ -154,7 +154,7 @@ class TestTavilyCheck:
 class TestTradeCheck:
     def test_empty_chat_reply_is_fatal(self):
         """空回复正是客户机上「Agent 未返回有效回复」的表现 —— 必须致命。"""
-        results = doctor.check_trade(
+        results = doctor.check_agentbase(
             db_prober=lambda: (True, "可读写"),
             chat_prober=lambda: (False, "agent 返回空回复"),
         )
@@ -167,13 +167,13 @@ class TestTradeCheck:
         def boom():
             raise SystemExit(1)
 
-        results = doctor.check_trade(db_prober=lambda: (True, "ok"), chat_prober=boom)
+        results = doctor.check_agentbase(db_prober=lambda: (True, "ok"), chat_prober=boom)
 
         item = next(r for r in results if r.name == "对话回合")
         assert item.status == doctor.STATUS_FAIL and item.fatal is True
 
     def test_db_failure_is_fatal(self):
-        results = doctor.check_trade(
+        results = doctor.check_agentbase(
             db_prober=lambda: (False, "磁盘只读"),
             chat_prober=lambda: (True, "ok"),
         )
@@ -351,7 +351,7 @@ class TestEstopCheck:
     """急停（ESTOP）检查：`hermes pause` 会让定时任务**静默**停跑。
 
     机制见 Hermes `agent/estop.py`：`hermes pause` 写 `$HERMES_HOME/ESTOP` 哨兵、
-    `hermes resume` 删除；存在期间 cron/kanban/gateway 新回合一律跳过。Trade 界面
+    `hermes resume` 删除；存在期间 cron/kanban/gateway 新回合一律跳过。AgentBase 界面
     完全不显示这个状态 —— 客户机上残留了就只会看到"定时任务不跑了"，所以必须
     能在自检里一眼看出来。
     """
@@ -365,7 +365,7 @@ class TestEstopCheck:
         assert results[0].fatal is False
 
     def test_sentinel_is_warn_with_recovery_hint(self, tmp_path):
-        """哨兵存在 → 降级（不是致命：Trade 还能用），且必须告诉用户怎么恢复。"""
+        """哨兵存在 → 降级（不是致命：AgentBase 还能用），且必须告诉用户怎么恢复。"""
         from agentbase.doctor import STATUS_WARN, check_estop
 
         p = tmp_path / "ESTOP"
@@ -478,11 +478,11 @@ class TestUnconfiguredLlmIsNotFatal:
 
 
 class TestUpdateInterpreterGuard:
-    """`agentbase update` 必须拒绝在非 Trade venv 的解释器下运行。
+    """`agentbase update` 必须拒绝在非 AgentBase venv 的解释器下运行。
 
     为什么：升级过程中的全部 `pip install` 用 `sys.executable`。若被系统 python 调起
     （cron / launchd / 计划任务 / 手敲 python），依赖会装进**全局 site-packages** ——
-    既污染用户系统，又因为启动器指向 Trade 自己的 venv 而下次启动仍缺依赖，白升一场。
+    既污染用户系统，又因为启动器指向 AgentBase 自己的 venv 而下次启动仍缺依赖，白升一场。
     """
 
     @staticmethod
@@ -497,7 +497,7 @@ class TestUpdateInterpreterGuard:
         home = tmp_path / "home"
         agentbase_home = tmp_path / "tradehome"
         home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(upd, "_get_trade_home", lambda: agentbase_home)
+        monkeypatch.setattr(upd, "get_agent_home", lambda: agentbase_home)
         monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: home))
         if agentbase_venv_exists:
             venv = agentbase_home / "venv"
@@ -523,7 +523,7 @@ class TestUpdateInterpreterGuard:
 
         reason = upd._refuse_reason_for_interpreter()
 
-        assert reason and "不是 Trade 自己" in reason
+        assert reason and "不是 AgentBase 自己" in reason
 
     def test_allows_inside_trade_venv(self, monkeypatch, tmp_path):
         upd, agentbase_home = self._stub(monkeypatch, tmp_path,
@@ -533,21 +533,21 @@ class TestUpdateInterpreterGuard:
         assert upd._refuse_reason_for_interpreter() is None
 
     def test_allows_when_no_trade_venv_exists(self, monkeypatch, tmp_path):
-        """开发机上从仓库直接跑（本机没有 trade venv）不能被拦。"""
+        """开发机上从仓库直接跑（本机没有 agentbase venv）不能被拦。"""
         upd, _ = self._stub(monkeypatch, tmp_path, prefix=str(tmp_path), base_prefix="/usr",
                             agentbase_venv_exists=False)
 
         assert upd._refuse_reason_for_interpreter() is None
 
     def test_update_trade_refuses_early_when_guard_trips(self, monkeypatch, tmp_path):
-        """守卫必须真的**接在 update_trade 的入口**上。
+        """守卫必须真的**接在 update_agentbase 的入口**上。
 
         只测 `_refuse_reason_for_interpreter()` 本身发现不了「漏接线」——
         变异检验时把调用点改成恒 None，上面 4 条用例全绿，就是这个缺口。
         """
         from agentbase.post_install import update as upd
 
-        monkeypatch.setattr(upd, "_get_trade_home", lambda: tmp_path)
+        monkeypatch.setattr(upd, "get_agent_home", lambda: tmp_path)
         monkeypatch.setattr(upd, "_refuse_reason_for_interpreter",
                             lambda: "当前解释器不在任何虚拟环境内。")
         # 架构检查排在守卫**之前**，而它在 Windows 上会走 platform.uname() →
@@ -566,7 +566,7 @@ class TestUpdateInterpreterGuard:
         monkeypatch.setattr(upd.subprocess, "run", _boom)
         monkeypatch.setattr(upd.subprocess, "Popen", _boom)
 
-        result = upd.update_trade()
+        result = upd.update_agentbase()
 
         assert result["ok"] is False
-        assert "not_in_trade_venv" in result["errors"]
+        assert "not_in_agentbase_venv" in result["errors"]

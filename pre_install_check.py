@@ -1,19 +1,19 @@
 """
-pre_install_check: Verify hermes-agent is installed and compatible before trade install.
+pre_install_check: Verify hermes-agent is installed and compatible before agentbase install.
 
-This module runs BEFORE pip install of the trade package.
+This module runs BEFORE pip install of the agentbase package.
 It checks:
   1. Is hermes-agent installed at all?
-  2. Is the installed version compatible with trade's requirements?
+  2. Is the installed version compatible with agentbase's requirements?
   3. If not compatible → print instructions to install from NousResearch/hermes-agent first.
 
 Exit codes:
-  0  = compatible, proceed with trade install
+  0  = compatible, proceed with agentbase install
   1  = hermes-agent not found, must install first
   2  = hermes-agent version incompatible, must upgrade/downgrade
   3  = architecture mismatch (e.g. x86_64 Python on arm64 Mac)
 
-Usage (run BEFORE pip install trade):
+Usage (run BEFORE pip install agentbase):
   python pre_install_check.py
 """
 
@@ -27,10 +27,10 @@ import urllib.request
 # Version compatibility matrix
 # ─────────────────────────────────────────────────────────────────────────────
 
-# trade requires hermes-agent from NousResearch/hermes-agent at or above this version.
+# agentbase requires hermes-agent from NousResearch/hermes-agent at or above this version.
 # (Prior to v0.4.0, the chefroger/hermes-agent fork was used; now migrated to upstream.)
 # 下限 = v0.21.6：上游从这一版起把 Python 支持上界抬到 3.14（也是 `pm` 托管运行时
-# 的起点）；上一代硬性要求 <3.14，与 Trade 的 3.14 解释器互斥。**已无上限** ——
+# 的起点）；上一代硬性要求 <3.14，与 AgentBase 的 3.14 解释器互斥。**已无上限** ——
 # 新版 Hermes 我们都要跟，卡上限只会把自己锁死。
 # 必须与 agentbase/bootstrap.py 的 _MIN_HERMES_VERSION 保持一致（有测试断言两者相等）。
 MIN_COMPATIBLE_VERSION = "0.21.6"
@@ -277,7 +277,7 @@ def get_latest_official_commit() -> str | None:
 
 def print_header():
     print("=" * 60)
-    print("  Trade Pre-Install Check — Hermes Agent Compatibility")
+    print("  AgentBase Pre-Install Check — Hermes Agent Compatibility")
     print("=" * 60)
 
 
@@ -381,7 +381,7 @@ def run_check() -> int:
     if installed_version is None:
         print_fail("hermes-agent is NOT installed.")
         print()
-        print_warn("Hermes Agent must be installed BEFORE trade.")
+        print_warn("Hermes Agent must be installed BEFORE agentbase.")
         print()
         _print_install_instructions()
         return 1
@@ -393,7 +393,7 @@ def run_check() -> int:
     # Case 2: installed but wrong source (old chefroger fork)
     if not from_official:
         print_fail("hermes-agent is installed from the old chefroger/hermes-agent fork (deprecated).")
-        print_warn("Trade now uses the upstream: https://github.com/NousResearch/hermes-agent")
+        print_warn("AgentBase now uses the upstream: https://github.com/NousResearch/hermes-agent")
         print()
         print_info("Please uninstall the current version first:")
         print_info("  pip uninstall hermes-agent")
@@ -413,7 +413,7 @@ def run_check() -> int:
         return 0
     if verdict == "too_old":
         print_fail(f"hermes-agent version {installed_version} is too old.")
-        print_warn(f"Trade requires version >= {MIN_COMPATIBLE_VERSION} from NousResearch/hermes-agent.")
+        print_warn(f"AgentBase requires version >= {MIN_COMPATIBLE_VERSION} from NousResearch/hermes-agent.")
         print()
         print_info("Please upgrade:")
         print_info("  pip install --upgrade hermes-agent")

@@ -2,7 +2,7 @@
 
 ## 为什么（客户机上定时任务静默失效）
 
-Hermes 是装在 Trade 自己的 venv 里的（`~/.agentbase/venv`），而启动 Gateway 用的是
+Hermes 是装在 AgentBase 自己的 venv 里的（`~/.agentbase/venv`），而启动 Gateway 用的是
 `shutil.which("hermes") or "hermes"` —— 只查 PATH。
 
 三个平台的 PATH 里有没有 venv 的 bin 目录：
@@ -36,7 +36,7 @@ def _clear_path(monkeypatch):
 
 class TestVenvFirst:
     def test_prefers_interpreters_own_directory(self, monkeypatch, tmp_path):
-        """与解释器同目录的 hermes 优先 —— 那就是 Trade venv 里的那份。"""
+        """与解释器同目录的 hermes 优先 —— 那就是 AgentBase venv 里的那份。"""
         import agentbase.app as app
 
         (tmp_path / "bin").mkdir(parents=True)

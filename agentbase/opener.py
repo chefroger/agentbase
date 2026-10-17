@@ -1,4 +1,4 @@
-"""`trade open` —— 打开 Trade 界面（桌面快捷方式的目标）。
+"""`agentbase open` —— 打开 AgentBase 界面（桌面快捷方式的目标）。
 
 ## 为什么要单独一个子命令
 
@@ -12,7 +12,7 @@
 3. **一套逻辑多处复用**：快捷方式、将来的托盘/菜单项都调它。
 
 与开机自启的区别：自启用 `--no-browser`（登录时不该弹浏览器），
-`trade open` 才负责打开界面。
+`agentbase open` 才负责打开界面。
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _POLL_INTERVAL = 0.5
 
 
 def is_server_up(base_url: str = DEFAULT_BASE_URL, timeout: float = 1.5) -> bool:
-    """探测 Trade 服务是否已在运行。"""
+    """探测 AgentBase 服务是否已在运行。"""
     try:
         with urllib.request.urlopen(f"{base_url}/api/status", timeout=timeout) as resp:
             return resp.status == 200
@@ -71,7 +71,7 @@ def _spawn_detached(cmd: list[str]) -> None:
     subprocess.Popen(cmd, **kwargs)
 
 
-def open_trade(
+def open_agentbase(
     *,
     base_url: str = DEFAULT_BASE_URL,
     timeout: float = STARTUP_TIMEOUT_SECONDS,
@@ -80,7 +80,7 @@ def open_trade(
     opener=None,
     focuser=None,
 ) -> str:
-    """确保服务在运行，然后**切到已打开的 Trade 页面；没有才打开**。
+    """确保服务在运行，然后**切到已打开的 AgentBase 页面；没有才打开**。
 
     顺序很关键：先确保服务在跑，再决定聚焦还是新开。反过来的话，服务没起时
     会把用户切到一个浏览器的错误页上。
@@ -100,16 +100,16 @@ def open_trade(
         server_py = _server_script_path()
         if server_py is None:
             return (
-                "✗ 找不到 server.py，无法启动服务。请重新安装 Trade，"
+                "✗ 找不到 server.py，无法启动服务。请重新安装 AgentBase，"
                 f"或手动运行 agentbase 后访问 {url}"
             )
 
-        print("[open] Trade 未运行，正在后台启动 ...")
+        print("[open] AgentBase 未运行，正在后台启动 ...")
         try:
             # --no-browser：浏览器由本命令负责，避免服务自己也开一次
             spawn([sys.executable, str(server_py), "--no-browser"])
         except Exception as e:
-            return f"✗ 启动 Trade 失败：{e}"
+            return f"✗ 启动 AgentBase 失败：{e}"
 
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -121,24 +121,24 @@ def open_trade(
         if not started:
             # 超时不要假装成功 —— 让用户知道去哪看日志
             return (
-                f"✗ Trade 启动超时（{int(timeout)}s 内未就绪）。请查看日志：\n"
+                f"✗ AgentBase 启动超时（{int(timeout)}s 内未就绪）。请查看日志：\n"
                 "    ~/.agentbase/logs/   （Windows: %LOCALAPPDATA%\\agentbase\\logs\\）"
             )
 
-    # 服务就绪。已打开的 Trade 页面就直接切过去，避免每点一次多一个标签页。
+    # 服务就绪。已打开的 AgentBase 页面就直接切过去，避免每点一次多一个标签页。
     # 浏览器不向外部程序暴露「聚焦已有标签页」的接口，只能按窗口标题找回。
     # 默认聚焦器在运行时解析（定义在下方；默认参数是定义时求值，不能写在那里）。
     if focuser is None:
         focuser = _focus_window_by_title
     try:
         if focuser(WINDOW_TITLE_MARKER):
-            return "✓ 已切到已打开的 Trade 页面"
+            return "✓ 已切到已打开的 AgentBase 页面"
     except Exception:
         pass  # 聚焦失败不是错误，照常打开新页面即可
 
     _open(url, opener)
     suffix = "已在运行" if was_running else "已启动"
-    return f"✓ Trade {suffix}，已打开界面：{url}"
+    return f"✓ AgentBase {suffix}，已打开界面：{url}"
 
 
 # 页面标题里这段是稳定的（见 static/app.html 的 <title>）。
@@ -147,8 +147,8 @@ def open_trade(
 WINDOW_TITLE_MARKER = "AgentBase"
 
 
-def match_trade_window(titles: list[str]) -> str | None:
-    """从窗口标题里挑出 Trade 页面那个；没有则返回 None。
+def match_window(titles: list[str]) -> str | None:
+    """从窗口标题里挑出 AgentBase 页面那个；没有则返回 None。
 
     纯函数，便于测试 —— 真正的窗口枚举在 Windows 上用 Win32 API。
     """

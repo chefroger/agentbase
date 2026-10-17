@@ -3,7 +3,7 @@
 ## 背景
 
 2026-10-08 客户机事故：Hermes 的 `hermes_bootstrap.py` 把 server.py 重新 exec 到
-它自带的 store python（无 trade 包），子进程 ModuleNotFoundError 退出，父进程
+它自带的 store python（无 agentbase 包），子进程 ModuleNotFoundError 退出，父进程
 `raise RelaunchExit(1)` —— 它继承 **SystemExit**（BaseException）。
 
 `/chat/stream` 已补 `except BaseException`（`agentbase/api/chat.py:450`），但同步

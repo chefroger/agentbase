@@ -244,9 +244,9 @@ show_summary() {
     echo "    | bash"
     echo ""
     echo "  注意：不要把某个 tag 克隆到 ~/.hermes/hermes-agent —— 那会覆盖掉用户"
-    echo "        已装的那份 Hermes。Trade 与 Hermes 共用同一份安装。"
+    echo "        已装的那份 Hermes。AgentBase 与 Hermes 共用同一份安装。"
     echo ""
-    echo "  装好后 Trade 会在启动时检查版本；过旧会在界面里自动升级。"
+    echo "  装好后 AgentBase 会在启动时检查版本；过旧会在界面里自动升级。"
     echo ""
 }
 

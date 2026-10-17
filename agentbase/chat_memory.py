@@ -409,7 +409,7 @@ def get_recent(workspace_id: int, limit: int = 20) -> list[dict]:
 # 区间端点都是 00:00:00 本地时间，与 created_at 同源；this_* 含"现在"，last_* 不含"现在"。
 #
 # 时区口径：与 save_with_context 一致（datetime('now', 'localtime')）。所有计算都在
-# Python 进程的本地时区完成，**不**做时区归一化——这是 trade 现有口径，保持一致。
+# Python 进程的本地时区完成，**不**做时区归一化——这是 agentbase 现有口径，保持一致。
 #
 # "本周"基准：Monday=weekday(0)。"上周"= 本周一 00:00 减 7 天。注意这是中国大陆
 # 出口场景的默认（贸易员认知的"上周一→本周一"）；如果哪天产品决定改"周日=一周第一天"，

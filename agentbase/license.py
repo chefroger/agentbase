@@ -276,11 +276,11 @@ def days_remaining(workspace_id: int | None = None) -> int:
 
 
 def _make_request_code() -> str:
-    """生成本机申请码: TRADE-REQ-{64 hex with separators}（基于完整 SHA256 / 256 bit）。"""
+    """生成本机申请码: AGENTBASE-REQ-{64 hex with separators}（基于完整 SHA256 / 256 bit）。"""
     mid = _machine_id()
     h = hashlib.sha256(mid.encode()).hexdigest().upper()
     groups = ["".join(g) for g in zip(h[0::4], h[1::4], h[2::4], h[3::4], strict=True)]
-    return f"TRADE-REQ-{'-'.join(groups)}"
+    return f"AGENTBASE-REQ-{'-'.join(groups)}"
 
 
 def status(workspace_id: int | None = None) -> dict:
@@ -501,12 +501,12 @@ def activate(code: str, workspace_id: int | None = None) -> tuple[bool, str]:
 def _encode_activation_code(request_code: str, expires_at: str) -> str:
     """根据申请码和到期日期生成激活码。
 
-    编码格式: TRADE-{base64url(日期 + 机器码哈希 + Ed25519签名)}
+    编码格式: AGENTBASE-{base64url(日期 + 机器码哈希 + Ed25519签名)}
     新格式 (v0.6.3+): payload = 8 bytes 日期 + 16 bytes 机器码哈希 (64 bit) → 88 bytes total。
     激活码 ~120 字符。
 
     Args:
-        request_code: 用户发送的申请码 (TRADE-REQ-XXXX-XXXX-XXXX-XXXX)
+        request_code: 用户发送的申请码 (AGENTBASE-REQ-XXXX-XXXX-XXXX-XXXX)
         expires_at: ISO 日期字符串，如 "2027-06-01"
     """
     import base64
@@ -518,7 +518,7 @@ def _encode_activation_code(request_code: str, expires_at: str) -> str:
             "或设置 AGENTBASE_LICENSE_PRIVATE_KEY 环境变量。"
         )
 
-    req_hash = request_code.replace("TRADE-REQ-", "").replace("-", "").upper()
+    req_hash = request_code.replace("AGENTBASE-REQ-", "").replace("-", "").upper()
     date_str = expires_at[:10].replace("-", "")  # YYYYMMDD
 
     # payload: 日期(8) + 机器码哈希(64) = 72 bytes ASCII hex
@@ -530,13 +530,13 @@ def _encode_activation_code(request_code: str, expires_at: str) -> str:
     # 打包: 日期 + 机器码哈希 + 签名 → base64url
     combined = date_str.encode() + req_hash.encode() + sig
     b64 = base64.urlsafe_b64encode(combined).decode().rstrip("=")
-    return f"TRADE-{b64}"
+    return f"AGENTBASE-{b64}"
 
 
 def _decode_activation_code(code: str) -> dict:
     """解码激活码，返回 {expires_at: str, machine_hash: str, signature: bytes}。
 
-    激活码格式: TRADE-{base64url(日期+机器码哈希+Ed25519签名)}
+    激活码格式: AGENTBASE-{base64url(日期+机器码哈希+Ed25519签名)}
     兼容新旧格式: 旧 8 hex (32 bit) 80 bytes / 新 16 hex (64 bit) 88 bytes。
     """
     import base64
@@ -544,10 +544,10 @@ def _decode_activation_code(code: str) -> dict:
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric import ed25519
 
-    # 只去掉前缀 "TRADE-"，保留 base64url 中的 "-" 字符
+    # 只去掉前缀 "AGENTBASE-"，保留 base64url 中的 "-" 字符
     b64 = code
-    if b64.startswith("TRADE-"):
-        b64 = b64[6:]
+    if b64.startswith("AGENTBASE-"):
+        b64 = b64[len("AGENTBASE-"):]
     # 补回 base64 padding
     b64 += "=" * (-len(b64) % 4)
     decoded = base64.urlsafe_b64decode(b64)
@@ -592,10 +592,10 @@ def _decode_activation_code(code: str) -> dict:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Trade License Manager")
+    parser = argparse.ArgumentParser(description="AgentBase License Manager")
     sub = parser.add_subparsers(dest="cmd")
     gen = sub.add_parser("generate", help="生成激活码")
-    gen.add_argument("request_code", help="用户申请码 (TRADE-REQ-{SHA256[:64] 分组})")
+    gen.add_argument("request_code", help="用户申请码 (AGENTBASE-REQ-{SHA256[:64] 分组})")
     gen.add_argument("date", help="到期日期 (YYYY-MM-DD)")
     sub.add_parser("status", help="查看当前许可证状态")
 

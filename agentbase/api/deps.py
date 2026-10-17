@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — API 依赖函数。
+AgentBase AI Assistant — API 依赖函数。
 
 提供 session token 校验和 workspace_id 解析的共享依赖，
 被所有 /api/agentbase/* 路由使用。
@@ -78,9 +78,9 @@ def require_workspace(
         raise HTTPException(status_code=401, detail="X-Workspace-ID must be an integer.") from e
 
     # 验证公司存在且激活
-    tc = workspace_module.get_trade_workspace(cid)
+    tc = workspace_module.get_workspace_record(cid)
     if not tc:
-        raise HTTPException(status_code=401, detail=f"Workspace {cid} not found in Trade system.")
+        raise HTTPException(status_code=401, detail=f"Workspace {cid} not found in AgentBase system.")
     if not tc.get("is_active"):
         raise HTTPException(status_code=401, detail=f"Workspace {cid} is inactive.")
 

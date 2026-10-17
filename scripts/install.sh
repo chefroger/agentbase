@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# Foreign Trade Assistant — 一键安装脚本 (macOS / Linux / WSL2)
+# AgentBase — 一键安装脚本 (macOS / Linux / WSL2)
 # ==============================================================================
 # 使用方式:
 #   curl -fsSL https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scripts/install.sh | bash
@@ -27,7 +27,7 @@ log_step()  { echo -e "\n${BOLD}════════════════
 #      而且**重试永远无法恢复**，用户只能手动删目录。
 #   2. 用浅克隆 `--depth 1`：全历史克隆在弱网下最慢、最易失败（README 本身就提醒
 #      用户要有稳定网络）。跟 main 时本地没有 tag，Hermes 版本推导会退化为「未知」，
-#      Trade 会打印警告并继续启动，不影响使用；固定版本模式（`--branch <tag>`）
+#      AgentBase 会打印警告并继续启动，不影响使用；固定版本模式（`--branch <tag>`）
 #      会把该 tag 一并带上，版本可正常解出。
 #   3. 不吞 git 的 stderr：README 让用户按网络问题排查，看不到真实报错就没法排查。
 _clone_or_update() {
@@ -58,7 +58,7 @@ _clone_or_update() {
 }
 
 echo ""
-echo -e "${BOLD}${CYAN}  Foreign Trade Assistant — 安装向导${NC}"
+echo -e "${BOLD}${CYAN}  AgentBase — 安装向导${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,9 +66,9 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 log_step "Step 1/5: 检查 Python 环境"
 
-# Trade 必须跑在 **Python 3.14** 上：Hermes 从 v0.21.6 起只提供 3.14 的依赖集
+# AgentBase 必须跑在 **Python 3.14** 上：Hermes 从 v0.21.6 起只提供 3.14 的依赖集
 # （requires-python 里那个 `>=3.11` 只是留给旧安装「跑完自己的升级步骤」的过渡桥），
-# 而 Trade 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
+# 而 AgentBase 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
 # 在 3.11~3.13 上会变成「装得上、起不来」，所以这里不再接受 3.11~3.13。
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 
@@ -95,7 +95,7 @@ _find_python314() {
     # `generation / "venv"`、pm/install_states.py:72 的两棵树）。
     # 写死布局的 glob 一旦猜错就是「静默找不到」，而且我无法在本机观测真实布局。
     # 所以改成**递归找 + 按版本号验**：对布局变化免疫，多找到的由 _is_py314 兜住。
-    # 任一份 3.14 都能用来建 Trade 的 venv（同为 cp314 ABI），无需挑特定的那一份。
+    # 任一份 3.14 都能用来建 AgentBase 的 venv（同为 cp314 ABI），无需挑特定的那一份。
     #
     # maxdepth 6 刚好到 <tree>/<gen>/venv/bin/python：再深就进 site-packages 了（慢且无益）。
     # 先按「名字就带 3.14」找（无歧义），再按通用名 python/python3 找并逐个验版本。
@@ -135,7 +135,7 @@ PYTHON="$(_find_python314 || true)"
 if [ -z "$PYTHON" ]; then
     log_err "需要 Python 3.14，但未找到。"
     echo ""
-    echo "  Trade 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式："
+    echo "  AgentBase 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式："
     echo ""
     echo "  1) 让 Hermes 自带（推荐）—— 先安装 Hermes，它会自带 3.14，本脚本能自动找到："
     echo "       curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
@@ -198,7 +198,7 @@ VENV_DIR="$_VENV_REAL"
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 _VENV_OLD=""
 
-# 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 trade 时，代码与依赖
+# 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 agentbase 时，代码与依赖
 # 都换了、venv 的解释器还是旧的（`agentbase update` 只更新代码与依赖，不重建 venv），
 # 于是 Hermes 的 pm 激活会把 cp314 的包塞进旧解释器 → 聊天只报「AI Agent 模块未加载」。
 # **重建不会丢任何用户数据**：数据在 $AGENT_HOME 下（数据库、公司目录），不在 venv 里。
@@ -247,7 +247,7 @@ log_ok "Hermes 随 agentbase 内置分发，无需单独安装（版本见 vendo
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3: 安装 agentbase + 全部依赖
 # ─────────────────────────────────────────────────────────────────────────────
-log_step "Step 3/5: 安装 Foreign Trade Assistant"
+log_step "Step 3/5: 安装 AgentBase"
 
 AGENTBASE_REPO="https://github.com/chefroger/smart-trade-ai.git"
 AGENTBASE_DIR="$HOME/.agentbase/agentbase"
@@ -345,7 +345,7 @@ if [ -n "$_VENV_OLD" ]; then
     fi
 fi
 
-log_ok "Foreign Trade Assistant 安装完成"
+log_ok "AgentBase 安装完成"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 4: 安装 B2B skills
@@ -361,9 +361,9 @@ else
     log_warn "B2B skills 安装可能不完整（首次启动时会自动同步）"
 fi
 
-# chat-memory 插件：trade 自带的工具（让 LLM 能用 agentbase.conversations 表查历史对话）。
+# chat-memory 插件：agentbase 自带的工具（让 LLM 能用 agentbase.conversations 表查历史对话）。
 # setup() 也会兜底同步 + 写 config.yaml，这里做一次显式的初始安装，避免用户装完
-# 还没启动 trade 之前就看不到工具（虽然通常不实际发生，但稳）。
+# 还没启动 agentbase 之前就看不到工具（虽然通常不实际发生，但稳）。
 if "$PY" -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"; then
     log_ok "chat-memory 插件已部署到 ~/.hermes/plugins/chat-memory"
 else
@@ -391,7 +391,7 @@ cat > "$HOME/.local/bin/agentbase" << LAUNCHER
 #!/bin/bash
 export HERMES_HOME="\${HERMES_HOME:-$HOME/.hermes}"
 # 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes 自带的 store python
-# （那里没有 trade 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
+# （那里没有 agentbase 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 # 前端只会看到「Agent 未返回有效回复」。bootstrap.py 里也设了一处，这里是双保险。
 export HERMES_DISABLE_LAZY_INSTALLS="1"
 exec "$VENV_DIR/bin/python" "$AGENTBASE_DIR/server.py" "\$@"
@@ -423,11 +423,11 @@ fi
 # 避免安装因为网络波动误报失败而挡住用户。
 # ─────────────────────────────────────────────────────────────────────────────
 # 两处都必须在调 doctor 之前处理：
-#   1. `prepare_hermes_import_paths()` —— Hermes 不再装进 Trade 的 venv，不先准备
+#   1. `prepare_hermes_import_paths()` —— Hermes 不再装进 AgentBase 的 venv，不先准备
 #      sys.path 就直接 import doctor 会报 `No module named 'run_agent'`（干净机器实测）。
 #   2. doctor 自己会 import Hermes，会触发 pm 激活剥离 venv 的 site-packages；
 #      那一步的恢复也在这个函数里，漏了会让后面 holehe/sqlite-vec 误报「未安装」。
-# 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
+# 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— AgentBase 启动后
 # 会在界面里自动升级 Hermes（见 agentbase/hermes_upgrade.py）。若这里判失败并 exit 1，
 # 用户就永远看不到那个升级界面了。
 if ! "$PY" -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"; then
@@ -442,7 +442,7 @@ echo ""
 echo -e "${BOLD}${GREEN}══ 安装完成 ══${NC}"
 echo ""
 echo -e "  启动方式:"
-echo -e "    新终端: ${BOLD}trade${NC}"
+echo -e "    新终端: ${BOLD}agentbase${NC}"
 echo -e "    当前终端: ${BOLD}$HOME/.local/bin/agentbase${NC}"
 echo ""
 echo -e "  启动后打开: ${CYAN}http://127.0.0.1:9120/agentbase${NC}"
@@ -451,7 +451,7 @@ echo -e "  数据位置:"
 echo -e "    用户数据: ${CYAN}$AGENT_HOME/${NC}"
 echo -e "    Hermes 配置: ${CYAN}$HERMES_HOME/${NC}"
 echo ""
-echo -e "  帮助: ${CYAN}trade --help${NC}"
+echo -e "  帮助: ${CYAN}agentbase --help${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -520,7 +520,7 @@ elif [[ "$(uname -s)" == "Linux" ]]; then
     if [ ! -f "$UNIT_FILE" ]; then
         cat > "$UNIT_FILE" << UNIT
 [Unit]
-Description=Smart Trade AI
+Description=AgentBase
 After=network.target
 
 [Service]

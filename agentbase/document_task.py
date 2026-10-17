@@ -1,4 +1,4 @@
-"""Trade 文档分析任务的范围和完成度状态，不读取文件内容。"""
+"""AgentBase 文档分析任务的范围和完成度状态，不读取文件内容。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Trade 认为「需要完整读取」的文档类型。Hermes 负责实际读取与解析，
+# AgentBase 认为「需要完整读取」的文档类型。Hermes 负责实际读取与解析，
 # 这里只决定哪些文件纳入强制范围。
 _ANALYZABLE_EXTENSIONS = frozenset({
     # 纯文本

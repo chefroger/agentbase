@@ -53,7 +53,7 @@ def main():
 
     url = f"http://{host}:{port}/agentbase"
     webview.create_window(
-        "Smart Trade AI",
+        "AgentBase",
         url,
         width=1280,
         height=900,

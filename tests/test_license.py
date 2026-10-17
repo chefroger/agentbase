@@ -61,7 +61,7 @@ class TestRequestCode:
     def test_format(self):
         from agentbase.license import _make_request_code
         code = _make_request_code()
-        assert code.startswith("TRADE-REQ-")
+        assert code.startswith("AGENTBASE-REQ-")
         # 完整 SHA256 64 hex + 分隔符 + 前缀
         assert len(code) > 80
 
@@ -98,7 +98,7 @@ class TestEncodeDecode:
 
         req = _make_request_code()
         code = _encode_activation_code(req, "2027-06-01")
-        assert code.startswith("TRADE-")
+        assert code.startswith("AGENTBASE-")
         assert len(code) > 40
 
         decoded = _decode_activation_code(code)
@@ -124,15 +124,15 @@ class TestEncodeDecode:
     def test_decode_rejects_wrong_length(self):
         from agentbase.license import _decode_activation_code
         with pytest.raises(ValueError):
-            _decode_activation_code("TRADE-SHORT")
+            _decode_activation_code("AGENTBASE-SHORT")
 
     def test_different_machines_different_hash(self, monkeypatch):
         """不同机器码应产生不同的激活码哈希"""
         _setup_temp_ed25519_key(monkeypatch)
         from agentbase.license import _decode_activation_code, _encode_activation_code
 
-        code1 = _encode_activation_code("TRADE-REQ-AAAA-BBBB", "2027-06-01")
-        code2 = _encode_activation_code("TRADE-REQ-CCCC-DDDD", "2027-06-01")
+        code1 = _encode_activation_code("AGENTBASE-REQ-AAAA-BBBB", "2027-06-01")
+        code2 = _encode_activation_code("AGENTBASE-REQ-CCCC-DDDD", "2027-06-01")
         d1 = _decode_activation_code(code1)
         d2 = _decode_activation_code(code2)
         assert d1["machine_hash"] != d2["machine_hash"]
@@ -141,8 +141,8 @@ class TestEncodeDecode:
         """相同申请码不同日期应产生不同激活码"""
         _setup_temp_ed25519_key(monkeypatch)
         from agentbase.license import _encode_activation_code
-        code1 = _encode_activation_code("TRADE-REQ-AAAA-BBBB", "2027-06-01")
-        code2 = _encode_activation_code("TRADE-REQ-AAAA-BBBB", "2027-12-31")
+        code1 = _encode_activation_code("AGENTBASE-REQ-AAAA-BBBB", "2027-06-01")
+        code2 = _encode_activation_code("AGENTBASE-REQ-AAAA-BBBB", "2027-12-31")
         assert code1 != code2
 
     def test_encode_without_private_key_fails(self, monkeypatch):
@@ -151,7 +151,7 @@ class TestEncodeDecode:
         with mock.patch.object(Path, "is_file", return_value=False):
             from agentbase.license import _encode_activation_code
             with pytest.raises(ValueError, match="私钥"):
-                _encode_activation_code("TRADE-REQ-AAAA-BBBB", "2027-06-01")
+                _encode_activation_code("AGENTBASE-REQ-AAAA-BBBB", "2027-06-01")
 
 
 class TestLicenseCheck:
@@ -279,7 +279,7 @@ class TestLicenseStatus:
         assert s["status"] == "trial"
         assert s["activated"] is False
         # 未激活状态下始终返回申请码（方便用户在试用期内提前申请激活）
-        assert s["request_code"].startswith("TRADE-REQ-")
+        assert s["request_code"].startswith("AGENTBASE-REQ-")
 
     def test_expired_shows_request_code(self, monkeypatch):
         forty_days_ago = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40)).isoformat()
@@ -289,7 +289,7 @@ class TestLicenseStatus:
         from agentbase.license import status
         s = status(workspace_id=1)
         assert s["status"] == "expired"
-        assert s["request_code"].startswith("TRADE-REQ-")
+        assert s["request_code"].startswith("AGENTBASE-REQ-")
 
     def test_active_status(self, monkeypatch):
         # 激活状态需要有效签名（v0.6.9+ status() 会调用 _verify_license 验签）
@@ -347,7 +347,7 @@ class TestActivate:
         """用不属于本机的哈希生成的激活码应被拒绝"""
         _setup_temp_ed25519_key(monkeypatch)
         from agentbase.license import _encode_activation_code, activate
-        code = _encode_activation_code("TRADE-REQ-DEAD-BEEF", "2027-12-31")
+        code = _encode_activation_code("AGENTBASE-REQ-DEAD-BEEF", "2027-12-31")
         ok, msg = activate(code)
         assert not ok
         # DEADBEEF 哈希不在本地机器码中，会被拒绝（签名无效或机器码不匹配）
@@ -455,7 +455,7 @@ class TestActivationCodeErrorChain:
 
         # 构造 88 字节新格式：date(8) + hash(16) + 全零签名(64) → 签名一定验证失败
         raw = b"20261231" + b"a" * 16 + b"\x00" * 64
-        code = "TRADE-" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
+        code = "AGENTBASE-" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
         with pytest.raises(ValueError) as exc_info:
             _decode_activation_code(code)

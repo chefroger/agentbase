@@ -22,7 +22,7 @@ def main():
     # triggers: []
     # category: b2b-sales
     # version: "1.0.0"
-    # author: Foreign Trade Assistant
+    # author: AgentBase
     # injection_prompt: |
 
     # 目标：

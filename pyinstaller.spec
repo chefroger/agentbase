@@ -1,11 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec — Foreign Trade Assistant standalone app
+# PyInstaller spec — Foreign AgentBase Assistant standalone app
 #
 # Build:
 #   pip install pyinstaller
 #   pyinstaller pyinstaller.spec
 #
-# Output: dist/Foreign Trade Assistant.app (macOS) / dist/ (Windows)
+# Output: dist/Foreign AgentBase Assistant.app (macOS) / dist/ (Windows)
 
 import sys
 from pathlib import Path
@@ -97,7 +97,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="Foreign Trade Assistant",
+    name="Foreign AgentBase Assistant",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -113,13 +113,13 @@ exe = EXE(
 
 app = BUNDLE(
     exe,
-    name="Foreign Trade Assistant.app",
+    name="Foreign AgentBase Assistant.app",
     icon=str(ROOT / "static" / "icon.icns") if (ROOT / "static" / "icon.icns").is_file() else None,
     bundle_identifier="com.foreign-agentbase.assistant",
     info_plist={
         "NSHighResolutionCapable": True,
         "CFBundleShortVersionString": "0.3.0",
-        "CFBundleName": "Foreign Trade Assistant",
+        "CFBundleName": "Foreign AgentBase Assistant",
         "LSBackgroundOnly": False,
         "NSSupportsAutomaticGraphicsSwitching": True,
     },

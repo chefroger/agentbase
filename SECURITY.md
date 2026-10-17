@@ -2,12 +2,12 @@
 
 ## HERMES_YOLO_MODE
 
-Smart Trade AI 在启动时通过 `agentbase/bootstrap.py` 自动设置 `HERMES_YOLO_MODE=true`。
+AgentBase 在启动时通过 `agentbase/bootstrap.py` 自动设置 `HERMES_YOLO_MODE=true`。
 AI Agent 工具调用（文件读写、终端命令等）**无需人工审批**。
 
 ### Why
 
-The target users are international trade salespeople who cannot evaluate whether
+The target users are international agentbase salespeople who cannot evaluate whether
 an AI tool call is safe. Prompting them for approval on every action would make
 the product unusable.
 
@@ -71,7 +71,7 @@ We do not currently run a bug bounty program.
 
 | 组件 | 许可证 | 兼容性 |
 |------|--------|:------:|
-| Smart Trade AI | AGPL-3.0-only | — |
+| AgentBase | AGPL-3.0-only | — |
 | Hermes Agent | MIT | ✅ 完全兼容 |
 | FastAPI / uvicorn / beautifulsoup4 | MIT / BSD | ✅ 完全兼容 |
 | PyMuPDF | AGPL | ⚠️ pip install 使用无传染风险；PyInstaller 打包分发时需评估 |

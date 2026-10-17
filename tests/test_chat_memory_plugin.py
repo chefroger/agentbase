@@ -489,14 +489,14 @@ class TestChatMemoryPluginE2E:
 
 
 class TestPluginToolsetIsEnabled:
-    """插件声明的 toolset **必须**在 trade 的 DEFAULT_ENABLED_TOOLSETS 里。
+    """插件声明的 toolset **必须**在 agentbase 的 DEFAULT_ENABLED_TOOLSETS 里。
 
     这是本 feature 的"最后一公里"：Hermes 只把 enabled 列表里那些 toolset 的工具
     放进工具表。插件加载成功（enabled=True / tools=1）但 toolset 没启用的话，
     工具就只是躺在注册表里、**LLM 完全看不见** —— 和"工具根本不存在"等效。
 
     2026-10-16 实测就是这么翻车的：我验证"工具在不在工具表里"时**显式传了**
-    chat-memory，而 trade 的真实路径传的是 DEFAULT_ENABLED_TOOLSETS（里面没有它）。
+    chat-memory，而 agentbase 的真实路径传的是 DEFAULT_ENABLED_TOOLSETS（里面没有它）。
     这条契约测试直接从插件注册结果反查，任何一边漏了就红。
     """
 

@@ -18,9 +18,9 @@ Write-Host ""
 # ─────────────────────────────────────────────────────────────────────────────
 Write-Host "Step 1/5: 检查 Python 环境" -ForegroundColor White
 
-# Trade 必须跑在 **Python 3.14** 上：Hermes 从 v0.21.6 起只提供 3.14 的依赖集
+# AgentBase 必须跑在 **Python 3.14** 上：Hermes 从 v0.21.6 起只提供 3.14 的依赖集
 # （requires-python 里那个 `>=3.11` 只是留给旧安装「跑完自己的升级步骤」的过渡桥），
-# 而 Trade 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
+# 而 AgentBase 是**进程内**嵌 Hermes 的，解释器必须与 Hermes 的托管环境同 ABI。
 # 在 3.11~3.13 上会变成「装得上、起不来」，所以这里不再接受 3.11~3.13。
 $PythonCmd = $null
 $HermesHome = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { "$env:LOCALAPPDATA\hermes" }
@@ -45,7 +45,7 @@ foreach ($cmd in @("python3.14", "python3", "python")) {
 # （权威来源 pm/operations.py:152/210 `generation / "venv"`、
 #   pm/install_states.py:72 的两棵树）。写死布局一旦猜错就是「静默找不到」。
 # 所以改成**递归找 + 按版本号验**：对布局变化免疫，多找到的由 $IsPython314 兜住
-# （任一份 3.14 都能建 Trade 的 venv，同为 cp314 ABI）。
+# （任一份 3.14 都能建 AgentBase 的 venv，同为 cp314 ABI）。
 # -Depth 6 刚好到 <tree>\<gen>\venv\Scripts\python.exe，再深就进 Lib\site-packages 了。
 if (-not $PythonCmd) {
     $candidates = Get-ChildItem -Path "$HermesHome\installs", "$HermesHome\tools" `
@@ -65,7 +65,7 @@ if (-not $PythonCmd) {
 if (-not $PythonCmd) {
     Write-Host "  ✗ 需要 Python 3.14，但未找到。" -ForegroundColor Red
     Write-Host ""
-    Write-Host "  Trade 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式：" -ForegroundColor White
+    Write-Host "  AgentBase 必须与 Hermes 用同一个 Python 大版本（3.14）。任选一种方式：" -ForegroundColor White
     Write-Host ""
     Write-Host "  1) 让 Hermes 自带（推荐）—— 先安装 Hermes，它会自带 3.14，本脚本能自动找到：" -ForegroundColor White
     Write-Host "       irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex"
@@ -84,7 +84,7 @@ $VenvDir  = $VenvReal
 # 非空 = 旧环境还在原地、新环境建在 .new 里、依赖装完才切换（切换点见 Step 3 末尾）
 $VenvOld  = $null
 
-# 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 trade 时，代码与依赖
+# 已有 venv 但解释器**不是 3.14** → 必须重建。旧装机器就地升级 agentbase 时，代码与依赖
 # 都换了、venv 的解释器还是旧的（`agentbase update` 只更新代码与依赖，不重建 venv），
 # 于是 Hermes 的 pm 激活会把 cp314 的包塞进旧解释器 → 聊天只报「AI Agent 模块未加载」。
 # **重建不会丢任何用户数据**：数据在 $AgentHome 下（数据库、公司目录），不在 venv 里。
@@ -121,7 +121,7 @@ Write-Host "  ✓ 虚拟环境就绪 ($VenvDir)" -ForegroundColor Green
 #      git 会留下空目录，旧逻辑 Test-Path 会把它当成已装 → 之后 pull 静默失败、
 #      pip 在残缺树里报出误导性错误，且**重试永远无法恢复**。
 #   2. 浅克隆 --depth 1：全历史克隆在弱网下最慢、最易失败。跟 main 时本地没有 tag，
-#      Hermes 版本推导会退化为「未知」（Trade 警告后继续启动）；固定版本模式
+#      Hermes 版本推导会退化为「未知」（AgentBase 警告后继续启动）；固定版本模式
 #      （--branch <tag>）会把该 tag 一并带上，版本可正常解出。
 #   3. 不吞 git 的 stderr：用户要靠它排查网络问题。
 function Invoke-CloneOrUpdate {
@@ -325,7 +325,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  ⚠ B2B skills 安装可能不完整（首次启动时会自动同步）" -ForegroundColor Yellow
 }
 
-# chat-memory 插件：trade 自带的工具（让 LLM 能查 conversations 表的历史对话）。
+# chat-memory 插件：agentbase 自带的工具（让 LLM 能查 conversations 表的历史对话）。
 # setup() 会兜底同步 + 写 config.yaml；这里做一次显式的初始安装，幂等。
 & $PyCmd -c "from agentbase.bootstrap import sync_chat_memory_plugin, ensure_chat_memory_plugin_enabled; sync_chat_memory_plugin(); ensure_chat_memory_plugin_enabled()"
 if ($LASTEXITCODE -eq 0) {
@@ -361,7 +361,7 @@ New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null
 @echo off
 set HERMES_HOME=$HermesHome
 REM 禁用 Hermes 懒加载重启：否则 agent 创建时会被 exec 到 Hermes 自带的 store python
-REM （那里没有 trade 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
+REM （那里没有 agentbase 包），agent 线程以 RelaunchExit(SystemExit) 静默死亡，
 REM 前端只会看到「Agent 未返回有效响应」。bootstrap.py 里也设了一处，这里是双保险。
 set HERMES_DISABLE_LAZY_INSTALLS=1
 "$PyCmd" "$AgentbaseDir\server.py" %*
@@ -379,11 +379,11 @@ if ($currentPath -notlike "*$LocalBin*") {
 #
 # 委托给 agentbase.post_install.win_setup —— 那是唯一实现，服务启动时也会幂等调用。
 # 以前这里用 Register-ScheduledTask 直接跑 python.exe，是控制台程序 → 登录必弹
-# 终端窗口；而且只在这一处配，走「让 Hermes 装 Trade」流程的用户根本拿不到。
+# 终端窗口；而且只在这一处配，走「让 Hermes 装 AgentBase」流程的用户根本拿不到。
 # ─────────────────────────────────────────────────────────────────────────────
 & $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(agentbase_dir_from_module())]"
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 Trade 使用，可稍后重试）" -ForegroundColor Yellow
+    Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 AgentBase 使用，可稍后重试）" -ForegroundColor Yellow
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -394,11 +394,11 @@ if ($LASTEXITCODE -ne 0) {
 # "装坏了"的快检，避免安装脚本因为网络波动误报失败而挡住用户。
 # ─────────────────────────────────────────────────────────────────────────────
 # 两处都必须在调 doctor 之前处理：
-#   1. `prepare_hermes_import_paths()` —— Hermes 不再装进 Trade 的 venv，不先准备
+#   1. `prepare_hermes_import_paths()` —— Hermes 不再装进 AgentBase 的 venv，不先准备
 #      sys.path 就直接 import doctor 会报 `No module named 'run_agent'`（干净机器实测）。
 #   2. doctor 自己会 import Hermes，会触发 pm 激活剥离 venv 的 site-packages；
 #      那一步的恢复也在这个函数里，漏了会让后面 holehe/sqlite-vec 误报「未安装」。
-# 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— Trade 启动后
+# 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— AgentBase 启动后
 # 会在界面里自动升级 Hermes（见 agentbase/hermes_upgrade.py）。若这里判失败并退出，
 # 用户就永远看不到那个升级界面了。
 & $PyCmd -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"
@@ -411,9 +411,9 @@ Write-Host ""
 Write-Host "══ 安装完成 ══" -ForegroundColor Green
 Write-Host ""
 Write-Host "  启动方式:"
-Write-Host "    新终端: trade"
+Write-Host "    新终端: agentbase"
 Write-Host "    或: $PyCmd $AgentbaseDir\server.py"
-Write-Host "    Trade 将在每次开机后自动启动（后台静默运行）"
+Write-Host "    AgentBase 将在每次开机后自动启动（后台静默运行）"
 Write-Host ""
 Write-Host "  启动后打开: http://127.0.0.1:9120/agentbase"
 Write-Host ""

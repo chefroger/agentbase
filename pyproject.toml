@@ -8,8 +8,8 @@ version = "0.6.8"
 description = "AgentBase — 可复用的智能体框架（聊天服务 + skill 路由 + 记忆层 + Web 面板）。"
 readme = "README.md"
 # 注意：**不要**因为「部署必须用 Python 3.14」就把这里抬到 >=3.14。
-# 3.14 是**部署约束**（Trade 进程内嵌 Hermes，必须与 Hermes 的托管环境同 ABI），
-# 不是 Trade 代码本身的约束 —— Trade 的代码仍兼容 3.11，CI 也在 3.11–3.13 上跑。
+# 3.14 是**部署约束**（AgentBase 进程内嵌 Hermes，必须与 Hermes 的托管环境同 ABI），
+# 不是 AgentBase 代码本身的约束 —— AgentBase 的代码仍兼容 3.11，CI 也在 3.11–3.13 上跑。
 # 该约束由 scripts/install.sh / install.ps1 的 Step 1 强制（只接受 3.14），
 # 详见 COMPATIBILITY.md 的「当前策略」。
 requires-python = ">=3.11"
@@ -27,7 +27,7 @@ dependencies = [
   # Hermes's setup.py refuses to build wheels/sdists for pip ("Building wheels or
   # sdists for hermes-agent is not supported"); declaring it makes `pip install`
   # fail outright. It is installed separately as an editable checkout by
-  # scripts/install.sh (Step 2), and Trade installs itself with --no-deps.
+  # scripts/install.sh (Step 2), and AgentBase installs itself with --no-deps.
   # Pinned version: v2026.9.24 — new installs clone this tag; see COMPATIBILITY.md. The installed
   # version is enforced at runtime by pre_install_check.py and
   # bootstrap.check_hermes_version().
@@ -38,7 +38,7 @@ dependencies = [
   "anthropic==0.87.0",
   # Document extraction — REQUIRED, not optional. Hermes uses this to parse PDF
   # and legacy Office files. Without it Hermes decodes PDFs as plain text (garbage,
-  # no error), so trade users silently get unusable output. Declared here as well as
+  # no error), so agentbase users silently get unusable output. Declared here as well as
   # in Hermes' own dependencies so every install/upgrade path is covered; keep the
   # pin in lockstep with Hermes tools/lazy_deps.py.
   "firecrawl-anydoc==0.2.4",
@@ -62,7 +62,7 @@ dependencies = [
   # Email-registration checks (OSINT Layer 1: 122 platforms) — REQUIRED.
   # Missing → the layer is silently skipped (the report discloses it, but one
   # evidence source is gone). Pure Python, installs on all three platforms;
-  # its httpx matches Hermes' pin (0.28.1), so no conflict. Trade runs it in a
+  # its httpx matches Hermes' pin (0.28.1), so no conflict. AgentBase runs it in a
   # subprocess (holehe uses trio, incompatible with asyncio) with a 120s timeout.
   "holehe>=1.61,<2.0",
 ]
@@ -89,19 +89,19 @@ desktop = [
 
 [project.scripts]
 # 指向**包内**入口：原先写 server:main，而 server.py 在仓库根、不被打包，
-# pip 安装后 `trade` 命令会 ModuleNotFoundError（且 server.py 无守卫，
+# pip 安装后 `agentbase` 命令会 ModuleNotFoundError（且 server.py 无守卫，
 # `from server import main` 会连带执行启动流程）。agentbase.cli 做 setup() + app.main()。
 agentbase = "agentbase.cli:run_server"
-# Installs Trade skills into Hermes at package install time.
+# Installs AgentBase skills into Hermes at package install time.
 # Copies skills/b2b-* to ~/.hermes/skills/b2b/ so Hermes can discover them.
 install-agentbase-skills = "agentbase.post_install:install_skills"
 # Update B2B skills from GitHub (fetches latest SKILL.md from main branch)
 agentbase-skills-update = "agentbase.post_install:update_skills"
-# Update entire Trade system (git pull + pip install + skills + db)
-agentbase-update = "agentbase.post_install:update_trade"
-# Backup Trade data to tar.gz
-agentbase-backup = "agentbase.post_install:backup_trade"
-agentbase-restore = "agentbase.post_install:restore_trade"
+# Update entire AgentBase system (git pull + pip install + skills + db)
+agentbase-update = "agentbase.post_install:update_agentbase"
+# Backup AgentBase data to tar.gz
+agentbase-backup = "agentbase.post_install:backup_agentbase"
+agentbase-restore = "agentbase.post_install:restore_agentbase"
 desktop = "desktop:main"
 
 [tool.setuptools]

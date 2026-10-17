@@ -80,7 +80,7 @@ def test_auth_status_does_not_require_api_key_for_oauth(monkeypatch, compat_modu
 
 # ── Hermes 版本识别 ─────────────────────────────────────────────────────────
 # 上游 main 把 hermes_cli.__version__ 改为「惰性读安装印章，读不到返回 "0.0.0"」
-# （见 hermes_cli/__init__.py 的 __getattr__），而 Trade 用它做启动门禁。
+# （见 hermes_cli/__init__.py 的 __getattr__），而 AgentBase 用它做启动门禁。
 # 占位值必须视为「未知」：否则会以 0.0.0 < 0.13.0 拒绝启动，且提示信息是误导的。
 
 
@@ -159,7 +159,7 @@ class TestHermesPythonCompat:
         assert compat_module.hermes_python_compat()["verdict"] == "ok"
 
     def test_floor_applies_regardless_of_interpreter(self, monkeypatch, compat_module):
-        """版本下限与解释器无关：新版 Trade 的 venv 恒为 Python 3.14，老 Hermes
+        """版本下限与解释器无关：新版 AgentBase 的 venv 恒为 Python 3.14，老 Hermes
         不可能共存 —— 所以即便判定的解释器是 3.13（本身能跑 0.21.5），也一律判过旧。
         否则会给出错误补救：「升级 Hermes」在 3.13 上反而会把两套都弄坏。
         """
@@ -171,7 +171,7 @@ class TestHermesPythonCompat:
         assert compat_module.hermes_python_compat()["verdict"] == "too_old"
 
     def test_new_hermes_on_old_interpreter_is_python_too_old(self, monkeypatch, compat_module):
-        """反向场景：Hermes 已是 pm 时代（要 3.14），但 Trade 的解释器更老。
+        """反向场景：Hermes 已是 pm 时代（要 3.14），但 AgentBase 的解释器更老。
 
         2026-10-15 客户机实测：旧装机器（venv 是 3.11~3.13）把 Hermes 升到 0.22.0 后，
         这条被判成 ok —— 因为 requires-python 写的是 `>=3.11,<3.15`，而那个 `>=3.11`
@@ -184,10 +184,10 @@ class TestHermesPythonCompat:
         result = compat_module.hermes_python_compat()
 
         assert result["verdict"] == "python_too_old"
-        assert result["fix"] == "rebuild_trade_venv", "补救方向必须是重建 Trade 环境"
+        assert result["fix"] == "rebuild_venv", "补救方向必须是重建 AgentBase 环境"
 
     def test_old_hermes_on_old_interpreter_points_at_hermes(self, monkeypatch, compat_module):
-        """对比项：Hermes 自己过旧时，补救方向是升 Hermes 而不是重装 Trade。
+        """对比项：Hermes 自己过旧时，补救方向是升 Hermes 而不是重装 AgentBase。
 
         两个方向的用户动作完全不同，判错会让人白折腾 —— 所以这里成对钉住。
         """
@@ -331,7 +331,7 @@ class TestDegradedStartup:
             bootstrap, "dispatch_subcommands", lambda: calls.append("dispatch") or False
         )
         monkeypatch.setattr(bootstrap, "load_env_and_set_yolo", lambda: calls.append("env"))
-        for name in ("sync_b2b_skills", "ensure_document_deps", "ensure_desktop_integration"):
+        for name in ("sync_skills", "ensure_document_deps", "ensure_desktop_integration"):
             monkeypatch.setattr(bootstrap, name, (lambda n: lambda: calls.append(n))(name))
         monkeypatch.setattr(bootstrap, "start_doctor_if_needed", lambda: calls.append("doctor"))
 
@@ -365,7 +365,7 @@ class TestDegradedStartup:
         assert "doctor" not in calls, "过旧时端到端自检要起 agent，必须跳过"
         # vendored 模式（v2 §10.7）：版本随框架固定分发，**没有**后台自动升级
         # 不碰 Hermes 的步骤照常跑，保持功能完整
-        assert "sync_b2b_skills" in calls and "ensure_desktop_integration" in calls
+        assert "sync_skills" in calls and "ensure_desktop_integration" in calls
         assert "降级模式" in capsys.readouterr().out
 
     def test_optional_step_failure_does_not_block_startup(self, monkeypatch, capsys):
@@ -379,7 +379,7 @@ class TestDegradedStartup:
             raise RuntimeError("boom")
 
         # 让第一步就炸：降级模式仍必须照常起服务
-        monkeypatch.setattr(bootstrap, "sync_b2b_skills", _boom)
+        monkeypatch.setattr(bootstrap, "sync_skills", _boom)
 
         bootstrap.setup()  # 不抛异常即通过
 
@@ -396,7 +396,7 @@ class TestDegradedStartup:
 
         assert calls == [
             "guard", "arch", "paths", "version", "dispatch",
-            "env", "sync_b2b_skills", "ensure_document_deps",
+            "env", "sync_skills", "ensure_document_deps",
             "ensure_desktop_integration", "doctor",
         ]
 
@@ -416,7 +416,7 @@ class TestPrepareHermesImportPaths:
         monkeypatch.setattr(bootstrap, "_adjust_sys_path", lambda: calls.append("path"))
         monkeypatch.setattr(bootstrap, "hermes_is_usable", lambda: True)
         monkeypatch.setattr(
-            bootstrap, "_activate_hermes_env_and_restore_trade_paths",
+            bootstrap, "_activate_hermes_env_and_restore_paths",
             lambda: calls.append("activate"),
         )
 
@@ -432,7 +432,7 @@ class TestPrepareHermesImportPaths:
         monkeypatch.setattr(bootstrap, "_adjust_sys_path", lambda: None)
         monkeypatch.setattr(bootstrap, "hermes_is_usable", lambda: False)
         monkeypatch.setattr(
-            bootstrap, "_activate_hermes_env_and_restore_trade_paths",
+            bootstrap, "_activate_hermes_env_and_restore_paths",
             lambda: calls.append("activate"),
         )
 

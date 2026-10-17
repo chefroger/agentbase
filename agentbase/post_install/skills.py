@@ -36,8 +36,8 @@ def _get_hermes_home() -> Path:
     return Path.home() / ".hermes"
 
 
-def _get_trade_home() -> Path:
-    """解析 Trade 用户数据目录（AGENT_HOME 环境变量 → 平台默认路径）。
+def get_agent_home() -> Path:
+    """解析 AgentBase 用户数据目录（AGENT_HOME 环境变量 → 平台默认路径）。
 
     macOS/Linux: ~/.agentbase/
     Windows:     %LOCALAPPDATA%\\agentbase\\
@@ -65,7 +65,7 @@ def _get_package_skills_dir() -> Path | None:
 
     搜索策略（按优先级）：
       1. sys._MEIPASS — PyInstaller 打包模式的临时解压目录
-      2. sys.path 中的 trade 包目录（pip install . 场景）
+      2. sys.path 中的 agentbase 包目录（pip install . 场景）
       3. 当前脚本所在目录的父级（pip install -e . 开发模式）
 
     Returns:
@@ -105,7 +105,7 @@ def _copy_skills(src: Path, dst_base: Path, progress_callback=None) -> list[str]
     每个 skill 在目标创建 dst_base/{name}/SKILL.md。
 
     **判定标准是「子目录里有 SKILL.md」，不按名字前缀过滤** —— 框架不该知道
-    业务 skill 叫什么（旧版写死 b2b-/auto- 前缀，等于把业务知识焊进框架）。
+    业务 skill 叫什么（旧版写死业务前缀，等于把业务知识焊进框架）。
 
     Args:
         progress_callback: 可选回调 f(msg)，每安装一个 skill 调用一次
@@ -141,15 +141,15 @@ def _copy_skills(src: Path, dst_base: Path, progress_callback=None) -> list[str]
     return installed
 
 
-def _copy_trade_template(src: Path, dst: Path) -> None:
-    """将 .agentbase-template/ 目录复制到 Trade 运行时数据目录。
+def _copy_template(src: Path, dst: Path) -> None:
+    """将 .agentbase-template/ 目录复制到 AgentBase 运行时数据目录。
 
     仅当目标不存在时才复制，避免覆盖用户已有的模板修改。
     同时植入 prompts/system.md 初始提示词文件。
 
     Args:
         src: 源码中的 .agentbase-template/ 目录
-        dst: Trade 运行时目录（~/.agentbase/）
+        dst: AgentBase 运行时目录（~/.agentbase/）
     """
     if src.is_dir():
         dest = dst / ".agentbase-template"
@@ -173,7 +173,7 @@ def _copy_trade_template(src: Path, dst: Path) -> None:
 # ── 公开 API ──────────────────────────────────────────────────────────────
 
 def install_skills(progress_callback=None) -> None:
-    """主入口：将 Trade B2B skills 安装到 Hermes skills 目录。
+    """主入口：将 skills 安装到 Hermes skills 目录。
 
     调用方式：
       - pip install -e . 或 pip install .（setuptools post-install hook）
@@ -191,7 +191,7 @@ def install_skills(progress_callback=None) -> None:
         SystemExit(1): 找不到 skills 目录或安装失败时
     """
     hermes_home = _get_hermes_home()
-    agentbase_home = _get_trade_home()
+    agentbase_home = get_agent_home()
     hermes_skills_dir = hermes_home / "skills"
 
     # 首次安装时从模板生成 ~/.agentbase/business.yaml（已存在则绝不覆盖）
@@ -256,7 +256,7 @@ def install_skills(progress_callback=None) -> None:
         else:
             print(warn_msg, file=sys.stderr)
 
-    # 同时复制 .agentbase-template 到 Trade 运行时数据目录
+    # 同时复制 .agentbase-template 到 AgentBase 运行时数据目录
     template_dir = package_skills.parent / ".agentbase-template"
     if not template_dir.is_dir():
         # PyInstaller _MEIPASS 回退
@@ -269,15 +269,15 @@ def install_skills(progress_callback=None) -> None:
 
     if template_dir.is_dir():
         template_msg = (
-            f"[post_install] Trade home: {agentbase_home}"
+            f"[post_install] AgentBase home: {agentbase_home}"
         )
         if progress_callback:
             progress_callback(template_msg)
         else:
             print(template_msg)
         agentbase_home.mkdir(parents=True, exist_ok=True)
-        _copy_trade_template(template_dir, agentbase_home)
-        done_msg = f"[post_install] Trade data template installed to: {agentbase_home}/.agentbase-template"
+        _copy_template(template_dir, agentbase_home)
+        done_msg = f"[post_install] AgentBase data template installed to: {agentbase_home}/.agentbase-template"
         if progress_callback:
             progress_callback(done_msg)
         else:
@@ -292,8 +292,8 @@ def install_skills(progress_callback=None) -> None:
 def update_skills() -> None:
     """更新业务 skill pack，并同步到 Hermes。
 
-    旧实现从 `raw.githubusercontent.com/chefroger/smart-trade-ai` 逐个下载
-    b2b 的 SKILL.md —— 抽取之后那套做法已经不成立：skill 现在住在**独立的
+    旧实现从 `raw.githubusercontent.com` 逐个下载
+    业务 SKILL.md —— 抽取之后那套做法已经不成立：skill 现在住在**独立的
     skill pack 仓库**里，而且多半是 private（raw URL 取不到）。
 
     新实现分三步：
@@ -323,7 +323,7 @@ def update_skills() -> None:
 
     print(f"[update_skills] 更新 skill pack: {pack_dir}")
 
-    # 关键：断掉一切交互式提示。撞到凭证提示会永久挂住（这是 Trade 时代
+    # 关键：断掉一切交互式提示。撞到凭证提示会永久挂住（这是 AgentBase 时代
     # 用真机事故换来的教训，见 COMPATIBILITY.md 的网络探测那一节）。
     env = {
         **os.environ,

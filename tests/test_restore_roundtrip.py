@@ -13,7 +13,7 @@
 2. **重启回退是死代码**：`_build_restart_command()` 返回
    `[sys.executable, "-m", "agentbase"]`，但**仓库里没有 `agentbase/__main__.py`**
    → 子进程 `No module named agentbase.__main__` 秒退；而 Popen 本身成功，
-   所以照样打印「↻ Trade 服务已重新启动」。用户被告知服务已起，实际已下线。
+   所以照样打印「↻ AgentBase 服务已重新启动」。用户被告知服务已起，实际已下线。
 
 3. **依赖 sqlite3 CLI**：完整性检查用 `["sqlite3", ...]`，而 Windows 不带
    `sqlite3.exe`（Python 只有 sqlite3 模块）→ 必崩。
@@ -32,14 +32,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 @pytest.fixture(autouse=True)
 def _no_real_restart(monkeypatch):
-    """必须屏蔽真实重启 —— restore_trade 末尾会 Popen 一个新的 Trade 进程。
+    """必须屏蔽真实重启 —— restore_agentbase 末尾会 Popen 一个新的 AgentBase 进程。
 
     不屏蔽的话测试会在 CI 机器上真的拉起一个服务（占端口、留进程），
     既慢又不可控。
     """
     from agentbase.post_install import backup as bk
 
-    monkeypatch.setattr(bk, "_restart_trade_service", lambda: None)
+    monkeypatch.setattr(bk, "_restart_service", lambda: None)
 
 
 @pytest.fixture
@@ -74,9 +74,9 @@ def agentbase_env(monkeypatch, tmp_path):
 class TestRoundtripRestoresData:
     def test_workspaces_and_prompts_come_back(self, agentbase_env):
         """核心：还原后公司档案与提示词必须真的回来了。"""
-        from agentbase.post_install.backup import backup_trade, restore_trade
+        from agentbase.post_install.backup import backup_agentbase, restore_agentbase
 
-        archive = backup_trade(output_dir=str(agentbase_env["tmp"]))
+        archive = backup_agentbase(output_dir=str(agentbase_env["tmp"]))
 
         # 抹掉数据（模拟换机/重装后还原）
         th = agentbase_env["agentbase_home"]
@@ -86,7 +86,7 @@ class TestRoundtripRestoresData:
         shutil.rmtree(th / "prompts")
         (th / "data" / "agentbase.db").unlink()
 
-        msg = restore_trade(archive)
+        msg = restore_agentbase(archive)
 
         assert (th / "workspaces" / "acme" / "profile.md").is_file(), (
             f"公司档案没有还原（restore 返回：{msg!r}）—— "
@@ -96,13 +96,13 @@ class TestRoundtripRestoresData:
         assert (th / "prompts" / "system.md").read_text(encoding="utf-8") == "自定义提示词"
 
     def test_database_restored(self, agentbase_env):
-        from agentbase.post_install.backup import backup_trade, restore_trade
+        from agentbase.post_install.backup import backup_agentbase, restore_agentbase
 
-        archive = backup_trade(output_dir=str(agentbase_env["tmp"]))
+        archive = backup_agentbase(output_dir=str(agentbase_env["tmp"]))
         th = agentbase_env["agentbase_home"]
         (th / "data" / "agentbase.db").unlink()
 
-        restore_trade(archive)
+        restore_agentbase(archive)
 
         import sqlite3
 
@@ -124,7 +124,7 @@ class TestRoundtripRestoresData:
                 arcname=".agentbase/data/agentbase.db",
             )
 
-        msg = bk.restore_trade(str(thin))
+        msg = bk.restore_agentbase(str(thin))
 
         assert "workspaces" in msg or "未找到" in msg or "部分" in msg, (
             f"备份里没有公司数据却报告成功：{msg!r}"
@@ -136,7 +136,7 @@ class TestIntegrityCheckHasNoCliDependency:
         """完整性检查必须用 Python 的 sqlite3 模块 —— Windows 没有 sqlite3.exe。"""
         from agentbase.post_install import backup as bk
 
-        archive = bk.backup_trade(output_dir=str(agentbase_env["tmp"]))
+        archive = bk.backup_agentbase(output_dir=str(agentbase_env["tmp"]))
 
         calls: list[list[str]] = []
         real_run = bk._sp.run
@@ -148,7 +148,7 @@ class TestIntegrityCheckHasNoCliDependency:
 
         monkeypatch.setattr(bk._sp, "run", _spy)
 
-        bk.restore_trade(archive)
+        bk.restore_agentbase(archive)
 
         flat = [c[0] for c in calls if c]
         assert "sqlite3" not in flat, (

@@ -5,7 +5,7 @@
 有三次故障都是"安装验证全过、第一次真实使用才炸"，而且报错指不出真因：
 
 1. **Hermes 懒加载重启**：`import run_agent` 连带把进程 re-exec 到 Hermes 自带的
-   Python（无 trade 包）→ `RelaunchExit(SystemExit)` → agent 线程静默死亡。
+   Python（无 agentbase 包）→ `RelaunchExit(SystemExit)` → agent 线程静默死亡。
    `import` 层面的检查全都通过。
 2. **Tavily 静默失败**：SSL 被拦时 web_search 每次失败但只写 warning，
    报告照常输出，用户以为搜过了。
@@ -47,7 +47,7 @@ class CheckResult:
     """单项检查结果。
 
     Attributes:
-        fatal: True 表示这一项失败时**应当阻断安装** —— 只给"Trade 根本用不了"
+        fatal: True 表示这一项失败时**应当阻断安装** —— 只给"AgentBase 根本用不了"
                的项，例如 agent 构造不出来、数据库不可写。降级项（搜索、记忆）
                一律 fatal=False：功能打折但仍可用，不该挡着人用。
     """
@@ -331,9 +331,9 @@ def _probe_tavily_live(api_key: str) -> tuple[bool, str]:
     return False, "接口有响应但没有返回结果"
 
 
-# ── 检查 4：Trade 自身 ────────────────────────────────────────────────────
+# ── 检查 4：AgentBase 自身 ────────────────────────────────────────────────────
 
-def check_trade(*, chat_prober=None, db_prober=None) -> list[CheckResult]:
+def check_agentbase(*, chat_prober=None, db_prober=None) -> list[CheckResult]:
     """数据库可写 + 走一次真实对话回合。
 
     真实对话是这套自检里最值钱的一项：客户机上那次故障的表现就是"聊天空回复"，
@@ -370,9 +370,9 @@ def _probe_db() -> tuple[bool, str]:
     自检是诊断工具，不该产生这种副作用。
     """
     from agentbase.database import get_connection, init_db
-    from agentbase.post_install.skills import _get_trade_home
+    from agentbase.post_install.skills import get_agent_home
 
-    if not (_get_trade_home() / "data" / "agentbase.db").is_file():
+    if not (get_agent_home() / "data" / "agentbase.db").is_file():
         init_db()  # 全新环境：先把库建起来
 
     conn = get_connection()
@@ -443,12 +443,12 @@ def check_estop(*, estop_path: Path | None = None) -> list[CheckResult]:
     哨兵文件，`hermes resume` 删除；存在期间 cron 调度器 / kanban 派发 / gateway
     新回合一律跳过（在飞任务不杀）。它是 fail-safe 的：空文件、内容损坏都算已触发。
 
-    为什么放进自检：Trade 界面**完全不显示这个状态** —— 客户机上一旦残留这个文件
+    为什么放进自检：AgentBase 界面**完全不显示这个状态** —— 客户机上一旦残留这个文件
     （有人跑过 hermes pause，或上次没清理干净），用户只会看到「定时任务不跑了」，
     而其它自检项全是绿的，排查会走大弯路。
 
     边界：只查 `$HERMES_HOME/ESTOP`。Hermes 还会看 fleet root（profile 部署下
-    `~/.hermes/ESTOP` 同样生效）—— Trade 是单一 HERMES_HOME 部署，两者同路径，
+    `~/.hermes/ESTOP` 同样生效）—— AgentBase 是单一 HERMES_HOME 部署，两者同路径，
     故此处单路径即完整。
     """
     if estop_path is None:
@@ -494,7 +494,7 @@ def run_doctor(*, deep: bool = True) -> list[CheckResult]:
     if deep:
         results += check_vision()
         results += check_tavily()
-        results += check_trade()
+        results += check_agentbase()
     else:
         try:
             names = _agent_tool_names()
@@ -528,14 +528,14 @@ def format_report(results: list[CheckResult]) -> str:
     """人类可读的自检报告。
 
     汇总分三档，措辞与用户动作一一对应：
-      - **致命失败** → Trade 无法正常使用，必须先修
+      - **致命失败** → AgentBase 无法正常使用，必须先修
       - **非致命失败** → 该功能不可用（如读不了图），要修但不挡着用
       - **降级** → 功能打折（如没配搜索），可忽略
     历史 bug：原实现只统计 fatal 与 warn，**非致命的 FAIL 两边都不算**，
     于是落到 else 说"全部通过" —— 真机跑出来时明明有 ✗。
     """
     icon = {STATUS_OK: "✓", STATUS_WARN: "⚠", STATUS_FAIL: "✗"}
-    lines = ["", "══ Trade 自检 ══"]
+    lines = ["", "══ AgentBase 自检 ══"]
     for r in results:
         lines.append(f"  {icon.get(r.status, '?')} {r.name}: {r.detail}")
 
@@ -547,7 +547,7 @@ def format_report(results: list[CheckResult]) -> str:
     lines.append("")
     if fatal:
         lines.append(
-            f"  ✗ {len(fatal)} 项致命问题，Trade 无法正常使用 —— "
+            f"  ✗ {len(fatal)} 项致命问题，AgentBase 无法正常使用 —— "
             f"请先按上面的提示修复：{'、'.join(r.name for r in fatal)}"
         )
     if non_fatal:
@@ -565,13 +565,13 @@ def format_report(results: list[CheckResult]) -> str:
 # ── 何时跑（首次跑；未过则重试） ──────────────────────────────────────────
 
 def _state_file() -> Path:
-    from agentbase.post_install.skills import _get_trade_home
+    from agentbase.post_install.skills import get_agent_home
 
-    return _get_trade_home() / "data" / "doctor.json"
+    return get_agent_home() / "data" / "doctor.json"
 
 
 def _fingerprint() -> str:
-    """配置指纹：provider/model/Trade 版本任一变化都应重跑自检。"""
+    """配置指纹：provider/model/AgentBase 版本任一变化都应重跑自检。"""
     parts = []
     try:
         from agentbase.helpers import get_agent_kwargs

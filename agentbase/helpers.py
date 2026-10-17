@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 共享辅助函数。
+AgentBase AI Assistant — 共享辅助函数。
 
 集中了 Provider 校验和 Agent 构造参数逻辑，避免 /chat 和 /chat/stream
 两个端点各自重复约 90 行代码。
@@ -15,16 +15,22 @@ from agentbase import prompts as _prompts
 from agentbase import skill_router as _skill_router
 from agentbase import workspace as _workspace
 
+
 # ── 一致性温度分流 ────────────────────────────────────────────────────────────
 # 创作类 skill 豁免清单：输出需要多样性（A/B 变体、内容创意），保持 provider 默认温度。
 # 其余 skill（分析/提取/清单类）与无匹配的通用对话 → 低温，减少数据漂移。
-_CREATIVE_SKILLS = frozenset({
-    "b2b-cold-outreach", "b2b-email-imitation", "b2b-social-media",
-    "b2b-seo-aeo", "b2b-short-video", "b2b-kol-imitation",
-    "b2b-linkedin-marketing", "b2b-product-description",
-    "b2b-guarantee-proposal", "b2b-sales-playbook",
-    "b2b-inquiry-training", "b2b-sales-pipeline",
-})
+# 清单由 skill pack 的 pack.yaml `creative_skills` 声明 —— 框架不写死业务 skill 名。
+def _creative_skills() -> frozenset:
+    try:
+        from agentbase.skill_registry import pack_manifest
+
+        raw = pack_manifest().get("creative_skills")
+    except Exception:
+        return frozenset()
+    if not isinstance(raw, list):
+        return frozenset()
+    return frozenset(str(x) for x in raw if isinstance(x, str))
+
 
 # 支持自定义 temperature 的 provider 白名单（常规 chat-completions 类，传了确实生效）。
 # 白名单外有两种情况，都不能传 temperature：
@@ -46,7 +52,7 @@ _DEFAULT_CONSISTENCY_TEMPERATURE = "0.1"
 def _consistency_request_overrides(skill_name: str | None, provider: str) -> dict | None:
     """按 skill 类型与 provider 决定是否注入一致性 temperature。
 
-    - 创作类 skill（_CREATIVE_SKILLS）→ None（用 provider 默认温度，保多样性）
+    - 创作类 skill（pack 的 creative_skills）→ None（用 provider 默认温度，保多样性）
     - 白名单外 provider → None（会报错型如 Kimi/Anthropic；静默忽略型如 deepseek）
     - 其余（分析/提取/清单类 + 无匹配通用对话）→ {"temperature": 低温}
 
@@ -55,7 +61,7 @@ def _consistency_request_overrides(skill_name: str | None, provider: str) -> dic
     （三道防线），它们不依赖 provider 的采样参数契约——尤其是 deepseek 这类
     thinking mode 下 temperature 被静默忽略的 provider。
     """
-    if skill_name in _CREATIVE_SKILLS:
+    if skill_name in _creative_skills():
         return None
     if (provider or "").strip().lower() not in _TEMP_SAFE_PROVIDERS:
         return None
@@ -222,7 +228,7 @@ def get_agent_kwargs() -> dict:
 
 # ── Agent factory ─────────────────────────────────────────────────────────────
 
-# 默认启用的 Hermes toolset 组合。Trade 是**显式**传 enabled_toolsets 的，不继承
+# 默认启用的 Hermes toolset 组合。AgentBase 是**显式**传 enabled_toolsets 的，不继承
 # config.yaml 里的 toolsets —— 所以这个列表就是 agent 全部能力的边界。
 #
 # `vision` 必须在列：Hermes 的 `vision_analyze`（唯一的图片识别工具）注册在
@@ -236,7 +242,7 @@ DEFAULT_ENABLED_TOOLSETS = (
     "web", "search", "file", "terminal", "code_execution",
     "browser", "skills", "memory", "cronjob", "todo",
     "vision",
-    # chat-memory 是 trade 自带的 Hermes 插件提供的工具集（见
+    # chat-memory 是 agentbase 自带的 Hermes 插件提供的工具集（见
     # agentbase/hermes_chat_memory_plugin/）。**必须列在这里** —— Hermes 只会把
     # enabled 列表里那些 toolset 的工具放进工具表；插件加载成功但这里没列，
     # 工具就只是躺在注册表里、LLM 完全看不见（2026-10-16 实测踩到：
@@ -274,7 +280,7 @@ def create_agent(
 ):
     """创建 Hermes AIAgent 实例的统一入口。
 
-    Trade 中所有对 Hermes Agent 的调用都通过此函数，不直接 import AIAgent。
+    AgentBase 中所有对 Hermes Agent 的调用都通过此函数，不直接 import AIAgent。
     当 Hermes 升级改变模块路径或构造签名时，只需修改此一处。
 
     Args:
@@ -393,7 +399,7 @@ def _get_history_block(workspace_id: int | None, total_prompt_chars: int) -> tup
             "可用 time_range：today / yesterday / this_week / last_week / "
             "this_month / last_month / this_year / last_year / all；"
             "或 recent_days / recent_months 表达上上周三/前几个月等。"
-            "workspace_id 从 system prompt 的 Trade Context 段读取。"
+            "workspace_id 从 system prompt 的 AgentBase Context 段读取。"
         )
     else:                                # >= 50k tokens — 上下文紧张，仅注入 5 条
         limit = 5
@@ -425,7 +431,7 @@ def _get_history_block(workspace_id: int | None, total_prompt_chars: int) -> tup
 # ── 用户问题中显式文件/目录路径提取 ──────────────────────────────────────
 
 # 匹配常见文件路径模式：绝对路径、带扩展名的文件名、中文文件名
-# 正则定义在 read_evidence（零 Trade 依赖）里，供弱证据识别共用，避免两处漂移
+# 正则定义在 read_evidence（零 AgentBase 依赖）里，供弱证据识别共用，避免两处漂移
 from agentbase.read_evidence import EXPLICIT_PATH_RE as _EXPLICIT_PATH_RE  # noqa: E402
 
 
@@ -560,10 +566,10 @@ def build_query(
                 f"- 公司 ID：{co['id']}\n"
                 f"- Slug：「{slug}」\n\n"
                 "**所有数据操作（记忆读取、客户查询、文档搜索）必须限定在上述公司范围内。**"
-                # 紧跟其后**强绑定**"带 workspace_id 参数的 trade 工具必须传这个数字"——
+                # 紧跟其后**强绑定**"带 workspace_id 参数的 agentbase 工具必须传这个数字"——
                 # 不然 LLM 看到 ID 也未必会联想到工具调用。文案来源：
-                # agentbase/prompts._build_trade_context_block，**共用同一段文案**避免漂移。
-                + _prompts._build_trade_context_block(co['id'])
+                # agentbase/prompts._build_workspace_context_block，**共用同一段文案**避免漂移。
+                + _prompts._build_workspace_context_block(co['id'])
             )
 
     # 1.6 品牌安全护栏 — 所有对外内容生成都需遵守
@@ -597,7 +603,7 @@ def build_query(
     if workspace_id:
         # 收集工作目录 + 所有文档库，告知 Agent 可用目录，Agent 自行判断是否需要读取
         dirs_to_scan: list[str] = []
-        tc = _workspace.get_trade_workspace(workspace_id)
+        tc = _workspace.get_workspace_record(workspace_id)
         if tc:
             data_dir = tc.get("data_dir", "")
             if data_dir and Path(data_dir).is_dir():

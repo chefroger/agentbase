@@ -1,12 +1,12 @@
 """
-Trade AI Assistant — 一键系统更新。
+AgentBase AI Assistant — 一键系统更新。
 
-update_trade() 按序执行 7 个步骤：
+update_agentbase() 按序执行 7 个步骤：
   1. git pull（在运行目录拉取最新代码）
-  2. install_skills()（安装新增的 b2b-* skill 目录 + 模板）
+  2. install_skills()（安装新增的 skill 目录 + 模板）
   3. update_skills()（从 GitHub 同步每个 SKILL.md 内容）
   4. pip install -e .（更新包及依赖）
-  5. _sync_trade_template()（同步新增的模板文件）
+  5. _sync_template()（同步新增的模板文件）
   6. _ensure_auto_start()（开机自启设置幂等检查）
   7. 数据库迁移检查
 
@@ -23,7 +23,7 @@ import textwrap
 from pathlib import Path
 
 from agentbase.post_install.skills import (
-    _get_trade_home,
+    get_agent_home,
     install_skills,
     update_skills,
 )
@@ -69,8 +69,8 @@ def _sync_dir_rsync(src: Path, dst: Path) -> None:
                 item.unlink()
 
 
-def _sync_trade_template(template_src: Path, agentbase_home: Path) -> None:
-    """将 .agentbase-template/ 中新增的模板文件同步到 Trade 运行时目录。
+def _sync_template(template_src: Path, agentbase_home: Path) -> None:
+    """将 .agentbase-template/ 中新增的模板文件同步到 AgentBase 运行时目录。
 
     仅复制新增的文件，不覆盖用户已有数据。
     同时处理 prompts/system.md 的植入逻辑（与 install_skills 行为一致）。
@@ -112,7 +112,7 @@ def _sync_trade_template(template_src: Path, agentbase_home: Path) -> None:
 # ── 开机自启动 ────────────────────────────────────────────────────────────
 
 def _ensure_auto_start(agentbase_dir: Path) -> None:
-    """确保 Trade 在操作系统启动时自动运行（幂等操作：已存在则跳过）。
+    """确保 AgentBase 在操作系统启动时自动运行（幂等操作：已存在则跳过）。
 
     支持的平台：
       - Windows: Task Scheduler 登录时触发
@@ -151,7 +151,7 @@ def _ensure_macos_auto_start(agentbase_dir: Path) -> None:
         print("  ✓ 开机自启动任务已存在")
         return
 
-    # trade 命令路径（优先 ~/.local/bin/agentbase，其次 PATH 中的 trade）
+    # agentbase 命令路径（优先 ~/.local/bin/agentbase，其次 PATH 中的 agentbase）
     agentbase_bin = os.environ.get("HOME", str(Path.home())) + "/.local/bin/agentbase"
     plist_content = textwrap.dedent(f"""\
     <?xml version="1.0" encoding="UTF-8"?>
@@ -194,7 +194,7 @@ def _ensure_linux_auto_start(agentbase_dir: Path) -> None:
     server_py = str(agentbase_dir / "server.py")
     unit_content = textwrap.dedent(f"""\
     [Unit]
-    Description=Smart Trade AI
+    Description=AgentBase
     After=network.target
 
     [Service]
@@ -235,7 +235,7 @@ _OPTIONAL_DEPS = ("sqlite-vec>=0.1.6",)
 def _install_optional_deps(emit, warnings: list[str]) -> None:
     """装可选依赖；已装则跳过，任何失败只记警告，绝不阻断升级。
 
-    emit 由调用方传入（update_trade() 里的闭包，同时 print + 记 messages）——
+    emit 由调用方传入（update_agentbase() 里的闭包，同时 print + 记 messages）——
     本函数是模块级的，拿不到那个闭包。
     """
     try:
@@ -265,16 +265,16 @@ def _install_optional_deps(emit, warnings: list[str]) -> None:
 def _refuse_reason_for_interpreter() -> str | None:
     """当前解释器是否允许执行升级；不允许时返回给用户看的原因（允许返回 None）。
 
-    为什么必须挡：升级过程中的全部 `pip install` 都用 `sys.executable`。若 update_trade()
+    为什么必须挡：升级过程中的全部 `pip install` 都用 `sys.executable`。若 update_agentbase()
     是被**系统 python** 调起的（cron / launchd / 计划任务 / 用户手敲 python），依赖会装进
-    **全局 site-packages** —— 既污染用户系统，又因为 Trade 的启动器指向自己的 venv，
+    **全局 site-packages** —— 既污染用户系统，又因为 AgentBase 的启动器指向自己的 venv，
     下次启动仍然缺依赖，白升一场。
 
-    判据刻意保守（宁可放过、不可误拦）：只在**确知** Trade 的 venv 存在、且当前解释器
-    不在其中时才拒绝。在开发机上从仓库直接跑（本机没有 trade venv）不会被拦。
+    判据刻意保守（宁可放过、不可误拦）：只在**确知** AgentBase 的 venv 存在、且当前解释器
+    不在其中时才拒绝。在开发机上从仓库直接跑（本机没有 agentbase venv）不会被拦。
     """
     venv_markers = [
-        _get_trade_home() / "venv",
+        get_agent_home() / "venv",
         Path.home() / ".agentbase" / "venv",
     ]
     # pyvenv.cfg 是两个平台上都可靠的 venv 标志
@@ -286,17 +286,17 @@ def _refuse_reason_for_interpreter() -> str | None:
 
     # Windows 路径大小写不敏感 → 归一化后再比，避免把「就是同一个 venv」误判成不同
     here = os.path.normcase(str(Path(sys.prefix).resolve()))
-    in_trade_venv = any(
+    in_agentbase_venv = any(
         here == os.path.normcase(str(v.resolve())) for v in existing
     )
-    if existing and not in_trade_venv:
-        # 在某个 venv 里，但不是 Trade 的那个 → 装了也不会生效
-        return "当前解释器不是 Trade 自己的运行环境，升级不会生效。"
+    if existing and not in_agentbase_venv:
+        # 在某个 venv 里，但不是 AgentBase 的那个 → 装了也不会生效
+        return "当前解释器不是 AgentBase 自己的运行环境，升级不会生效。"
     return None
 
 
-def update_trade() -> dict:
-    """一键更新 Foreign Trade Assistant 系统。
+def update_agentbase() -> dict:
+    """一键更新 AgentBase 系统。
 
     返回结构化结果: {"ok": bool, "version": str, "errors": list[str], "messages": list[str]}
 
@@ -309,7 +309,7 @@ def update_trade() -> dict:
       6. auto-start check
       7. database migration
     """
-    agentbase_dir = _get_trade_home() / "agentbase"
+    agentbase_dir = get_agent_home() / "agentbase"
     # errors = 致命失败（git / pip / 数据库），必须阻止重启
     # warnings = 非致命失败（skills / 模板 / 开机自启），记录并上报但继续重启
     errors: list[str] = []
@@ -334,16 +334,16 @@ def update_trade() -> dict:
             "messages": messages,
         }
 
-    # ── Step 0b: 解释器必须跑在 Trade 自己的 venv 内 ───────────────────────
+    # ── Step 0b: 解释器必须跑在 AgentBase 自己的 venv 内 ───────────────────────
     _refuse = _refuse_reason_for_interpreter()
     if _refuse:
         _emit(f"  ✗ 升级已中止：{_refuse}")
         _emit(f"    当前解释器: {sys.executable}")
-        _emit("    请在 Trade 界面里点「更新」，或在终端执行 `agentbase update`。")
+        _emit("    请在 AgentBase 界面里点「更新」，或在终端执行 `agentbase update`。")
         return {
             "ok": False,
             "version": "",
-            "errors": ["not_in_trade_venv"],
+            "errors": ["not_in_agentbase_venv"],
             "warnings": warnings,
             "messages": messages,
         }
@@ -355,7 +355,7 @@ def update_trade() -> dict:
         agentbase_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
             clone_result = subprocess.run(
-                ["git", "clone", "https://github.com/chefroger/smart-trade-ai.git",
+                ["git", "clone", "https://github.com/chefroger/agentbase.git",
                  str(agentbase_dir)],
                 capture_output=True, text=True, timeout=300,
             )
@@ -468,7 +468,7 @@ def update_trade() -> dict:
 
     # ── Step 4: pip install ───────────────────────────────────────────────
     # 与 install.sh Step 3 保持一致：先按 requirements.txt 装依赖，再用
-    # --no-deps 装 Trade 自身。不能不带 --no-deps——Hermes 的 setup.py 已
+    # --no-deps 装 AgentBase 自身。不能不带 --no-deps——Hermes 的 setup.py 已
     # 明确拒绝通过 pip 构建（直接抛 RuntimeError），它由安装脚本单独
     # editable 安装；让 pip 去解析这个依赖会让整次升级失败。
     _emit("→ Step 4/7: pip install ...")
@@ -499,9 +499,9 @@ def update_trade() -> dict:
     _emit("→ Step 5/7: template sync ...")
     try:
         template_src = agentbase_dir / ".agentbase-template"
-        agentbase_home = _get_trade_home()
+        agentbase_home = get_agent_home()
         agentbase_home.mkdir(parents=True, exist_ok=True)
-        _sync_trade_template(template_src, agentbase_home)
+        _sync_template(template_src, agentbase_home)
         _emit("  ✓ Templates synced")
     except Exception as e:
         _emit(f"  ⚠ Template sync failed: {e}")
@@ -541,9 +541,9 @@ def update_trade() -> dict:
     if ok:
         # 有非致命警告时也重启，但把警告一并回报给前端
         if warnings:
-            _emit(f"\n✅ Trade update complete（{len(warnings)} 项警告）. Restarting...")
+            _emit(f"\n✅ AgentBase update complete（{len(warnings)} 项警告）. Restarting...")
         else:
-            _emit("\n✅ Trade update complete. Restarting...")
+            _emit("\n✅ AgentBase update complete. Restarting...")
     else:
         _emit("\n⚠️  Update completed with errors. No restart.")
     return {"ok": ok, "version": new_version, "errors": errors,

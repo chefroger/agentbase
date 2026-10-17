@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 首次运行引导 API。
+AgentBase AI Assistant — 首次运行引导 API。
 
 端点：
   GET  /onboarding/status       — 检查引导是否已完成

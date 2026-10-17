@@ -322,7 +322,7 @@ class TestCompanyEndpoints:
 
     def test_update_agent_identity(self, test_db, workspace_id, setup_mocks):
         from agentbase import workspace
-        result = workspace.update_trade_workspace(workspace_id, agent_identity_md="Test identity")
+        result = workspace.update_workspace_record(workspace_id, agent_identity_md="Test identity")
         assert result["agent_identity_md"] == "Test identity"
 
 
@@ -349,9 +349,9 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.get_workspace_record",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.update_workspace_record",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir
@@ -377,9 +377,9 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.get_workspace_record",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.update_workspace_record",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir
@@ -422,9 +422,9 @@ class TestWorkDirUpload:
         monkeypatch.setattr("agentbase.workspace.get",
                            lambda cid: {"name": "Test", "slug": "test"})
         # 上传端点会读 agentbase_workspaces.extra1 取已保存的工作目录
-        monkeypatch.setattr("agentbase.workspace.get_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.get_workspace_record",
                            lambda cid: {"extra1": None})
-        monkeypatch.setattr("agentbase.workspace.update_trade_workspace",
+        monkeypatch.setattr("agentbase.workspace.update_workspace_record",
                            lambda cid, **kw: None)
 
         from agentbase.api.files import upload_to_work_dir

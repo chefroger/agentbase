@@ -14,7 +14,7 @@ from typing import Any
 # __getattr__，那是给旧更新器留的兼容面）。官方新口径是
 # hermes_cli.version_info.get_version_info()：安装印章 → live git → unknown，
 # 且明确选择降级而不是崩。
-# Trade 只拿这个版本做启动门禁，所以必须区分「真实版本」与「识别不到」。
+# AgentBase 只拿这个版本做启动门禁，所以必须区分「真实版本」与「识别不到」。
 
 # 不是真实版本号的占位值（上游无安装印章时返回 0.0.0）
 _VERSION_PLACEHOLDERS = frozenset({"", "0.0.0", "0.0.0.0", "unknown", "none", "dev"})
@@ -108,11 +108,11 @@ def hermes_version() -> str | None:
 
 
 # ── Python 共存判定（不导入 Hermes）────────────────────────────────────────
-# Trade 是**进程内**嵌 Hermes（`from run_agent import AIAgent`），所以 Trade 的解释器
+# AgentBase 是**进程内**嵌 Hermes（`from run_agent import AIAgent`），所以 AgentBase 的解释器
 # 必须能加载 Hermes 及其全部依赖。而 Hermes 从 v0.21.6 起改为只支持 Python 3.14
 # （requires-python 上界从 <3.14 翻到 <3.15），上一代则硬性要求 <3.14：
 # 实测 3.14 下装 0.19.0 直接 `ERROR: Package 'hermes-agent' requires a different Python`。
-# 两侧互斥，因此「旧 Hermes + 新版 Trade」永远不可能共存 —— 必须先升级 Hermes。
+# 两侧互斥，因此「旧 Hermes + 新版 AgentBase」永远不可能共存 —— 必须先升级 Hermes。
 #
 # 为什么不用 `import` 判：旧 Hermes 跑在 3.14 上，崩点是**缺依赖的 ImportError**，
 # 不是版本错。用户看到的是天书，而我们需要的是「版本过旧、去升级」这个可行动的结论。
@@ -239,7 +239,7 @@ def hermes_python_compat() -> dict[str, Any]:
         "python": python_version,
         "checkout": str(checkout.parent) if checkout else None,
         "reason": "",
-        # 补救方向：告诉调用方该升 Hermes 还是该重建 Trade 的运行环境。
+        # 补救方向：告诉调用方该升 Hermes 还是该重建 AgentBase 的运行环境。
         # 两者的用户动作完全不同（一个去装 Hermes，一个重跑安装脚本），
         # 给错方向会让用户白折腾 —— 2026-10-15 客户机就是这么卡住的。
         "fix": "none",
@@ -260,10 +260,10 @@ def hermes_python_compat() -> dict[str, Any]:
 
             if Version(str(version)) >= Version(_MIN_HERMES_VERSION_314):
                 result["verdict"] = "python_too_old"
-                result["fix"] = "rebuild_trade_venv"
+                result["fix"] = "rebuild_venv"
                 result["reason"] = (
                     f"Hermes {version} 需要 Python 3.14 运行时，"
-                    f"而 Trade 当前的解释器是 {python_version}"
+                    f"而 AgentBase 当前的解释器是 {python_version}"
                 )
                 return result
         except Exception:
@@ -352,26 +352,26 @@ def upgrade_steps() -> list[dict[str, str]]:
     ]
 
 
-def rebuild_trade_steps() -> list[dict[str, str]]:
-    """「Trade 的运行环境需要重建」时给用户的步骤（与 upgrade_steps 同构）。
+def rebuild_steps() -> list[dict[str, str]]:
+    """「AgentBase 的运行环境需要重建」时给用户的步骤（与 upgrade_steps 同构）。
 
-    什么时候会用到：Hermes 已是 pm 时代（≥0.21.6，需要 3.14 运行时），但 Trade 的
-    venv 还是旧装时建的 3.11~3.13。典型来源是**旧装机器就地升级 trade** ——
+    什么时候会用到：Hermes 已是 pm 时代（≥0.21.6，需要 3.14 运行时），但 AgentBase 的
+    venv 还是旧装时建的 3.11~3.13。典型来源是**旧装机器就地升级 agentbase** ——
     `agentbase update` 只更新代码与依赖，**不会重建 venv**，解释器还是老的。
-    这种时候升级 Hermes 毫无用处（问题在 Trade 这一侧），所以要给的是重装指引。
+    这种时候升级 Hermes 毫无用处（问题在 AgentBase 这一侧），所以要给的是重装指引。
 
     安装脚本会自己发现「已有 venv 的解释器不满足要求」并重建，所以用户只需要
-    「关掉 Trade → 跑这一行 → 重新打开」，不需要理解 venv 是什么。
+    「关掉 AgentBase → 跑这一行 → 重新打开」，不需要理解 venv 是什么。
     """
     reinstall = (
-        "irm https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scripts/install.ps1 | iex"
+        "irm https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.ps1 | iex"
         if os.name == "nt"
-        else "curl -fsSL https://raw.githubusercontent.com/chefroger/smart-trade-ai/main/scripts/install.sh | bash"
+        else "curl -fsSL https://raw.githubusercontent.com/chefroger/agentbase/main/scripts/install.sh | bash"
     )
     return [
         {
-            "title": "重新运行安装脚本（会自动重建 Trade 的运行环境）",
-            "detail": "先关掉 Trade 的窗口；然后复制下面这一行，粘贴到终端后回车，等它跑完再重新打开 Trade。",
+            "title": "重新运行安装脚本（会自动重建 AgentBase 的运行环境）",
+            "detail": "先关掉 AgentBase 的窗口；然后复制下面这一行，粘贴到终端后回车，等它跑完再重新打开 AgentBase。",
             "command": reinstall,
         },
     ]
@@ -382,13 +382,13 @@ def compat_steps(compat: dict[str, Any]) -> list[dict[str, str]]:
 
     `fix` 的两个方向对应**完全不同的用户动作**，给错会让人白折腾：
       - upgrade_hermes     → 去升级 Hermes
-      - rebuild_trade_venv → 重跑 Trade 的安装脚本
+      - rebuild_venv → 重跑 AgentBase 的安装脚本
     """
     fix = compat.get("fix")
     if fix == "upgrade_hermes":
         return upgrade_steps()
-    if fix == "rebuild_trade_venv":
-        return rebuild_trade_steps()
+    if fix == "rebuild_venv":
+        return rebuild_steps()
     return []
 
 
@@ -400,19 +400,19 @@ def incompatible_upgrade_steps() -> list[str]:
         lines.append(f"   {step['detail']}")
         lines.append(f"       {step['command']}")
         lines.append("")
-    lines.append("升级完成后，重新运行：  trade")
+    lines.append("升级完成后，重新运行：  agentbase")
     return lines
 
 
 def incompatible_rebuild_steps() -> list[str]:
-    """把 rebuild_trade_steps() 渲染成终端可读的行。"""
+    """把 rebuild_steps() 渲染成终端可读的行。"""
     lines = ["", "【现在照着做】", ""]
-    for index, step in enumerate(rebuild_trade_steps(), start=1):
+    for index, step in enumerate(rebuild_steps(), start=1):
         lines.append(f"{index}) {step['title']}")
         lines.append(f"   {step['detail']}")
         lines.append(f"       {step['command']}")
         lines.append("")
-    lines.append("重装完成后，重新运行：  trade")
+    lines.append("重装完成后，重新运行：  agentbase")
     return lines
 
 

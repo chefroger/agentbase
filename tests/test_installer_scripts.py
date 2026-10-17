@@ -93,16 +93,16 @@ class TestCloneRobustness:
 
 
 class TestHermesInstallPolicy:
-    """安装脚本必须让机器上只存在**一份** Hermes，且 Trade 用 Python 3.14 与它共存。
+    """安装脚本必须让机器上只存在**一份** Hermes，且 AgentBase 用 Python 3.14 与它共存。
 
     为什么（都由实测/事故推出来的）：
       - 上游从 v0.21.6 起只提供 Python 3.14 的依赖集（requires-python 里的 `>=3.11`
-        只是留给旧安装跑完升级步骤的过渡桥）。Trade 是**进程内**嵌 Hermes 的，
+        只是留给旧安装跑完升级步骤的过渡桥）。AgentBase 是**进程内**嵌 Hermes 的，
         解释器必须与 Hermes 的托管环境同 ABI，所以脚本必须只接受 3.14。
-      - **旧的固定 tag 方案（v2026.9.24）已废除**：它把 Hermes 装进 Trade 的 venv，
+      - **旧的固定 tag 方案（v2026.9.24）已废除**：它把 Hermes 装进 AgentBase 的 venv，
         并与用户自己那份共用 `~/.hermes/hermes-agent`。结果是固定静默失效（目录里
         已有检出就原样保留）、还把用户的 Hermes 降级 —— 见 COMPATIBILITY.md。
-        新方案不碰用户的 Hermes；版本过旧由 Trade 启动后在界面里自动升级。
+        新方案不碰用户的 Hermes；版本过旧由 AgentBase 启动后在界面里自动升级。
     """
 
     @staticmethod
@@ -113,7 +113,7 @@ class TestHermesInstallPolicy:
         return text[start:end]
 
     def test_scripts_require_python_314(self):
-        """Step 1 必须只接受 3.14：3.11~3.13 上 Trade 与 Hermes 的托管环境 ABI 不符。"""
+        """Step 1 必须只接受 3.14：3.11~3.13 上 AgentBase 与 Hermes 的托管环境 ABI 不符。"""
         for name, text in (("install.sh", SH), ("install.ps1", PS1)):
             assert "3.14" in text, f"{name} 未提到 Python 3.14"
         # 判据是「解释器正好是 3.14」，不是原来的「>= 3.11」下限写法
@@ -121,7 +121,7 @@ class TestHermesInstallPolicy:
         assert "$PSVersionTable" in PS1 or "3, 14" in PS1 or "(3,14)" in PS1
 
     def test_hermes_step_does_not_install_hermes_into_trade_venv(self):
-        """Step 2 绝不能再把 Hermes 克隆/安装进 Trade 的 venv。
+        """Step 2 绝不能再把 Hermes 克隆/安装进 AgentBase 的 venv。
 
         那是旧方案的根因：它与用户自己那份抢同一个 checkout 目录，导致 pin 失效
         并把用户的 Hermes 降级。新方案只确认 `hermes` 命令存在。
@@ -153,7 +153,7 @@ class TestHermesInstallPolicy:
     def test_installer_does_not_abort_on_old_hermes(self):
         """安装脚本不得因「Hermes 版本过旧」判定安装失败。
 
-        否则用户永远见不到 Trade 界面里那个自动升级面板 —— 而升级正是在那里做的。
+        否则用户永远见不到 AgentBase 界面里那个自动升级面板 —— 而升级正是在那里做的。
         """
         assert "ignore_names=('Hermes 版本',)" in SH, (
             "install.sh 的自检未忽略「Hermes 版本」致命项"
@@ -164,8 +164,11 @@ class TestHermesInstallPolicy:
 
         那会覆盖用户已装的那份 Hermes —— 也正是旧方案的坑。
         """
-        for name in ("README.md", "README.en.md"):
-            text = (ROOT / name).read_text(encoding="utf-8")
+        for name in ("README.md", "FRAMEWORK.md"):
+            path = ROOT / name
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
             assert "git clone --branch v" not in text or "hermes-agent.git ~/.hermes" not in text, (
                 f"{name} 仍在用固定 tag 克隆 Hermes 到 ~/.hermes/hermes-agent"
             )
@@ -260,7 +263,7 @@ class TestCloneHelperBehaviour:
     def test_pinned_ref_clones_that_tag_and_never_moves_to_main(self, tmp_path):
         """固定版本模式：克隆指定 tag，且**再次运行时不得被拖到 main 尖端**。
 
-        背景：main 每天前进约 200 个提交，一旦越出 Trade 的兼容窗口
+        背景：main 每天前进约 200 个提交，一旦越出 AgentBase 的兼容窗口
         （0.13.0 ≤ v < 0.22.0），新装机器会「装得上、起不来」。所以安装脚本把
         Hermes 固定在已核对兼容的 release tag 上 —— 而固定只有在**不会**被
         后续 pull main 悄悄带走时才有意义（在 tag 检出上 `git pull origin main`
@@ -301,9 +304,9 @@ class TestLauncherDisablesHermesLazyInstalls:
 
     客户机实测（2026-10-08）：「网站诊断」时前端只显示「Agent 未返回有效回复」。
     成因是 `from run_agent import AIAgent` 连带执行 Hermes 的 `hermes_bootstrap.py`，
-    它把 server.py 重新 exec 到 Hermes 自带的 store python（那里没有 trade 包），
+    它把 server.py 重新 exec 到 Hermes 自带的 store python（那里没有 agentbase 包），
     子进程 ModuleNotFoundError 退出，父进程 raise RelaunchExit(1)——继承 SystemExit，
-    Trade 的 except Exception 抓不到，agent 线程静默死亡。
+    AgentBase 的 except Exception 抓不到，agent 线程静默死亡。
 
     `agentbase/bootstrap.py` 已在代码层设了这个开关；启动器里再设一次是双保险，而且
     **必须写进生成器**：`agentbase.cmd` 是 install.ps1 生成的产物，手改会被重装抹掉。
@@ -336,10 +339,10 @@ class TestLauncherDisablesHermesLazyInstalls:
 class TestPowerShellChecksPipExitCodes:
     """install.ps1 的每个 pip 调用后都必须检查 $LASTEXITCODE。
 
-    历史 bug：Step 2（装 Hermes）显式查了退出码，Step 3（装 Trade 依赖）没查 ——
+    历史 bug：Step 2（装 Hermes）显式查了退出码，Step 3（装 AgentBase 依赖）没查 ——
     而脚本自己在 105 行注释过「PowerShell 里原生命令非零退出不会抛异常」，
     同一个坑只堵了一半。后果：弱网下 requirements.txt 装失败，脚本照样打印
-    「✓ Foreign Trade Assistant 安装完成」→「══ 安装完成 ══」，用户运行 agentbase
+    「✓ AgentBase 安装完成」→「══ 安装完成 ══」，用户运行 agentbase
     只得到一句 ModuleNotFoundError，且开机自启任务每次登录都静默失败。
 
     macOS 走 install.sh（`set -e`，pip 失败即中止）所以开发机看不出来；
@@ -362,8 +365,8 @@ class TestPowerShellChecksPipExitCodes:
             )
             checked += 1
 
-        # 脚本里共 3 处 pip 调用：Hermes 装 1 处 + Trade 依赖/自身 2 处
-        assert checked >= 3, f"应覆盖全部 3 处 pip 调用（Hermes 1 + Trade 2），实际 {checked}"
+        # 脚本里共 3 处 pip 调用：Hermes 装 1 处 + AgentBase 依赖/自身 2 处
+        assert checked >= 3, f"应覆盖全部 3 处 pip 调用（Hermes 1 + AgentBase 2），实际 {checked}"
 
     def test_failure_exits_nonzero(self):
         """失败分支必须真的中止脚本，而不是只打印一行。"""
@@ -376,7 +379,7 @@ class TestPowerShellLauncherEncoding:
     """agentbase.cmd 用 ASCII 落盘会把中文用户名路径写成 '?'。
 
     `-Encoding ASCII` 把每个非 ASCII 字符替换为 `?` 且**不报错**。中文 Windows
-    用户名（C:\\Users\\张伟\\...）是本产品的主力用户群，写坏后 `trade` 命令报
+    用户名（C:\\Users\\张伟\\...）是本产品的主力用户群，写坏后 `agentbase` 命令报
     「系统找不到指定的路径」，而自启任务用的是 API 传参（不受影响）——
     于是表现为「后台能跑、命令坏了」，更难排查。
     """
@@ -401,7 +404,7 @@ class TestPowerShellLauncherEncoding:
         """安装收尾的自检必须先准备 Hermes 的 import 路径。
 
         2026-10-15 干净机器实测（Bug 1）：自检用 `python -c` 直接调 doctor，绕过了
-        bootstrap 的路径准备 —— 而 Hermes 不再装进 Trade 的 venv，于是报
+        bootstrap 的路径准备 —— 而 Hermes 不再装进 AgentBase 的 venv，于是报
         `No module named 'run_agent'`，**安装永远过不了自检**。同一步还负责恢复 pm
         激活剥离掉的 site-packages，漏了会让 doctor 后面几项误报「未安装」。
         """
@@ -462,7 +465,7 @@ class TestVenvRebuildIsAtomic:
     建成」—— 用户的软件直接打不开。
 
     命中这条路径的正是**旧装机器**：2026-10-14 之前装的机器 venv 跑的是
-    Python 3.11~3.13，而 Hermes ≥0.21.6 只发 3.14 的依赖集，所以它们一升级 trade
+    Python 3.11~3.13，而 Hermes ≥0.21.6 只发 3.14 的依赖集，所以它们一升级 agentbase
     就必须重建 venv。而客群是电脑小白，读不懂也修不了 `ModuleNotFoundError`。
 
     改成原子切换后，失败时旧环境原样可用 —— 这是「升级不会把能用的软件搞坏」
@@ -493,7 +496,7 @@ class TestVenvRebuildIsAtomic:
         body = _code_lines(SH)
         assert "_rollback_code()" in body, "install.sh 未定义代码回滚函数"
         assert "_AGENTBASE_HEAD_BEFORE" in body, "install.sh 未记录回滚点"
-        # 两处 pip 失败分支都要调用回滚（requirements.txt 与 trade 自身）
+        # 两处 pip 失败分支都要调用回滚（requirements.txt 与 agentbase 自身）
         assert body.count("_rollback_code") >= 3, (
             "install.sh 的 pip 失败分支没有调用回滚（应至少：定义 1 次 + 两处失败分支各 1 次）"
         )

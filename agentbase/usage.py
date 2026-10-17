@@ -1,5 +1,5 @@
 """
-Smart Trade AI — Token / 费用台账（优化路线 P1-6）。
+AgentBase — Token / 费用台账（优化路线 P1-6）。
 
 用户用的是按量付费模型（DeepSeek 等），但现在没有任何用量统计。
 本模块提供极轻量的本地台账：每次 LLM 调用记一笔，支持按天/按 skill

@@ -112,20 +112,20 @@ class TestHermesCheckoutResolution:
 
 
 class TestHermesActivationRestore:
-    """Hermes 的 pm 激活之后，必须把 Trade 自己的 site-packages 补回 sys.path。
+    """Hermes 的 pm 激活之后，必须把 AgentBase 自己的 site-packages 补回 sys.path。
 
-    这是「Trade 跑在 Python 3.14 + 最新 Hermes」整条路线成立的前提：
+    这是「AgentBase 跑在 Python 3.14 + 最新 Hermes」整条路线成立的前提：
     `pm/environments.py:activate_dependencies()` 会在 `import hermes_bootstrap` 时
-    **按目录名剥掉进程原有的全部 site-packages**，Trade 的依赖（pymupdf / holehe /
+    **按目录名剥掉进程原有的全部 site-packages**，AgentBase 的依赖（pymupdf / holehe /
     openpyxl …）会全部消失，编译包还因 cp314/3.13 ABI 不符直接崩。不补回来的话，
-    Trade 会在运行到文档解析时才炸 —— 而且现场是一串 `ModuleNotFoundError` 天书。
+    AgentBase 会在运行到文档解析时才炸 —— 而且现场是一串 `ModuleNotFoundError` 天书。
     """
 
     def test_restores_trade_site_packages_after_activation(self, isolated):
         """激活剥离后必须补回，且补在末尾（让 Hermes 的依赖优先胜出版本冲突）。"""
         import types
 
-        agentbase_site = bootstrap._trade_site_packages()
+        agentbase_site = bootstrap._agentbase_site_packages()
         assert agentbase_site, "测试环境应能解析出 site-packages 目录"
 
         original_path = list(sys.path)
@@ -137,14 +137,14 @@ class TestHermesActivationRestore:
             p for p in sys.path if not p.endswith(("site-packages", "dist-packages"))
         ]
         try:
-            bootstrap._activate_hermes_env_and_restore_trade_paths()
+            bootstrap._activate_hermes_env_and_restore_paths()
 
-            assert agentbase_site in sys.path, "激活后未把 Trade 的 site-packages 补回 sys.path"
-            # 必须在末尾：一旦两侧版本漂移，让 Hermes 的托管代际优先，避免 Trade 的
+            assert agentbase_site in sys.path, "激活后未把 AgentBase 的 site-packages 补回 sys.path"
+            # 必须在末尾：一旦两侧版本漂移，让 Hermes 的托管代际优先，避免 AgentBase 的
             # 老 pin 把 Hermes 需要的版本压下去
             assert sys.path[-1] == agentbase_site
-            # PYTHONPATH 被激活覆盖过，也必须补回 —— 否则 Trade 起的子进程
-            # （如走 holehe 的 OSINT Layer 1）找不到 Trade 的依赖
+            # PYTHONPATH 被激活覆盖过，也必须补回 —— 否则 AgentBase 起的子进程
+            # （如走 holehe 的 OSINT Layer 1）找不到 AgentBase 的依赖
             assert agentbase_site in os.environ.get("PYTHONPATH", "")
         finally:
             sys.path[:] = original_path
@@ -168,7 +168,7 @@ class TestHermesActivationRestore:
         monkeypatch.setattr(builtins, "__import__", _fake_import)
 
         # 不抛异常即通过
-        bootstrap._activate_hermes_env_and_restore_trade_paths()
+        bootstrap._activate_hermes_env_and_restore_paths()
 
     def test_restore_works_when_hermes_bootstrap_already_cached(self, isolated):
         """`hermes_bootstrap` 已缓存时，恢复**仍然**必须生效。
@@ -182,19 +182,19 @@ class TestHermesActivationRestore:
         """
         import types
 
-        agentbase_site = bootstrap._trade_site_packages()
+        agentbase_site = bootstrap._agentbase_site_packages()
         assert agentbase_site, "测试环境应能解析出 site-packages 目录"
 
         original_path = list(sys.path)
         original_pythonpath = os.environ.get("PYTHONPATH", "")
         # 已缓存的假模块：**没有任何副作用**（不剥离 sys.path）
         sys.modules["hermes_bootstrap"] = types.ModuleType("hermes_bootstrap")
-        # 主动把 Trade 的 site-packages 拿掉，模拟「别处已经剥离过」
+        # 主动把 AgentBase 的 site-packages 拿掉，模拟「别处已经剥离过」
         sys.path[:] = [
             p for p in sys.path if not p.endswith(("site-packages", "dist-packages"))
         ]
         try:
-            bootstrap._activate_hermes_env_and_restore_trade_paths()
+            bootstrap._activate_hermes_env_and_restore_paths()
 
             assert agentbase_site in sys.path, (
                 "hermes_bootstrap 已缓存（import 无副作用）时，恢复段被跳过了 —— "
@@ -210,22 +210,22 @@ class TestHermesActivationRestore:
                 os.environ.pop("PYTHONPATH", None)
 
     def test_unresolvable_site_packages_is_loud(self, isolated, monkeypatch, capsys):
-        """解析不到 Trade 自己的 site-packages 时**必须响亮报错**，不能静默继续。
+        """解析不到 AgentBase 自己的 site-packages 时**必须响亮报错**，不能静默继续。
 
-        这是 ⓐ 真正会「静默降级」的那条路径：`_trade_site_packages()` 返回空串时，
+        这是 ⓐ 真正会「静默降级」的那条路径：`_agentbase_site_packages()` 返回空串时，
         补齐与 PYTHONPATH 修补**双双跳过** —— 进程表面还能跑，实际只剩 Hermes 的依赖。
         原来的实现一声不响，用户看到的是运行到文档解析时的一串 ModuleNotFoundError。
         """
         import types
 
-        monkeypatch.setattr(bootstrap, "_trade_site_packages", lambda: "")
+        monkeypatch.setattr(bootstrap, "_agentbase_site_packages", lambda: "")
         sys.modules["hermes_bootstrap"] = types.ModuleType("hermes_bootstrap")
         try:
-            bootstrap._activate_hermes_env_and_restore_trade_paths()
+            bootstrap._activate_hermes_env_and_restore_paths()
         finally:
             sys.modules.pop("hermes_bootstrap", None)
 
         out = capsys.readouterr().out
-        assert "无法解析 Trade 自身的 site-packages" in out, (
+        assert "无法解析 AgentBase 自身的 site-packages" in out, (
             "静默降级路径必须留下可追踪的输出，否则现场无从排查"
         )

@@ -1,4 +1,4 @@
-"""`trade workspace` —— 公司管理命令（作者用的隐藏功能，**不写进用户文档**）。
+"""`agentbase workspace` —— 公司管理命令（作者用的隐藏功能，**不写进用户文档**）。
 
 ## 为什么需要
 
@@ -22,9 +22,9 @@
 
 ## 命令
 
-    trade workspace list                    列出全部公司（含已软删除的）
-    trade workspace purge <slug|id>         先打印"将要删除什么"，不动手
-    trade workspace purge <slug|id> --yes   真的删
+    agentbase workspace list                    列出全部公司（含已软删除的）
+    agentbase workspace purge <slug|id>         先打印"将要删除什么"，不动手
+    agentbase workspace purge <slug|id> --yes   真的删
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def _check_password(provided: str | None) -> tuple[str, str]:
         return (
             "no_tty",
             "  当前不是交互终端。请改用：\n"
-            "      trade workspace <子命令> <目标> --yes --password <口令>\n",
+            "      agentbase workspace <子命令> <目标> --yes --password <口令>\n",
         )
     try:
         entered = getpass.getpass("请输入清理口令：")
@@ -275,7 +275,7 @@ def _resolve_work_dir(workspace: dict) -> tuple[Path | None, str]:
     `extra1={}`），而它的桌面文件夹真实存在。不找回来的话，purge 会把那个
     文件夹留在桌面上 —— 正是用户抱怨的那种残留。
 
-    只接受带 Trade 目录指纹的目录（≥5 个分类子目录），避免误认同名文件夹。
+    只接受带 AgentBase 目录指纹的目录（≥5 个分类子目录），避免误认同名文件夹。
     """
     from agentbase.workspace.workdir import _get_desktop_path
 
@@ -291,15 +291,15 @@ def _resolve_work_dir(workspace: dict) -> tuple[Path | None, str]:
         if not candidate_name:
             continue
         candidate = desktop / candidate_name
-        if is_trade_work_dir(candidate):
+        if is_agentbase_work_dir(candidate):
             return candidate, "按公司名找到"
     return None, ""
 
 
-# ── 孤儿目录：桌面有 Trade 结构、数据库却没记录 ────────────────────────────
+# ── 孤儿目录：桌面有 AgentBase 结构、数据库却没记录 ────────────────────────────
 
-def is_trade_work_dir(path: Path) -> bool:
-    """判断一个目录是不是 Trade 建的公司工作目录（按分类子目录指纹）。"""
+def is_agentbase_work_dir(path: Path) -> bool:
+    """判断一个目录是不是 AgentBase 建的公司工作目录（按分类子目录指纹）。"""
     if not path.is_dir():
         return False
     try:
@@ -346,7 +346,7 @@ def _known_workspace_paths_and_names() -> tuple[set[str], set[str]]:
 
 
 def find_orphan_work_dirs() -> list[Path]:
-    """桌面上有 Trade 目录结构、但**不属于任何已记录公司**的目录。
+    """桌面上有 AgentBase 目录结构、但**不属于任何已记录公司**的目录。
 
     错误安装的典型残留：文件夹建出来了，数据库却没落记录（或库被清过），
     于是从界面和 `list` 都看不到它，只能扫桌面找出来。
@@ -364,7 +364,7 @@ def find_orphan_work_dirs() -> list[Path]:
 
     orphans = []
     for child in desktop.iterdir():
-        if not child.is_dir() or not is_trade_work_dir(child):
+        if not child.is_dir() or not is_agentbase_work_dir(child):
             continue
         if child.name.strip().lower() in known_names:
             continue  # 名字对得上某家公司 → 不是孤儿（老数据没记路径的情况）
@@ -380,7 +380,7 @@ def find_orphan_work_dirs() -> list[Path]:
 # ── 命令：list ────────────────────────────────────────────────────────────
 
 def list_workspaces() -> str:
-    """`trade workspace list` 的实现。"""
+    """`agentbase workspace list` 的实现。"""
     from agentbase.database import get_connection
     from agentbase.workspace.crud import AGENT_HOME
 
@@ -425,11 +425,11 @@ def list_workspaces() -> str:
     orphans = find_orphan_work_dirs()
     if orphans:
         lines.append("")
-        lines.append("  ⚠ 桌面上还有 Trade 目录结构、但数据库无记录（错误安装的典型残留）：")
+        lines.append("  ⚠ 桌面上还有 AgentBase 目录结构、但数据库无记录（错误安装的典型残留）：")
         for p in orphans:
             st = _dir_stat(p)
             lines.append(f"      {p}  [{st['files']} 个文件 / {_fmt_size(st['bytes'])}]")
-        lines.append("      清理：trade workspace purge-dir \"<上面的路径>\"")
+        lines.append("      清理：agentbase workspace purge-dir \"<上面的路径>\"")
     lines.append("")
     lines.append(f"  数据根目录: {AGENT_HOME}")
     lines.append("")
@@ -439,7 +439,7 @@ def list_workspaces() -> str:
 # ── 命令：purge ───────────────────────────────────────────────────────────
 
 def purge_workspace(target: str, *, yes: bool = False, password: str | None = None) -> tuple[str, int]:
-    """`trade workspace purge` 的实现。返回 (报告文本, 退出码)。
+    """`agentbase workspace purge` 的实现。返回 (报告文本, 退出码)。
 
     不加 `--yes` 时只打印计划并返回 1 —— 不用交互式确认，因为这条命令主要在
     远程 shell 里用，交互式提示容易踩到没有 TTY 的坑；强制两步更可靠。
@@ -448,10 +448,10 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
 
     workspace = _resolve(target)
     if not workspace:
-        return f"✗ 找不到公司：{target!r}（用 trade workspace list 看有哪些）", 1
+        return f"✗ 找不到公司：{target!r}（用 agentbase workspace list 看有哪些）", 1
 
     cid = workspace["id"]
-    tc = crud.get_trade_workspace(cid) or {}
+    tc = crud.get_workspace_record(cid) or {}
     data_dir = Path(tc["data_dir"]) if tc.get("data_dir") else None
 
     work_dir = None
@@ -510,7 +510,7 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
     if not yes:
         lines.append("")
         lines.append("  以上是预览。确认无误后加 --yes 执行：")
-        lines.append(f"      trade workspace purge {target} --yes")
+        lines.append(f"      agentbase workspace purge {target} --yes")
         lines.append("")
         return "\n".join(lines), 1
 
@@ -551,7 +551,7 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
 def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) -> tuple[str, int]:
     """删除一个**孤儿**工作目录（数据库里没有对应公司记录的那种）。
 
-    只接受通过 `is_trade_work_dir()` 指纹校验、且在桌面下的目录 ——
+    只接受通过 `is_agentbase_work_dir()` 指纹校验、且在桌面下的目录 ——
     避免这条命令被当成任意删除工具使用。
     """
     from agentbase.workspace.workdir import _get_desktop_path
@@ -559,10 +559,10 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
     path = Path(path_str).expanduser()
     if not path.is_dir():
         return f"✗ 目录不存在：{path}", 1
-    if not is_trade_work_dir(path):
+    if not is_agentbase_work_dir(path):
         return (
-            f"✗ 这个目录不像 Trade 建的公司文件夹（缺少分类子目录）：{path}\n"
-            "  为防误删，本命令只处理带 Trade 目录结构的文件夹。",
+            f"✗ 这个目录不像 AgentBase 建的公司文件夹（缺少分类子目录）：{path}\n"
+            "  为防误删，本命令只处理带 AgentBase 目录结构的文件夹。",
             1,
         )
     try:
@@ -584,7 +584,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
             f"✗ 这个文件夹属于一个**在用中的公司**，不能按残留目录删除：{path}\n"
             "  它里面可能有该公司的真实业务文件。\n"
             f"  若确实要清理，请先删除那家公司（会连文件夹一起清）：\n"
-            f"      trade workspace purge <slug 或 ID>\n",
+            f"      agentbase workspace purge <slug 或 ID>\n",
             1,
         )
 
@@ -597,7 +597,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
         return (
             preview
             + f"\n  确认无误后加 --yes 执行：\n"
-            f"      trade workspace purge-dir \"{path}\" --yes\n",
+            f"      agentbase workspace purge-dir \"{path}\" --yes\n",
             1,
         )
 
@@ -632,7 +632,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
 # ── 命令分发 ──────────────────────────────────────────────────────────────
 
 def main(argv: list[str]) -> int:
-    """`trade workspace <子命令>` 的入口。返回退出码。"""
+    """`agentbase workspace <子命令>` 的入口。返回退出码。"""
     reconfigure_streams()  # 报告里带 ✓/✗/⚠，Windows 管道输出要先降级编码错误
     sub = argv[0] if argv else ""
     rest = argv[1:]
@@ -643,7 +643,7 @@ def main(argv: list[str]) -> int:
 
     if sub == "purge":
         if not rest:
-            print("用法：trade workspace purge <slug 或 ID> [--yes [--password <口令>]]")
+            print("用法：agentbase workspace purge <slug 或 ID> [--yes [--password <口令>]]")
             return 1
         yes, password = _parse_flags(rest[1:])
         text, code = purge_workspace(rest[0], yes=yes, password=password)
@@ -652,7 +652,7 @@ def main(argv: list[str]) -> int:
 
     if sub == "purge-dir":
         if not rest:
-            print('用法：trade workspace purge-dir "<桌面目录路径>" [--yes [--password <口令>]]')
+            print('用法：agentbase workspace purge-dir "<桌面目录路径>" [--yes [--password <口令>]]')
             return 1
         yes, password = _parse_flags(rest[1:])
         text, code = purge_dir(rest[0], yes=yes, password=password)

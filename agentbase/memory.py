@@ -256,7 +256,7 @@ def retain_conversation(
     格式化问答对并用资料库/客户上下文进行标注。
     """
     content_parts = [f"Q: {query}", f"A: {response}"]
-    context = "B2B trade conversation"
+    context = "agentbase conversation"
     if workspace_id:
         context += f" — workspace: {workspace_id}"
     if library_name:
@@ -279,7 +279,7 @@ def retain_to_hermes_memory(
 ) -> bool:
     """将对话摘要追加到 ~/.hermes/memories/MEMORY.md。
 
-    这样可以让 Hermes Agent 的原生记忆系统学习到 B2B 贸易对话，
+    这样可以让 Hermes Agent 的原生记忆系统学习到业务对话，
     而无需任何 API 密钥。
     """
     import datetime as _dt
@@ -374,8 +374,8 @@ def retain_to_hermes_memory(
             # 如果记忆文件已存在，读取其现有内容
             if MEMORY_FILE.exists():
                 existing = MEMORY_FILE.read_text(encoding="utf-8")
-            SECTION = "## Foreign Trade Assistant — B2B Trade Memory\n"
-            # 如果文件中还没有 B2B 记忆段落，则在文件开头创建
+            SECTION = "## AgentBase — Memory\n"
+            # 如果文件中还没有记忆段落，则在文件开头创建
             if SECTION not in existing:
                 content_str = SECTION + entry + "\n\n" + existing if existing else SECTION + entry
             else:

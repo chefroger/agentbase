@@ -1,4 +1,4 @@
-# Foreign Trade Assistant — 非 git 依赖（不含 hermes-agent）
+# AgentBase — 非 git 依赖（不含 hermes-agent）
 # hermes-agent 需单独通过 install.sh Step 2 或手动 git clone + pip install -e . 安装
 
 # Core
@@ -20,7 +20,7 @@ anthropic==0.87.0
 firecrawl-anydoc==0.2.4
 pypdfium2>=4.30.0,<6.0
 # 注意：hermes-agent 不在本文件里。它由安装脚本单独 git clone + editable 安装
-# （scripts/install.sh Step 2），Trade 用 --no-deps 安装自身。Hermes 的 setup.py
+# （scripts/install.sh Step 2），AgentBase 用 --no-deps 安装自身。Hermes 的 setup.py
 # 已明确拒绝通过 pip 构建，所以不能让 pip 去解析它。
 # Process management
 psutil>=5.9.0,<8.0
@@ -29,7 +29,7 @@ dnspython>=2.6.0,<3.0
 # 邮箱注册检测（OSINT Layer 1：122 个平台的注册痕迹）—— required，不是可选。
 # 缺了这层会被**静默跳过**（报告如实披露，但少一层证据）。纯 Python（无 C 扩展）、
 # 三平台可装；其 httpx 与 Hermes 钉的版本一致（0.28.1），无冲突。
-# Trade 侧在子进程里跑它（holehe 用 trio，与 asyncio 不兼容），120s 超时兜底。
+# AgentBase 侧在子进程里跑它（holehe 用 trio，与 asyncio 不兼容），120s 超时兜底。
 holehe>=1.61,<2.0
 
 # Document extraction (read_file tool)

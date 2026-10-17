@@ -2,7 +2,7 @@
 
 ## 背景
 
-客户的部署流程是「装 Hermes → 让 Hermes 装 Trade」，**不经过 install.ps1**，
+客户的部署流程是「装 Hermes → 让 Hermes 装 AgentBase」，**不经过 install.ps1**，
 所以脚本里配好的自启拿不到。这里要保证：这份代码在任何安装路径下都能把
 自启和桌面快捷方式配好，且**不弹终端窗口**。
 
@@ -46,15 +46,15 @@ class TestBatchPathRewriting:
         monkeypatch.delenv("LOCALAPPDATA", raising=False)
         monkeypatch.setenv("USERPROFILE", r"C:\Users\张伟")
 
-        assert ws.to_batch_path(r"C:\Users\张伟\Desktop\Trade") == r"%USERPROFILE%\Desktop\Trade"
+        assert ws.to_batch_path(r"C:\Users\张伟\Desktop\AgentBase") == r"%USERPROFILE%\Desktop\AgentBase"
 
     def test_unrelated_path_untouched(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\a\AppData\Local")
-        assert ws.to_batch_path(r"D:\opt\trade") == r"D:\opt\trade"
+        assert ws.to_batch_path(r"D:\opt\agentbase") == r"D:\opt\agentbase"
 
     def test_case_insensitive_match(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\A\AppData\Local")
-        out = ws.to_batch_path(r"c:\users\a\appdata\local\trade")
+        out = ws.to_batch_path(r"c:\users\a\appdata\local\agentbase")
         assert out.startswith("%LOCALAPPDATA%")
 
 
@@ -68,7 +68,7 @@ class TestGeneratedScripts:
     def test_open_has_open_subcommand(self):
         bat = ws.build_open_bat('"%LOCALAPPDATA%\\agentbase\\venv\\Scripts\\agentbase.exe"', "%LOCALAPPDATA%\\agentbase\\o.log")
 
-        assert " open " in bat, "快捷方式应调用 `trade open`（起服务 + 开浏览器）"
+        assert " open " in bat, "快捷方式应调用 `agentbase open`（起服务 + 开浏览器）"
         assert "--no-browser" not in bat, "open 子命令自己负责开浏览器"
 
     def test_vbs_hides_window(self):
@@ -84,7 +84,7 @@ class TestGeneratedScripts:
         (exe_dir / "agentbase.exe").write_text("", encoding="utf-8")
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
-        cmd = ws.resolve_trade_command(tmp_path, executable=str(exe_dir / "python.exe"))
+        cmd = ws.resolve_command(tmp_path, executable=str(exe_dir / "python.exe"))
 
         assert "agentbase.exe" in cmd
 
@@ -94,7 +94,7 @@ class TestGeneratedScripts:
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
         (tmp_path / "server.py").write_text("", encoding="utf-8")
 
-        cmd = ws.resolve_trade_command(tmp_path, executable=str(exe_dir / "python.exe"))
+        cmd = ws.resolve_command(tmp_path, executable=str(exe_dir / "python.exe"))
 
         assert "python.exe" in cmd and "server.py" in cmd
 
@@ -263,7 +263,7 @@ class TestVbsIsAsciiSafe:
 
     def test_vbs_uses_env_var_not_literal_path(self, monkeypatch):
         monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\张伟\AppData\Local")
-        bat = Path(r"C:\Users\张伟\AppData\Local\agentbase\trade-autostart.bat")
+        bat = Path(r"C:\Users\张伟\AppData\Local\agentbase\agentbase-autostart.bat")
 
         vbs = ws.build_hidden_vbs(bat)
 
@@ -280,7 +280,7 @@ class TestVbsIsAsciiSafe:
 
 
 class TestNoStrayLaunchersOnDesktop:
-    """桌面只该有 Trade.lnk —— 启动器脚本一律在 launcher_dir()。
+    """桌面只该有 AgentBase.lnk —— 启动器脚本一律在 launcher_dir()。
 
     为什么专门测这条：让 AI「在桌面放个快捷方式」时，很容易变成把 .vbs 复制到桌面。
     那等于桌面上多一个可执行文件：容易被误删、也可能被杀软拦截。
@@ -301,7 +301,7 @@ class TestNoStrayLaunchersOnDesktop:
         assert len(ws.find_stray_desktop_launchers(tmp_path)) == 4
 
     def test_clean_desktop_returns_empty(self, tmp_path):
-        (tmp_path / "Trade.lnk").write_text("x", encoding="utf-8")
+        (tmp_path / "AgentBase.lnk").write_text("x", encoding="utf-8")
         (tmp_path / "我的文档.docx").write_text("x", encoding="utf-8")
 
         assert ws.find_stray_desktop_launchers(tmp_path) == []

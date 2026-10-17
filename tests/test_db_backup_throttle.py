@@ -161,7 +161,7 @@ class TestPruneOldBackups:
         ]
 
     def test_never_deletes_manual_backups(self, tmp_path):
-        """手工备份（trade-before-restore-*）是用户特意留的，绝不能删。"""
+        """手工备份（agentbase-before-restore-*）是用户特意留的，绝不能删。"""
         from agentbase.database import prune_old_backups
 
         d = tmp_path / "backups"

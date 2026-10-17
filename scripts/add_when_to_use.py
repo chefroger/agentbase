@@ -125,13 +125,13 @@ WHEN_TO_USE = {
         "用户提到「做个新技能」「自动生成」",
         "不要用于：修改现有 skill",
     ],
-    "b2b-trade-ops": [
+    "b2b-agentbase-ops": [
         "履约运营：催款 / 索赔 / 展会 / 验厂 / 物流 / 售后",
         "用户提到「催款」「索赔」「展会」「验厂」「物流」「售后」",
         "生成年度总结 / 满意度报告",
         "不要用于：客户开发阶段",
     ],
-    "b2b-trade-compliance": [
+    "b2b-agentbase-compliance": [
         "文化禁忌检查 / 缩写规范 / ICC 术语",
         "翻译二审 / 投标合规",
         "电商上架合规检查",
@@ -238,7 +238,7 @@ WHEN_TO_USE = {
         "用户提到「自动发邮件」「smtp 配置」",
         "不要用于：手动单封邮件（用 b2b-cold-outreach）",
     ],
-    "auto-trade-customer-development": [
+    "auto-agentbase-customer-development": [
         "全自动客户开发流水线",
         "定时搜索 + 自动生成开发信 + 自动发送",
         "用户提到「自动开发客户」「流水线」",

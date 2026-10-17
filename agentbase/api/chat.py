@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — AI 聊天 API 路由。
+AgentBase AI Assistant — AI 聊天 API 路由。
 
 端点：
   POST /chat         — 同步聊天（线程池 + 600s 超时）
@@ -454,7 +454,7 @@ async def chat_stream(
             except BaseException as e:
                 # Hermes 可能以 BaseException 结束 —— 例如 hermes_bootstrap 的
                 # RelaunchExit 继承 SystemExit（它会把 server.py 重新 exec 到 Hermes
-                # 自带的 store python，而那里没有 trade 包）。`except Exception` 抓不到
+                # 自带的 store python，而那里没有 agentbase 包）。`except Exception` 抓不到
                 # 这类异常，agent 线程会静默死亡：前端既收不到 response 也收不到 error，
                 # 只能落兜底文案「Agent 未返回有效回复」（客户机实测，2026-10-08）。
                 # 它也不是瞬时故障，重试无意义，如实上报即可。

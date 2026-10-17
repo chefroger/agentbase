@@ -1,0 +1,12 @@
+version: 1
+blocked_skills: []
+skills:
+  - name: demo-skill
+    triggers: [demo, 演示, 示例技能]
+    aliases: [demo]
+    input_fmt: 任意文本
+    output_fmt: 结构化摘要
+    augment_prompt: |
+      你是 demo-skill 技能。用户提到 demo/演示时，按以下步骤处理：
+      1. 读取用户输入
+      2. 输出结构化摘要

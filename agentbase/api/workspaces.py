@@ -1,5 +1,5 @@
 """
-Trade AI Assistant — 公司管理 API 路由。
+AgentBase AI Assistant — 公司管理 API 路由。
 
 端点：
   GET    /workspaces                          — 列出所有公司
@@ -30,7 +30,7 @@ router = APIRouter(tags=["workspaces"])
 
 @router.get("/workspaces")
 def list_workspaces():
-    """列出 Trade 系统中所有已注册的公司。"""
+    """列出 AgentBase 系统中所有已注册的公司。"""
     return workspace_module.list_all()
 
 
@@ -56,7 +56,7 @@ def create_workspace(payload: WorkspaceCreate):
             workspace["name"],
             {"products": "各类工业产品", "differentiation": "源头工厂，性价比高", "target_region": "全球市场"},
         )
-        workspace_module.update_trade_workspace(
+        workspace_module.update_workspace_record(
             workspace_id=workspace["id"],
             agent_identity_md=default_identity,
         )
@@ -130,7 +130,7 @@ def switch_workspace(
     写审计日志记录切换操作。
     """
     # 校验目标公司存在且激活
-    tc = workspace_module.get_trade_workspace(workspace_id)
+    tc = workspace_module.get_workspace_record(workspace_id)
     if not tc or not tc.get("is_active"):
         raise HTTPException(status_code=404, detail="Workspace not found or inactive")
 
@@ -191,7 +191,7 @@ def update_workspace_agent_identity(
     """更新公司的 Agent 身份（写入 DB 缓存）。"""
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="Cannot update another workspace's identity.")
-    result = workspace_module.update_trade_workspace(
+    result = workspace_module.update_workspace_record(
         workspace_id, agent_identity_md=payload.agent_identity_md,
     )
     if not result:

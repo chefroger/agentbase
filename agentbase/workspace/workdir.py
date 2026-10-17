@@ -92,7 +92,7 @@ def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
 
     Args:
         slug: 公司 slug 标识
-        agentbase_home: Trade 数据根目录（~/.agentbase/）
+        agentbase_home: AgentBase 数据根目录（~/.agentbase/）
 
     Returns:
         创建或已存在的公司数据目录路径
@@ -104,7 +104,7 @@ def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
     if _meipass:
         template_src = Path(_meipass) / ".agentbase-template"
     else:
-        # 运行时目录优先（update_trade 同步后模板在此）
+        # 运行时目录优先（update_agentbase 同步后模板在此）
         _runtime_tmpl = agentbase_home / ".agentbase-template"
         if _runtime_tmpl.is_dir():
             template_src = _runtime_tmpl
@@ -192,7 +192,7 @@ def _get_desktop_path() -> Path:
 def _setup_work_directory(
     workspace_name: str, slug: str, suggested_name: str = ""
 ) -> tuple[Path, bool]:
-    """在用户桌面创建公司工作目录，包含外贸业务流程分类子目录。
+    """在用户桌面创建 workspace 工作目录，分类来自 business.yaml。
 
     如果目标目录已存在，自动尝试加数字后缀（如 "我的公司-2"）。
     在 pytest 测试环境中将目录写到临时位置而非桌面。

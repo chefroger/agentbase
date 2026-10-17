@@ -1,4 +1,4 @@
-"""`trade open` —— 桌面快捷方式双击后的行为。
+"""`agentbase open` —— 桌面快捷方式双击后的行为。
 
 规则：
   - 服务已在运行 → **不重复启动**，直接打开界面
@@ -37,7 +37,7 @@ class TestAlreadyRunning:
     def test_does_not_spawn_when_up(self):
         rec = _Recorder()
 
-        msg = opener.open_trade(
+        msg = opener.open_agentbase(
             probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
             focuser=lambda _m: False, timeout=1.0,
         )
@@ -50,7 +50,7 @@ class TestAlreadyRunning:
         """打开的必须是 /agentbase 界面，不是站点根。"""
         rec = _Recorder()
 
-        opener.open_trade(probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
+        opener.open_agentbase(probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
                           focuser=lambda _m: False, timeout=1.0)
 
         assert rec.opened[0].endswith("/agentbase")
@@ -70,7 +70,7 @@ class TestColdStart:
 
         monkeypatch.setattr(opener, "_POLL_INTERVAL", 0.01)
 
-        msg = opener.open_trade(probe=probe, spawn=spawn, opener=rec.open,
+        msg = opener.open_agentbase(probe=probe, spawn=spawn, opener=rec.open,
                                 focuser=lambda _m: False, timeout=5.0)
 
         assert len(rec.spawned) == 1
@@ -83,7 +83,7 @@ class TestColdStart:
         state = {"up": False}
         monkeypatch.setattr(opener, "_POLL_INTERVAL", 0.01)
 
-        opener.open_trade(
+        opener.open_agentbase(
             probe=lambda _u: state["up"],
             spawn=lambda cmd: (rec.spawn(cmd), state.update(up=True)),
             opener=rec.open,
@@ -100,7 +100,7 @@ class TestFailureIsHonest:
         rec = _Recorder()
         monkeypatch.setattr(opener, "_POLL_INTERVAL", 0.01)
 
-        msg = opener.open_trade(
+        msg = opener.open_agentbase(
             probe=lambda _u: False, spawn=rec.spawn, opener=rec.open,
             focuser=lambda _m: False, timeout=0.05,
         )
@@ -112,7 +112,7 @@ class TestFailureIsHonest:
     def test_missing_server_script_is_reported(self, monkeypatch):
         monkeypatch.setattr(opener, "_server_script_path", lambda: None)
 
-        msg = opener.open_trade(probe=lambda _u: False, spawn=lambda _c: None,
+        msg = opener.open_agentbase(probe=lambda _u: False, spawn=lambda _c: None,
                                 focuser=lambda _m: False, timeout=0.05)
 
         assert msg.startswith("✗")
@@ -121,7 +121,7 @@ class TestFailureIsHonest:
         def boom(_cmd):
             raise OSError("无权限")
 
-        msg = opener.open_trade(probe=lambda _u: False, spawn=boom,
+        msg = opener.open_agentbase(probe=lambda _u: False, spawn=boom,
                                 focuser=lambda _m: False, timeout=0.05)
 
         assert msg.startswith("✗")
@@ -135,7 +135,7 @@ class TestProbe:
 
 
 class TestReuseExistingPage:
-    """已打开的 Trade 页面要切过去，而不是每点一次多一个标签页。
+    """已打开的 AgentBase 页面要切过去，而不是每点一次多一个标签页。
 
     浏览器不向外部程序暴露「聚焦已有标签页」，只能按窗口标题找回
     （用户已确认采用这个方案）。
@@ -144,7 +144,7 @@ class TestReuseExistingPage:
     def test_focus_existing_does_not_open_new(self):
         rec = _Recorder()
 
-        msg = opener.open_trade(
+        msg = opener.open_agentbase(
             probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
             focuser=lambda _m: True, timeout=1.0,
         )
@@ -155,7 +155,7 @@ class TestReuseExistingPage:
     def test_falls_back_to_opening_when_no_window(self):
         rec = _Recorder()
 
-        opener.open_trade(
+        opener.open_agentbase(
             probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
             focuser=lambda _m: False, timeout=1.0,
         )
@@ -169,7 +169,7 @@ class TestReuseExistingPage:
         def boom(_m):
             raise OSError("用户32 调用失败")
 
-        opener.open_trade(
+        opener.open_agentbase(
             probe=lambda _u: True, spawn=rec.spawn, opener=rec.open,
             focuser=boom, timeout=1.0,
         )
@@ -193,7 +193,7 @@ class TestReuseExistingPage:
             order.append("focus")
             return True
 
-        opener.open_trade(probe=probe, spawn=spawn, opener=lambda _u: True,
+        opener.open_agentbase(probe=probe, spawn=spawn, opener=lambda _u: True,
                           focuser=focus, timeout=5.0)
 
         assert "focus" in order
@@ -209,15 +209,15 @@ class TestWindowTitleMatching:
             "另一个窗口",
         ]
 
-        assert opener.match_trade_window(titles) == (
+        assert opener.match_window(titles) == (
             "AgentBase - Google Chrome"
         )
 
     def test_returns_none_when_absent(self):
-        assert opener.match_trade_window(["微信", "记事本"]) is None
+        assert opener.match_window(["微信", "记事本"]) is None
 
     def test_ignores_empty_titles(self):
-        assert opener.match_trade_window(["", None]) is None
+        assert opener.match_window(["", None]) is None
 
     def test_marker_matches_the_real_page_title(self):
         """标记必须真的出现在 static/app.html 的 <title> 里 ——

@@ -36,8 +36,8 @@ _cache_lock = threading.Lock()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _get_trade_home() -> Path:
-    """返回用户 Trade 数据目录。
+def get_agent_home() -> Path:
+    """返回用户 AgentBase 数据目录。
 
     优先级：AGENT_HOME 环境变量 → 平台默认路径。
     macOS/Linux: ~/.agentbase/, Windows: %LOCALAPPDATA%\agentbase\
@@ -99,12 +99,12 @@ def _workspace_identity_path(slug: str) -> Path:
     历史上这里写作 ~/.agentbase/workspaces/{slug}/agent_identity.md（下划线 + 少一层），
     导致读取方永远读不到 onboarding / 模板写入的文件，「文件优先」整层失效。
     """
-    return _get_trade_home() / slug / "workspaces" / slug / "agent-identity.md"
+    return get_agent_home() / slug / "workspaces" / slug / "agent-identity.md"
 
 
 def _system_prompt_path() -> Path:
     """返回全局 system prompt 文件的绝对路径。"""
-    return _get_trade_home() / "prompts" / "system.md"
+    return get_agent_home() / "prompts" / "system.md"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ def _legacy_identity_path(slug: str) -> Path:
     路径约定统一前的读取方指向：~/.agentbase/workspaces/{slug}/agent_identity.md
     （下划线、且少一层 workspaces/{slug}）。
     """
-    return _get_trade_home() / "workspaces" / slug / "agent_identity.md"
+    return get_agent_home() / "workspaces" / slug / "agent_identity.md"
 
 
 def write_agent_identity(workspace_slug: str, content: str) -> None:
@@ -199,7 +199,7 @@ def _brand_safety_path(slug: str) -> Path:
     与身份文件同约定（工作目录/模板布局）：
         ~/.agentbase/{slug}/workspaces/{slug}/brand_safety.md
     """
-    return _get_trade_home() / slug / "workspaces" / slug / "brand_safety.md"
+    return get_agent_home() / slug / "workspaces" / slug / "brand_safety.md"
 
 
 def get_brand_safety(workspace_slug: str | None = None) -> str:
@@ -221,8 +221,8 @@ def get_brand_safety(workspace_slug: str | None = None) -> str:
     return BRAND_SAFETY_BLOCK
 
 
-def _build_trade_context_block(workspace_id: int | None) -> str:
-    """生成"当前 trade 会话上下文"段；workspace_id 为 None 时返回空串。
+def _build_workspace_context_block(workspace_id: int | None) -> str:
+    """生成"当前 agentbase 会话上下文"段；workspace_id 为 None 时返回空串。
 
     这段**目前不直接被 resolve_system_prompt 使用** —— 实际注入点放在 agentbase.helpers.build_query
     里，紧跟在它已有的"## 当前工作公司"段后面（"ID 是 X / 数据操作必须限定在该公司" 后面），
@@ -238,7 +238,7 @@ def _build_trade_context_block(workspace_id: int | None) -> str:
     if workspace_id is None:
         return ""
     return (
-        f"\n- **任何带 `workspace_id` 参数的 trade 工具**（如 `chat_memory_list`）"
+        f"\n- **任何带 `workspace_id` 参数的 agentbase 工具**（如 `chat_memory_list`）"
         f"**必须**传这个数字 {workspace_id} —— 这是当前会话的公司，**不是**用户消息里能取的值。"
     )
 

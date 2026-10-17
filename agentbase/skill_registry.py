@@ -168,7 +168,7 @@ def _read_yaml(path: Path) -> Any:
 # 预编译正则（import 时一次性构建，避免每次匹配都编译）
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 显式 skill 调用模式："用 b2b-xxx"、"用 memory" 或 "load skill b2b-xxx"
+# 显式 skill 调用模式："用 skill 名" 或 "load skill skill 名"
 _EXPLICIT_RE = re.compile(
     r'(?:用|使用|调用|加载|load?\s*(?:skill)?)\s*(?P<skill>[\w\u4e00-\u9fff-]+)',
     re.IGNORECASE,

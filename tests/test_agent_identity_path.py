@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 @pytest.fixture
 def agentbase_home(tmp_path, monkeypatch):
     """把 prompts 的数据目录指向临时目录。"""
-    monkeypatch.setattr("agentbase.prompts._get_trade_home", lambda: tmp_path)
+    monkeypatch.setattr("agentbase.prompts.get_agent_home", lambda: tmp_path)
     return tmp_path
 
 
@@ -150,7 +150,7 @@ class TestCrudIdentityReaderFileFallback:
         slug = workspace["slug"]
 
         # 清空 DB 身份字段，逼它走文件回退
-        crud.update_trade_workspace(cid, agent_identity_md="")
+        crud.update_workspace_record(cid, agent_identity_md="")
 
         # 在规范位置（模板/工作目录布局）写文件
         identity_file = crud.AGENT_HOME / slug / "workspaces" / slug / "agent-identity.md"

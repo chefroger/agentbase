@@ -51,7 +51,7 @@ class TestNoHardcodedHomePaths:
     """文件系统调用里不得写死开发机的家目录路径。
 
     2026-10-16 实测教训：`tests/test_chat_memory_plugin.py` 第一版把插件目录写成了
-    `Path("/Users/rogerlau/Desktop/Foreign Trade Assistant/agentbase/...")` ——
+    `Path("/Users/rogerlau/Desktop/AgentBase/agentbase/...")` ——
     本机 35 个用例全绿，**CI 上 6 个用例全挂在 FileNotFoundError**（仓库不在那个路径下）。
     这类 bug 本地永远发现不了，只能靠静态守卫。
     """

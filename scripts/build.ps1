@@ -1,5 +1,5 @@
 # ==============================================================================
-# Foreign Trade Assistant — Windows Build Script
+# AgentBase — Windows Build Script
 # ==============================================================================
 # TradeWin 桌面版暂不完善，Windows 构建临时关闭。
 # 如需手动构建，请参考 pyinstaller spec 文件配置。
