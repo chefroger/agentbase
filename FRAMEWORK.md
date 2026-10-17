@@ -188,6 +188,71 @@ PYTHONPATH=vendor/hermes python scripts/verify_extensions.py
 脚本在临时 `HERMES_HOME` 里跑：加载第三方 plugin → 检查 tools registry 发现 →
 连接一个 stdio MCP server 并实际调用。不碰用户数据。
 
+## 4.2 扩展点全量清单（v2 §4.8 盘点）
+
+Hermes 的扩展面远超"skills / plugins / MCP"三项。以下是 vendored v0.22.2 的真实清单。
+**默认全部保留**；标 ✅ 的是已经跑通过真实调用的。
+
+### 插件 API（`ctx.register_*`，由第三方 plugin 调用）
+
+| 接口 | 用途 | 状态 |
+|---|---|---|
+| `register_tool` | 注册工具进 tools registry | ✅ 已验证 |
+| `register_hook` | 30+ 生命周期事件（pre/post_tool_call、pre/post_llm_call、stream_*、session_*、approval_*、pre_gateway_dispatch、pre_transcription…） | 保留 |
+| `register_middleware` | 按 kind 插入中间件 | 保留 |
+| `register_command` / `register_cli_command` | 斜杠命令 / CLI 子命令 | 保留 |
+| `register_memory_provider` | 替换记忆后端 | 保留 |
+| `register_context_engine` | 替换上下文引擎 | 保留 |
+| `register_platform` / `register_telegram_handler` / `register_slack_action_handler` | 消息平台接入 | 保留 |
+| `register_auxiliary_task` | 辅助 LLM 任务通道 | 保留 |
+| `register_system_prompt_section` | 注入 system prompt 段落 | 保留 |
+| `register_automation_blueprint` | 贡献 cron 自动化蓝图 | 保留 |
+| `register_source` | 密钥来源 | 保留 |
+| `register_redaction_patterns` | 自定义脱敏规则 | 保留 |
+| `register_locale` / `register_locale_dir` | 多语言 | 保留 |
+| `register_approval_transport` | 审批 UI 传输层 | 保留 |
+| `register_dashboard_auth_provider` | 面板登录 | 保留 |
+| `ctx.llm` + 能力门控 | provider / model / agent / profile / task override（需 `capabilities` 授权） | 保留 |
+| `ctx.platform_actions` | 以 bot 身份操作消息平台（需 `gateway.platform_actions`） | 保留 |
+
+插件能力门控：`tools.override`、`llm.provider_override`、`llm.model_override`、
+`llm.agent_id_override`、`llm.profile_override`、`llm.task_override`、`gateway.platform_actions`。
+高风险能力需要在 `config.yaml` 的 `plugins.entries.<id>` 显式授权。
+
+### 非插件扩展点
+
+| 接口 | 说明 | 状态 |
+|---|---|---|
+| Skills（`SKILL.md` 发现） | 任何包/目录都能放 skill | ✅ 已验证（demo-pack） |
+| MCP 客户端（`mcp_servers`） | stdio / 远程 MCP server | ✅ 已验证 |
+| 内建工具自注册（`vendor/hermes/tools/*.py` 的 `register()`） | 第一方加工具 | 保留 |
+| Provider profiles（`providers/base.py`） | 声明式 infer provider | 保留 |
+| Gateway 平台（`hermes_platform/`、`gateway/`） | 消息网关与常驻 cron | 保留 |
+| Cron 自动化蓝图（`cron/blueprint_catalog.py`） | 内置 + 插件贡献 | 保留 |
+| ACP adapter（`hermes acp`） | 编辑器集成协议 | 保留 |
+| Web dashboard routers（`hermes_cli/web_routers/`） | Hermes 自带 HTTP API | 保留（agentbase 不直接暴露） |
+| Python 包插件（entry points `hermes_agent.plugins`） | pip 安装即加载 | 保留 |
+
+### 资源目录（不是 API，是可直接安装的内容）
+
+| 目录 | 内容 |
+|---|---|
+| `vendor/hermes/plugin-catalog/` | 可直接安装的第三方插件清单 |
+| `vendor/hermes/optional-mcps/` | MCP server 配置目录 |
+| `vendor/hermes/optional-skills/` | 可选 skill 目录 |
+| `vendor/hermes/plugins/` | Hermes 自带插件 |
+
+### AgentBase 自身的扩展点
+
+| 接口 | 说明 |
+|---|---|
+| `business.yaml` | 业务名/品牌/onboarding/工作目录/prompt 覆盖 |
+| `skill-packs/<pack>/` | 业务 skill 包（registry + SKILL.md） |
+| `GET/POST /api/skill-packs` | 本地安装/启用/卸载 pack |
+| `GET /api/branding` | 前端品牌 |
+| `GET/POST /api/settings` | provider Key / 默认模型 / MoA |
+| `static/` | 前端（可替换） |
+
 ---
 
 ## 5. 目录速览
