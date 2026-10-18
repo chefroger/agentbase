@@ -711,11 +711,16 @@ def _create_system_router() -> APIRouter:
         return {"ok": True, "message": message, "autostart": enabled}
 
     @router.post("/system/quit")
-    def api_quit_service():
+    def api_quit_service(request: Request):
         """退出常驻服务（不是卸载）。
 
         先返回响应，再在后台线程里发 SIGTERM，避免把正在写的响应掐断。
         """
+        _tk = request.headers.get("X-Hermes-Session-Token", "")
+        if _tk and not _check_system_rate_limit(_tk[:16]):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=429, detail="系统端点请求过于频繁，请稍后重试。")
+
         import threading
         import time as _t
 
