@@ -63,6 +63,28 @@
 - 三份 spec（mac/windows/linux）保持一致；`tests/test_service.py::TestSpecHygiene` 钉住"不引用已删模块"和"必须包含 vendor/hermes"。
 - 从 trade 原样拷贝的 `pyinstaller.spec` 已删除（产品名含 Foreign、bundle id `com.foreign-agentbase.assistant`、版本 0.3.0、大量死 hiddenimports、永远匹配不到的 b2b skill 循环）；构建正主是 `desktop-*.spec`。
 
+## 自身更新机制（任务书 §12）
+
+**已实现**
+
+- `agentbase/updater/`：`state.py`（`update-state.json` 的 phase / `update.lock` O_EXCL + PID 存活清理）、`changelog.py`、`sources.py`（`GitSource` / `PackageSource`）、`engine.py`（备份 → 换版 → 自检 → 完成/回滚）。
+- 自动备份：`AGENT_HOME/data/backups/`，保留最近 5 个；**自动回滚只回滚代码/产物，不回滚用户数据**。
+- 独立更新器：`POST /system/update` 只写状态并派生 `update --detached`，随后服务退出；更新器等待旧服务退出（30s SIGTERM → 5s SIGKILL）。
+- 半升级恢复：`bootstrap.setup()` 在子命令分发之后、业务初始化之前调用 `recover_if_needed()`；锁存活按 phase 分流，锁死亡派发恢复更新器。
+- 更新说明：`CHANGELOG.md`（三份 spec 已打进 bundle）；`GET /system/changelog`；前端更新前弹窗显示说明并要求确认。
+- 自检判据：`/api/status` 200 且 `hermes_usable` 为真（status 端点新增该字段）。
+
+**实测**
+
+- 单元测试：`tests/test_updater.py`（24 项）——状态/锁/changelog/PackageSource 替换与回滚/半升级分流/超时升级到 SIGKILL/端点。
+- 端到端（源码模式，临时 `AGENT_HOME`）：伪造 `phase=updating` + 死锁 → 重启服务 → 检测半升级、派发恢复、自身退出（exit 0）→ 恢复器写 `rolled_back` 并拉起服务 → `/api/status` 200。日志见 `logs/updater.log`。
+
+**未验证**
+
+- `GitSource` 真实全流程（需要安装到 `~/.agentbase/agentbase` 且有可拉取的新版本）。
+- `PackageSource` 真机替换（需要 Windows/macOS 分发包 + manifest）。
+- 真实 SIGKILL 超时（单测用假时钟覆盖，未做真机卡死注入）。
+
 ## 未完成 / 后续
 
 1. 真·全新机器安装复跑（Windows + macOS）；`install.ps1` 语法验证。

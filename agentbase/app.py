@@ -572,24 +572,46 @@ def _create_system_router() -> APIRouter:
 
     @router.post("/system/update")
     def api_update_system(background_tasks: BackgroundTasks, request: Request):
-        """一键更新 AgentBase 系统。
+        """一键更新 AgentBase（独立更新器 + 自动备份 + 失败回滚）。
 
-        升级成功后通过 BackgroundTasks 调度全量重启。
-        返回 {"ok": bool, "version": str, "errors": list, "restart_scheduled": bool}
+        不在服务进程内更新：派生 `update --detached` 后本进程退出，
+        更新器负责备份、换版、自检与回滚（任务书 §12）。
         """
         _tk = request.headers.get("X-Hermes-Session-Token", "")
         if _tk and not _check_system_rate_limit(_tk[:16]):
             from fastapi import HTTPException
             raise HTTPException(status_code=429, detail="系统端点请求过于频繁，请稍后重试。")
 
-        from agentbase.post_install import update_agentbase as _do_update
-        result = _do_update()  # 现在返回结构化 dict，不再依赖 _capture_output
+        from agentbase.updater import request_update
 
-        if result["ok"]:
+        result = request_update()
+        if result.get("ok"):
             _latest_version_cache["ts"] = 0.0  # 强制重新拉取 GitHub latest
-            background_tasks.add_task(_perform_restart)
+
+            def _quit_for_update() -> None:
+                import time as _time
+
+                _time.sleep(0.5)
+                from agentbase.service import quit_service
+
+                quit_service()
+
+            background_tasks.add_task(_quit_for_update)
             result["restart_scheduled"] = True
         return result
+
+    @router.get("/system/changelog")
+    def api_changelog(latest: str = ""):
+        """返回当前版本到 latest 之间的人话更新说明（任务书 §12 设计 5）。"""
+        from agentbase.updater.changelog import render
+
+        current = _resolve_reported_version()
+        return {
+            "ok": True,
+            "current": current,
+            "latest": latest,
+            "notes": render(current, latest),
+        }
 
     @router.post("/system/backup")
     def api_backup(request: Request):
@@ -830,6 +852,15 @@ def create_app() -> FastAPI:
         except Exception:
             doctor_result = None
 
+        # 更新器的自检判据之一（任务书 §12）：新版起来后 Hermes 必须可用。
+        # 判定结果在进程内缓存，重复轮询不会反复计算。
+        try:
+            from agentbase.bootstrap import hermes_is_usable
+
+            hermes_usable = hermes_is_usable()
+        except Exception:
+            hermes_usable = False
+
         return {
             "status": "ok",
             "app": business_config.branding().get("title") or "AgentBase",
@@ -837,6 +868,7 @@ def create_app() -> FastAPI:
             "latest_version": latest or None,
             "started_at": _STARTED_AT,
             "doctor": doctor_result,
+            "hermes_usable": hermes_usable,
         }
 
     return app

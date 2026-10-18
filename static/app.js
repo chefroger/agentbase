@@ -684,10 +684,29 @@ function _setBtnBusy(btn, busy) {
 }
 
 // ── 系统更新 ──
+async function _confirmUpdate() {
+    // 任务书 §12：更新前显示人话说明，并让用户明确确认。
+    let latest = '';
+    try {
+        const st = await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' });
+        const d = await st.json();
+        latest = d.latest_version || '';
+    } catch(e) { /* 拿不到最新版本号不影响更新 */ }
+
+    let notes = '修复与稳定性改进';
+    try {
+        const c = await api('GET', '/api/agentbase/system/changelog?latest=' + encodeURIComponent(latest));
+        if (c && c.notes) notes = c.notes;
+    } catch(e) { /* 兜底文案 */ }
+
+    return confirm('本次更新内容：\n\n' + notes + '\n\n更新前会自动备份；更新完成后服务会重启。现在更新吗？');
+}
+
 async function doSystemUpdate(e) {
     // 用 currentTarget 或回退到事件对象，再不行直接查 DOM
     const btn = (e && (e.currentTarget || e.target)) || document.querySelector('#system-update-btn');
     if (!btn) return;
+    if (!(await _confirmUpdate())) return;
     _setBtnBusy(btn, true);
     toast(t('sys.restart_toast').replace('Restarting','Updating'));
     var updateFailed = false;
@@ -1076,6 +1095,7 @@ function stopVersionCheck() {
 }
 
 async function doUpdateSystem() {
+    if (!(await _confirmUpdate())) return;
     const btn = document.getElementById('update-banner');
     if (btn) btn.textContent = '更新中...';
     var restartScheduled = false;

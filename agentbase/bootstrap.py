@@ -132,8 +132,14 @@ def dispatch_subcommands() -> bool:
         return False
 
     if cmd == "update":
-        from agentbase.post_install import update_agentbase
-        update_agentbase()
+        # 统一走新引擎（备份 / 回滚 / 独立进程全部包含）
+        from agentbase.updater import run_recovery, run_update
+
+        if "--recover" in sys.argv[2:]:
+            result = run_recovery()
+        else:
+            result = run_update()
+        print(result.get("message") or result.get("error") or "")
     elif cmd == "backup":
         from agentbase.post_install import backup_agentbase
         print(backup_agentbase())
@@ -1155,6 +1161,13 @@ def setup():
 
     # 第 4 步：子命令分发。排在路径准备之后 —— doctor/osint 自己会 import Hermes
     if dispatch_subcommands():
+        sys.exit(0)
+
+    # 第 4.5 步：半升级检测（只对服务启动路径；更新器进程走上面的子命令分支）。
+    # 必须在任何业务初始化之前 —— 带病的半个版本不应该先把数据库摸一遍。
+    from agentbase.updater import recover_if_needed
+
+    if recover_if_needed():
         sys.exit(0)
 
     if not hermes_usable:

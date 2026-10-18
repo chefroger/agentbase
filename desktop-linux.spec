@@ -19,6 +19,7 @@ a = Analysis(
         (str(_PROJECT_ROOT / 'agentbase'), 'agentbase'),
         (str(_PROJECT_ROOT / 'static'), 'static'),
         (str(_PROJECT_ROOT / 'pyproject.toml'), '.'),
+        (str(_PROJECT_ROOT / 'CHANGELOG.md'), '.'),
         (str(_PROJECT_ROOT / 'vendor' / 'hermes'), 'vendor/hermes'),
     ],
     hiddenimports=[

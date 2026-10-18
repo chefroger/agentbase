@@ -34,6 +34,16 @@ def main(argv: list[str] | None = None) -> int:
         run_server()
         return 0
 
+    # CLI 子命令（update/backup/open/doctor…）交给 bootstrap.dispatch_subcommands。
+    # 打包产物里没有 server.py，但入口相同：setup() 会在路径准备后分发并退出。
+    _SUBCOMMANDS = {"update", "backup", "skills-update", "open", "doctor", "workspace"}
+    if args and args[0] in _SUBCOMMANDS:
+        sys.argv = [sys.argv[0], *args]
+        from agentbase.cli import run_server
+
+        run_server()
+        return 0
+
     # 双击入口：确保服务在跑，再打开 UI（复用 `agentbase open` 的实现）。
     from agentbase.opener import open_agentbase
 
