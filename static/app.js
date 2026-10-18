@@ -2264,7 +2264,7 @@ async function loadSettings() {
 async function loadServiceSettings() {
     const el = document.getElementById('service-body');
     if (!el) return;
-    const data = await api('GET', '/system/service-status');
+    const data = await api('GET', '/api/agentbase/system/service-status');
     if (!data) { el.textContent = '加载失败'; return; }
     el.innerHTML = `
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -2276,7 +2276,7 @@ async function loadServiceSettings() {
 }
 
 async function setAutostart(enabled) {
-    const resp = await api('POST', '/system/autostart', { enabled });
+    const resp = await api('POST', '/api/agentbase/system/autostart', { enabled });
     if (resp?.ok) { toast(resp.message || '已保存'); }
     else {
         toast(resp?.error || '设置失败');
@@ -2288,7 +2288,7 @@ async function setAutostart(enabled) {
 
 async function quitService() {
     if (!confirm('确定退出 AgentBase 服务？退出后定时任务将停止。')) return;
-    const resp = await api('POST', '/system/quit', {});
+    const resp = await api('POST', '/api/agentbase/system/quit', {});
     if (resp?.ok) toast('服务正在退出…');
 }
 

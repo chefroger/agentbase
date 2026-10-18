@@ -221,6 +221,18 @@ class TestAutostartConsent:
         assert "Read-Host" in text
         assert "$WantAutostart = $false" in text  # catch 分支（无控制台）默认关闭
 
+    def test_settings_ui_calls_prefixed_system_endpoints(self):
+        """api() **不会**自动补 /api/agentbase 前缀；设置页路径写错会静默 404。"""
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / "static" / "app.js").read_text(encoding="utf-8")
+        for ep in ("/api/agentbase/system/service-status",
+                   "/api/agentbase/system/autostart",
+                   "/api/agentbase/system/quit"):
+            assert ep in text, f"设置页缺少 {ep}"
+        assert "api('GET', '/system/" not in text
+        assert "api('POST', '/system/" not in text
+
     def test_legacy_pyinstaller_spec_removed(self):
         """旧 trade 拷贝来的 pyinstaller.spec 必须删除（产品名含 Foreign、死引用一堆）。"""
         from pathlib import Path
