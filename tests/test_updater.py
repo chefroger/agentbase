@@ -156,6 +156,76 @@ class TestPackageSource:
         assert "manifest" in str(exc.value)
 
 
+class TestGitSourceRollback:
+    def test_snapshot_records_missing_repo(self, tmp_path):
+        from agentbase.updater.sources import GitSource
+
+        src = GitSource(tmp_path / "missing")
+        snap = src.snapshot()
+        assert snap == {"old_head": "", "repo_existed": False}
+
+    def test_rollback_removes_repo_created_by_update(self, tmp_path):
+        """更新前没有安装目录 → 本次 clone 出来的目录删掉就是回滚。"""
+        from agentbase.updater.sources import GitSource
+
+        repo = tmp_path / "agentbase"
+        repo.mkdir()
+        (repo / "server.py").write_text("new", encoding="utf-8")
+
+        src = GitSource(repo)
+        src.rollback({"old_head": "", "repo_existed": False})
+        assert not repo.exists()
+
+    def test_rollback_without_head_raises_when_repo_existed(self, tmp_path):
+        from agentbase.updater.sources import GitSource
+
+        repo = tmp_path / "agentbase"
+        repo.mkdir()
+        src = GitSource(repo)
+        with pytest.raises(RuntimeError):
+            src.rollback({"old_head": "", "repo_existed": True})
+
+
+class TestEngineRequest:
+    def test_request_update_records_service_cmd(self, agent_home, monkeypatch):
+        import sys
+
+        from agentbase.updater import engine, state
+
+        class FakeSource:
+            name = "git"
+
+            def snapshot(self):
+                return {"old_head": "", "repo_existed": False}
+
+        monkeypatch.setattr(engine, "detect_source", lambda: FakeSource())
+        monkeypatch.setattr(engine, "spawn_detached_updater", lambda: True)
+
+        result = engine.request_update()
+
+        assert result["ok"] is True
+        saved = state.read_state()
+        assert saved["service_cmd"][0] == sys.executable
+        assert saved["phase"] == state.PHASE_UPDATING
+
+    def test_request_update_rolls_back_state_when_spawn_fails(self, agent_home, monkeypatch):
+        from agentbase.updater import engine, state
+
+        class FakeSource:
+            name = "git"
+
+            def snapshot(self):
+                return {}
+
+        monkeypatch.setattr(engine, "detect_source", lambda: FakeSource())
+        monkeypatch.setattr(engine, "spawn_detached_updater", lambda: False)
+
+        result = engine.request_update()
+
+        assert result["ok"] is False
+        assert state.read_state()["phase"] == state.PHASE_ROLLED_BACK
+
+
 class TestEngineRecovery:
     def test_terminal_state_is_noop(self, agent_home):
         from agentbase.updater import engine, state

@@ -50,10 +50,19 @@ def request_update() -> dict:
     except Exception:
         snapshot = {}
 
+    # 记录"旧服务怎么启动的"：回滚后用它把原来的服务拉起来。
+    # 更新失败时 source.service_command() 可能指向一个已被删除的新目录，
+    # 没有这条记录就只能让用户手动重启。
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0 and not os.path.isabs(argv0):
+        argv0 = os.path.abspath(argv0)
+    service_cmd = [sys.executable, argv0, *sys.argv[1:]] if argv0 else []
+
     update_state.write_state(
         update_state.PHASE_UPDATING,
         source=source.name,
         requested_at=time.time(),
+        service_cmd=service_cmd,
         **snapshot,
     )
 
@@ -188,7 +197,7 @@ def run_recovery() -> dict:
             update_state.PHASE_ROLLED_BACK, recovered=True,
             error=saved.get("error", ""),
         )
-        _start_service(source)
+        _start_service(source, _previous_service_cmd(saved))
         return {"ok": True, "message": "已回滚并重新启动"}
     finally:
         update_state.release_lock()
@@ -273,10 +282,18 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
-def _start_service(source: UpdateSource) -> bool:
-    cmd = source.service_command(PORT)
-    _log(f"启动服务：{' '.join(cmd)}")
-    return _spawn_detached(cmd)
+def _start_service(source: UpdateSource, cmd: list[str] | None = None) -> bool:
+    command = cmd or source.service_command(PORT)
+    _log(f"启动服务：{' '.join(command)}")
+    return _spawn_detached(command)
+
+
+def _previous_service_cmd(saved: dict) -> list[str] | None:
+    """回滚后用原进程的命令行拉起旧服务（state 里由 request_update 写入）。"""
+    cmd = saved.get("service_cmd")
+    if isinstance(cmd, list) and cmd and all(isinstance(x, str) for x in cmd):
+        return cmd
+    return None
 
 
 def _start_and_verify(source: UpdateSource) -> tuple[bool, str]:
@@ -312,13 +329,13 @@ def _rollback_and_recover(error: str) -> dict:
         source.rollback(saved)
         _log("回滚成功")
         update_state.write_state(update_state.PHASE_ROLLED_BACK, error=error, recovered=True)
-        _start_service(source)
+        _start_service(source, _previous_service_cmd(saved))
         return {"ok": False, "error": error, "rolled_back": True}
     except Exception as exc:
         update_state.write_state(
             update_state.PHASE_ROLLED_BACK, error=f"{error}; 回滚失败: {exc}", recovered=False,
         )
-        _start_service(source)
+        _start_service(source, _previous_service_cmd(saved))
         return {"ok": False, "error": f"{error}; 回滚失败: {exc}", "rolled_back": False}
 
 

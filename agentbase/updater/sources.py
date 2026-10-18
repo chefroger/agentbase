@@ -50,14 +50,18 @@ class GitSource(UpdateSource):
         self.repo = Path(repo)
 
     def snapshot(self) -> dict:
-        try:
-            head = subprocess.run(
-                ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
-                capture_output=True, text=True, timeout=15,
-            )
-            return {"old_head": head.stdout.strip() if head.returncode == 0 else ""}
-        except (OSError, subprocess.TimeoutExpired):
-            return {"old_head": ""}
+        existed = self.repo.is_dir()
+        head_text = ""
+        if existed:
+            try:
+                head = subprocess.run(
+                    ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                head_text = head.stdout.strip() if head.returncode == 0 else ""
+            except (OSError, subprocess.TimeoutExpired):
+                head_text = ""
+        return {"old_head": head_text, "repo_existed": existed}
 
     def prepare(self) -> None:
         from agentbase.post_install.update import update_agentbase
@@ -67,7 +71,14 @@ class GitSource(UpdateSource):
             raise RuntimeError("; ".join(result.get("errors") or ["git 更新失败"]))
 
     def rollback(self, snapshot: dict) -> None:
-        old_head = (snapshot or {}).get("old_head") or ""
+        snapshot = snapshot or {}
+        # 更新前没有安装目录（本次更新刚 clone 出来的）→ 删掉它即回滚
+        if snapshot.get("repo_existed") is False:
+            if self.repo.is_dir():
+                shutil.rmtree(self.repo)
+            return
+
+        old_head = snapshot.get("old_head") or ""
         if not old_head:
             raise RuntimeError("缺少旧版本 commit，无法回滚代码")
         subprocess.run(
