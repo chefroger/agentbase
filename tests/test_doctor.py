@@ -445,7 +445,7 @@ class TestUnconfiguredLlmIsNotFatal:
         self._stub_compat_ok(monkeypatch)
         monkeypatch.setattr(
             helpers, "check_provider",
-            lambda: "未配置 AI 模型。请先运行 hermes setup 选择模型。",
+            lambda: "未配置 AI 模型。请在「设置 → 模型与 API Key」里选择 Provider、填写 Key 并保存。",
         )
 
         results = doctor.check_hermes_runtime(agent_factory=lambda: pytest.fail(
@@ -455,7 +455,7 @@ class TestUnconfiguredLlmIsNotFatal:
         agent = next(r for r in results if r.name == "Agent 构造")
         assert agent.status == doctor.STATUS_WARN
         assert agent.fatal is False
-        assert "hermes setup" in agent.detail, "要告诉用户下一步是去配大模型"
+        assert "模型与 API Key" in agent.detail, "要告诉用户下一步是去设置页配大模型"
         # 关键：安装脚本据此判定「能不能继续」，不能是致命
         assert doctor.has_fatal_failure(results) is False
 

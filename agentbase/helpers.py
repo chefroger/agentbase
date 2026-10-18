@@ -134,21 +134,21 @@ def check_provider() -> str | None:
 
     provider, model = current_model_config()
     if not provider and not model:
-        return "未配置 AI 模型。请先运行 hermes setup 选择模型。"
+        return "未配置 AI 模型。请在「设置 → 模型与 API Key」里选择 Provider、填写 Key 并保存。"
 
     configured = provider_is_configured(provider) if provider else None
     if configured is False:
-        return "未检测到当前 Provider 的认证信息。请在 ~/.hermes/.env 中设置，或运行 hermes setup 重新配置。"
+        return "未检测到当前 Provider 的认证信息。请在「设置 → 模型与 API Key」里填写该 Provider 的 API Key。"
     if configured is None and not os.getenv("LLM_API_KEY"):
-        return "未检测到 API Key。请在 ~/.hermes/.env 中设置，或运行 hermes setup 重新配置。"
+        return "未检测到 API Key。请在「设置 → 模型与 API Key」里填写 API Key。"
 
     # 检查 openai SDK 是否可导入 — Hermes 用此 SDK 作为所有 provider 的通用 HTTP 客户端
     try:
         import openai  # noqa: F401
     except ImportError:
         return (
-            "OpenAI Python SDK 未安装。所有 LLM Provider 的 HTTP 通信都依赖此包。\n"
-            "请运行: pip install openai==2.24.0"
+            "AgentBase 安装不完整：缺少 openai 依赖。\n"
+            "请重新运行 AgentBase 安装脚本（会自动补齐依赖）。"
         )
 
     # 检查 anthropic SDK 是否可导入 — 仅在使用原生 Anthropic provider 时需要
