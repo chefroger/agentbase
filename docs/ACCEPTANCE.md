@@ -40,7 +40,8 @@
 - macOS：launchd `~/Library/LaunchAgents/com.agentbase.assistant.plist`（`RunAtLoad=true`、`KeepAlive=false`，用户级）。`install.sh` 每次重写并 `bootout`+`bootstrap`。
 - Windows：计划任务 `AgentBase`（登录触发、`wscript` 隐藏窗口，见 `post_install/win_setup.py`）；install.ps1 与服务启动时幂等确保。
 - Linux：systemd user unit（install.sh 既有）。
-- 用户偏好：`AGENT_HOME/data/autostart.json`。设置页关闭自启后，Windows 服务重启**不会**把它装回来；重跑安装脚本会重置为默认开启。
+- 用户偏好：`AGENT_HOME/data/autostart.json`。设置页关闭自启后，Windows 服务重启**不会**把它装回来。
+- **安装时必须征得同意**（任务书 §12 红线）：install.sh / install.ps1 会询问；非交互安装（无 tty / 无控制台）默认**不开启**并记录偏好，用户可随时在设置页打开。选择"否"时同时清除旧安装遗留的自启项。
 
 **设置页入口**：`后台服务` 区块（开机自启开关 + 退出服务），对应
 `GET /system/service-status`、`POST /system/autostart`、`POST /system/quit`（均需 session token）。
@@ -60,6 +61,7 @@
 - `vendor/hermes` 以 **datas 源码目录**分发；`bootstrap._adjust_sys_path()` 在 frozen 下把 `_MEIPASS/vendor/hermes` 加入 `sys.path`。只靠 PyInstaller 静态分析会漏 Hermes 的惰性导入。
 - Hermes 的运行时依赖必须在 `hiddenimports` 显式列出（ruamel.yaml / certifi / truststore / dotenv / httpx / rich …）；`PIL` 不能排除（Hermes 图像工具需要）。
 - 三份 spec（mac/windows/linux）保持一致；`tests/test_service.py::TestSpecHygiene` 钉住"不引用已删模块"和"必须包含 vendor/hermes"。
+- 从 trade 原样拷贝的 `pyinstaller.spec` 已删除（产品名含 Foreign、bundle id `com.foreign-agentbase.assistant`、版本 0.3.0、大量死 hiddenimports、永远匹配不到的 b2b skill 循环）；构建正主是 `desktop-*.spec`。
 
 ## 未完成 / 后续
 
