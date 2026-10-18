@@ -455,14 +455,41 @@ echo -e "  帮助: ${CYAN}agentbase --help${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 开机自启需用户确认（任务书 §12：不得偷偷装）
+#
+# 交互终端问一句；非交互安装（如 curl | bash 且没有 tty）**默认不开启**，
+# 并把偏好写成 false —— 用户之后可以在设置页随时打开。
+# ─────────────────────────────────────────────────────────────────────────────
+_want_autostart() {
+    if [ -t 0 ]; then
+        printf "  AgentBase 会在登录后自动在后台常驻运行（无窗口）。是否开启开机自启？[Y/n] "
+        read -r _ans || return 1
+        case "$_ans" in
+            [nN]*) return 1 ;;
+            *) return 0 ;;
+        esac
+    fi
+    return 1
+}
+
+if _want_autostart; then
+    WANT_AUTOSTART=1
+    # 恢复默认：清掉「用户之前手动关闭自启」的偏好记录
+    "$VENV_DIR/bin/python" -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()" 2>/dev/null || true
+else
+    WANT_AUTOSTART=0
+    # 同时移除旧安装可能留下的自启项（用户明确选择了不开启）
+    "$VENV_DIR/bin/python" -c "from agentbase.service import set_autostart; set_autostart(False)" 2>/dev/null || true
+    echo -e "  ${YELLOW}已跳过开机自启${NC}（安装完成后可在设置页随时开启）"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 配置 macOS 开机自启动（launchd，后台静默运行，无终端窗口）
 # ─────────────────────────────────────────────────────────────────────────────
-if [[ "$(uname -s)" == "Darwin" ]]; then
+if [[ "$(uname -s)" == "Darwin" ]] && [ "$WANT_AUTOSTART" = "1" ]; then
     PLIST_DIR="$HOME/Library/LaunchAgents"
     PLIST_FILE="$PLIST_DIR/com.agentbase.assistant.plist"
     mkdir -p "$PLIST_DIR"
-    # 重新安装 = 恢复默认：清掉「用户手动关闭自启」的偏好记录
-    "$VENV_DIR/bin/python" -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()" 2>/dev/null || true
 
     # 每次都重写：旧装用户的 plist 可能带 KeepAlive=true，
     # 那样「退出服务」后会被 launchd 立刻拉起（Phase 7 要求可退出）。
@@ -514,7 +541,7 @@ PLIST
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置 Linux 开机自启动（systemd user unit）
 # ─────────────────────────────────────────────────────────────────────────────
-elif [[ "$(uname -s)" == "Linux" ]]; then
+elif [[ "$(uname -s)" == "Linux" ]] && [ "$WANT_AUTOSTART" = "1" ]; then
     UNIT_DIR="$HOME/.config/systemd/user"
     UNIT_FILE="$UNIT_DIR/agentbase.service"
     mkdir -p "$UNIT_DIR"

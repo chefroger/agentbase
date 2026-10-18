@@ -199,6 +199,39 @@ class TestPackagedServiceCommand:
         assert cmd[-1] == "--no-browser"
 
 
+class TestAutostartConsent:
+    """任务书 §12 红线：安装时不得偷偷注册开机自启。"""
+
+    def test_shell_installer_asks_and_defaults_to_no(self):
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / "scripts" / "install.sh").read_text(encoding="utf-8")
+        assert "是否开启开机自启" in text, "安装脚本没有询问用户"
+        assert "_want_autostart" in text
+        assert "[ -t 0 ]" in text, "非交互安装必须走默认分支"
+        # 非交互分支返回 1 = 不开启
+        block = text.split("_want_autostart() {", 1)[1].split("\n}", 1)[0]
+        assert "return 1" in block
+
+    def test_powershell_installer_asks_and_defaults_to_no_without_console(self):
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / "scripts" / "install.ps1").read_text(encoding="utf-8")
+        assert "是否开启开机自启" in text
+        assert "Read-Host" in text
+        assert "$WantAutostart = $false" in text  # catch 分支（无控制台）默认关闭
+
+    def test_legacy_pyinstaller_spec_removed(self):
+        """旧 trade 拷贝来的 pyinstaller.spec 必须删除（产品名含 Foreign、死引用一堆）。"""
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        assert not (root / "pyinstaller.spec").exists()
+        # 正主是 desktop-*.spec
+        for name in ("desktop-mac.spec", "desktop-windows.spec", "desktop-linux.spec"):
+            assert (root / name).is_file()
+
+
 class TestSpecHygiene:
     """spec 不能引用已删除的模块（PyInstaller 会静默忽略，打包后才炸）。"""
 

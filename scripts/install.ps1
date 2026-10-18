@@ -376,8 +376,24 @@ if ($currentPath -notlike "*$LocalBin*") {
 # 以前这里用 Register-ScheduledTask 直接跑 python.exe，是控制台程序 → 登录必弹
 # 终端窗口；而且只在这一处配，走「让 Hermes 装 AgentBase」流程的用户根本拿不到。
 # ─────────────────────────────────────────────────────────────────────────────
-# 重新安装 = 恢复默认：清掉「用户手动关闭自启」的偏好记录
-& $PyCmd -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()"
+# 开机自启需用户确认（任务书 §12：不得偷偷装）。
+# 读不到用户答复（无控制台）时按"不开启"处理，用户可在设置页随时打开。
+$WantAutostart = $true
+try {
+    $ans = Read-Host "  AgentBase 会在登录后自动在后台常驻运行（无窗口）。是否开启开机自启？[Y/n]"
+    if ($ans -match '^\s*[nN]') { $WantAutostart = $false }
+} catch {
+    $WantAutostart = $false
+}
+if ($WantAutostart) {
+    # 恢复默认：清掉「用户之前手动关闭自启」的偏好记录
+    & $PyCmd -c "from agentbase.service import reset_autostart_preference; reset_autostart_preference()"
+} else {
+    # 同时移除旧安装可能留下的计划任务
+    & $PyCmd -c "from agentbase.service import set_autostart; set_autostart(False)"
+    Write-Host "  已跳过开机自启（可在设置页随时开启）" -ForegroundColor Yellow
+}
+# 偏好为 false 时，ensure_windows_setup 会跳过计划任务注册（桌面快捷方式仍会创建）
 & $PyCmd -c "from agentbase.post_install.win_setup import ensure_windows_setup, agentbase_dir_from_module; [print('  ' + m) for m in ensure_windows_setup(agentbase_dir_from_module())]"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ⚠ 开机自启动/桌面快捷方式设置失败（不影响 AgentBase 使用，可稍后重试）" -ForegroundColor Yellow
