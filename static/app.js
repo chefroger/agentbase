@@ -38,20 +38,20 @@ const I18N = {
         'license.req_code':'申请码',
         'license.trial':'试用',
         'misc.thinking':'正在思考...',
-        'modal.co.add_title':'添加新公司',
+        'modal.co.add_title':'创建工作区',
         'modal.co.contact':'联系人',
         'modal.co.contact_ph':'姓名',
-        'modal.co.create':'创建公司',
+        'modal.co.create':'创建工作区',
         'modal.co.email':'邮箱',
         'modal.co.identity_label':'Agent 身份 (Markdown)',
         'modal.co.identity_ph':'粘贴 agent-identity.md 内容...',
-        'modal.co.name':'公司名称 *',
+        'modal.co.name':'工作区名称 *',
         'modal.co.name_ph':'例如：我的业务',
         'modal.co.slug_ph':'自动生成',
-        'modal.co.slug_tt':'由系统根据公司名称自动生成',
+        'modal.co.slug_tt':'由系统根据工作区名称自动生成',
         'modal.co.tab_identity':'Agent 身份',
-        'modal.co.tab_list':'公司列表',
-        'modal.co.title':'🏢 公司设置',
+        'modal.co.tab_list':'工作区列表',
+        'modal.co.title':'🏢 工作区设置',
         'modal.co.website':'网站',
         'nav.history':'对话记录',
         'nav.tasks':'定时任务',
@@ -75,8 +75,8 @@ const I18N = {
         'toast.network_retry':'网络错误，请重试',
         'toast.no_workspace':'请先选择 workspace',
         'toast.request_timeout':'请求超时',
-        'workspace.add':'添加公司',
-        'workspace.select':'— 选择公司 —',
+        'workspace.add':'创建工作区',
+        'workspace.select':'— 选择工作区 —',
     },
     en: {
         'btn.cancel':'Cancel',
@@ -109,7 +109,7 @@ const I18N = {
         'modal.co.identity_label':'Agent Identity (Markdown)',
         'modal.co.identity_ph':'Paste agent-identity.md content...',
         'modal.co.name':'Workspace Name *',
-        'modal.co.name_ph':'e.g. My Trading Co.',
+        'modal.co.name_ph':'e.g. My Business',
         'modal.co.slug_ph':'Auto-generated',
         'modal.co.slug_tt':'Auto-generated from workspace name',
         'modal.co.tab_identity':'Agent Identity',
@@ -138,7 +138,7 @@ const I18N = {
         'toast.network_retry':'Network error, please retry',
         'toast.no_workspace':'Please select a workspace first',
         'toast.request_timeout':'Request timeout',
-        'workspace.add':'Add',
+        'workspace.add':'Create',
         'workspace.select':'— Select Workspace —',
     }
 };
@@ -2105,13 +2105,21 @@ async function loadCompanies() {
     const prev = currentCompanyId;
     workspaces = await api('GET', '/api/agentbase/workspaces') || [];
     const sel = $('workspace-select');
-    sel.innerHTML = '<option value="">— 选择公司 —</option>' +
+    sel.innerHTML = '<option value="">— 选择工作区 —</option>' +
         workspaces.map(c => `<option value="${c.id}" ${c.id===prev?'selected':''}>${esc(c.name)}</option>`).join('');
     if (prev && !workspaces.find(c=>c.id===prev)) {
         // Previously selected workspace was deleted
         currentCompanyId = null;
         saveState();
     }
+    _applyWorkspaceVisibility();
+}
+
+function _applyWorkspaceVisibility() {
+    // 单业务框架：只有一个工作区时不向用户暴露选择器/添加入口。
+    // 0 个工作区（自动创建失败）仍显示，作为兜底创建入口。
+    var row = document.querySelector('.csel-row');
+    if (row) row.style.display = (workspaces.length === 1) ? 'none' : '';
 }
 
 function loadCompanyListUI() {
@@ -2443,5 +2451,5 @@ function renderNoCompanyPage() {
         viewCache[key].element.remove();
         delete viewCache[key];
     }
-    $('main-content').innerHTML = `<div class="empty-state"><div class="empty-icon">🏢</div><h2>请先选择或创建 workspace</h2><p>AgentBase 支持多 workspace 隔离</p><button onclick="showAddCompanyModal()">➕ 创建公司</button></div>`;
+    $('main-content').innerHTML = `<div class="empty-state"><div class="empty-icon">🏢</div><h2>正在准备工作区</h2><p>首次启动会自动创建默认工作区；若长时间没有出现，可手动创建。</p><button onclick="showAddCompanyModal()">创建工作区</button></div>`;
 }

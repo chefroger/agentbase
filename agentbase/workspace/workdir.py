@@ -48,7 +48,10 @@ def _slugify(name: str) -> str:
     slug = name.lower().strip()
     if not slug:
         return f"workspace-{uuid.uuid4().hex[:6]}"  # 空输入 → 唯一后备值
-    slug = re.sub(r"[^\w\s-]", "", slug)   # 移除非单词字符（Unicode 模式下 \w 含 CJK）
+    # 只保留 ASCII：slug 用于目录名 / URL，必须跨平台安全。
+    # 之前用 \w（Unicode 模式含 CJK）会保留中文，随后被 _validate_slug 拒绝 ——
+    # 中文 business_name（默认模板就是「示例业务」）导致创建直接失败。
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
     slug = re.sub(r"[_\s]+", "-", slug)    # 下划线/空格 → 连字符
     slug = re.sub(r"--+", "-", slug)       # 合并连续连字符
     return slug.strip("-") or f"workspace-{uuid.uuid4().hex[:6]}"  # 兜底 → 唯一后缀

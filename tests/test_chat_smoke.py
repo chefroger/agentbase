@@ -149,7 +149,9 @@ class TestChatEndpointHTTP:
         """
         monkeypatch.setenv("AGENT_HOME", str(tmp_path))
         import agentbase.database as _db
-        _db._get_db_path = lambda p=tmp_path: p / "agentbase.db"
+        # 必须用 monkeypatch：直接赋值会把模块级路径永久钉在这个测试的 tmp_path，
+        # 后续所有用例的数据库都会串到已删除的目录。
+        monkeypatch.setattr(_db, "_get_db_path", lambda: tmp_path / "agentbase.db")
         from agentbase.database import init_db
         init_db()
 

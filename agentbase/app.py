@@ -772,6 +772,17 @@ def create_app() -> FastAPI:
     _db_path = _init_db()
     print(f"  Database: {_db_path}")
 
+    # 默认单业务：首次启动自动创建唯一工作区，用户无需理解/创建「公司」。
+    # 失败不阻断启动（前端仍保留兜底入口）。
+    try:
+        from agentbase.workspace import ensure_default_workspace
+
+        _default_ws = ensure_default_workspace()
+        if _default_ws:
+            print(f"  Workspace: {_default_ws.get('name')}（已自动创建）")
+    except Exception as exc:
+        print(f"  ⚠️  自动创建工作区失败：{exc}")
+
     # 版本标记：记录「本进程实际运行的代码版本」，供 /api/status 上报。
     # 只在启动时写，升级流程不写 —— 这样没重启就一定显示旧版本（真话）。
     _running_version = _write_version_marker()

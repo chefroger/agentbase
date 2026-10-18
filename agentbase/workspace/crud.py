@@ -182,7 +182,10 @@ def create(
         raise ValueError("Workspace name cannot be empty")
 
     if not slug:
-        slug = _slugify(name)  # 从公司名自动生成 slug
+        # 中文（或纯非 ASCII）名称经 _slugify 后为空 —— 用 "workspace" 兜底，
+        # 与前端 autoSlug 的行为一致；否则默认 business_name（如「示例业务」）
+        # 会让首启自动创建工作区直接失败。
+        slug = _slugify(name) or "workspace"
     slug = _validate_slug(slug)  # 校验 slug 合法性（防路径穿越、非法字符）
 
     data_dir = None

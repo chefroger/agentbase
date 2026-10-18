@@ -37,10 +37,41 @@ from agentbase.workspace.workdir import (
     _validate_slug,
 )
 
+def ensure_default_workspace() -> dict | None:
+    """首次启动自动创建唯一工作区（框架默认单业务，不向用户暴露「公司」概念）。
+
+    - 已有活跃工作区 → 什么都不做（幂等）
+    - 没有 → 用 `business.yaml` 的 `business_name` 创建
+    - 创建失败（如桌面不可写）→ 返回 None，不阻断服务启动；前端仍提供兜底入口
+    """
+    from agentbase import business_config
+    from agentbase.database import get_connection
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM workspaces WHERE is_active = 1"
+        ).fetchone()
+        if row and row[0] > 0:
+            return None
+    finally:
+        conn.close()
+
+    name = str(business_config.get("business_name") or "").strip() or "AgentBase"
+    try:
+        return create(name=name)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning("自动创建默认工作区失败：%s", exc, exc_info=True)
+        return None
+
+
 # __all__ 明确列出所有公开 API（IDE 自动补全 / import * 的边界）
 __all__ = [
     # 数据目录常量
     "AGENT_HOME",
+    "ensure_default_workspace",
     # workspaces 表 CRUD
     "create",
     "get",
