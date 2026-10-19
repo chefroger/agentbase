@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
 <title>AgentBase</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" integrity="sha384-cwS6YdhLI7XS60eoDiC+egV0qHp8zI+Cms46R0nbn8JrmoAzV9uFL60etMZhAnSu" crossorigin="anonymous"></script>
@@ -21,30 +21,24 @@
                 <option value="en">English</option>
             </select>
         </div>
-        <div class="workspace-select">
+        <div class="workspace-select" id="workspace-select-wrap">
             <div class="csel-row">
-                <select id="workspace-select" aria-label="选择 workspace" onchange="onCompanyChange(this.value)">
-                    <option value="">— 选择 workspace —</option>
+                <select id="workspace-select" aria-label="选择工作区" onchange="onWorkspaceChange(this.value)">
+                    <option value="">—</option>
                 </select>
-                <button onclick="showAddCompanyModal()" title="添加 workspace">+</button>
+                <button onclick="showWorkspaceModal()" title="新建工作区">+</button>
             </div>
         </div>
     </div>
 
     <nav class="sidebar-nav">
         <div class="nav-section">
-            <div class="nav-section-title">💬</div>
-            <div class="nav-item active" data-view="chat" data-chat-context="general" onclick="navToView('chat','general','对话')">
-                <span class="nav-icon">💬</span><span class="nav-label">对话</span>
+            <div class="nav-section-title" id="nav-section-main">底座</div>
+            <div class="nav-item active" data-view="settings" onclick="navigateTo('#/settings')">
+                <span class="nav-icon">⚙️</span><span class="nav-label" id="nav-label-settings">设置</span>
             </div>
-            <div class="nav-item" data-view="tasks" onclick="navToView('tasks')">
-                <span class="nav-icon">⏰</span><span class="nav-label">定时任务</span>
-            </div>
-            <div class="nav-item" data-view="history" onclick="navToView('history')">
-                <span class="nav-icon">🕐</span><span class="nav-label">对话记录</span>
-            </div>
-            <div class="nav-item" data-view="settings" onclick="navToView('settings')">
-                <span class="nav-icon">⚙️</span><span class="nav-label">设置</span>
+            <div class="nav-item" data-view="debug" onclick="navigateTo('#/dev')">
+                <span class="nav-icon">🧪</span><span class="nav-label" id="nav-label-debug">调试</span>
             </div>
         </div>
     </nav>
@@ -54,15 +48,12 @@
     <div class="sidebar-footer">
         <button id="system-update-btn" onclick="doSystemUpdate(event)" data-tip="更新系统">⬆️</button>
         <button id="system-restart-btn" onclick="doSystemRestart(event)" data-tip="重启" hidden>♻️</button>
-        <button id="skills-update-btn" onclick="updateSkills(event)" data-tip="更新技能">📚</button>
-        <button id="onboarding-btn" onclick="restartOnboarding()" data-tip="新手引导">🎓</button>
     </div>
-
 </aside>
 
 <!-- ═════════════════════ MAIN ═════════════════════ -->
 <main class="main" id="main-content">
-    <!-- filled dynamically by navToView() -->
+    <!-- filled dynamically by showRoute() -->
 </main>
 
 <!-- ═════════════════════ MODALS ═════════════════════ -->
@@ -70,37 +61,17 @@
 <!-- Workspace Modal -->
 <div class="modal-backdrop hidden" id="workspace-modal">
     <div class="modal wide">
-        <h3>🏢 Workspace 设置</h3>
-        <div class="modal-tabs">
-            <button class="modal-tab active" onclick="switchModalTab('tab-workspaces')" id="tab-btn-workspaces">Workspace 列表</button>
-            <button class="modal-tab" onclick="switchModalTab('tab-identity')" id="tab-btn-identity">Agent 身份</button>
+        <h3 id="workspace-modal-title">工作区设置</h3>
+        <div style="margin-bottom:14px;" id="workspace-list-ui"></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+        <h4 style="font-size:13px;font-weight:600;margin-bottom:10px;" id="workspace-create-title">新建工作区</h4>
+        <div class="form-row">
+            <div class="form-group"><label for="co-name">名称 *</label><input type="text" id="co-name" placeholder="例如：项目 A" oninput="autoSlug()"></div>
+            <div class="form-group"><label for="co-slug">Slug</label><input type="text" id="co-slug" readonly placeholder="自动生成" style="color:var(--text-muted);background:var(--bg-main);cursor:not-allowed;"></div>
         </div>
-        <div id="tab-workspaces">
-            <div id="workspace-list-ui" style="margin-bottom:14px;"></div>
-            <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
-            <h4 style="font-size:13px;font-weight:600;margin-bottom:10px;">添加新 workspace</h4>
-            <div class="form-row">
-                <div class="form-group"><label for="co-name">名称 *</label><input type="text" id="co-name" placeholder="例如：我的业务" oninput="autoSlug()"></div>
-                <div class="form-group"><label for="co-slug">Slug</label><input type="text" id="co-slug" readonly placeholder="自动生成" style="color:var(--text-muted);background:var(--bg-main);cursor:not-allowed;" title="由系统根据名称自动生成"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label for="co-contact-name">联系人</label><input type="text" id="co-contact-name" placeholder="姓名"></div>
-                <div class="form-group"><label for="co-contact-email">邮箱</label><input type="email" id="co-contact-email" placeholder="email@example.com"></div>
-            </div>
-            <div class="form-group"><label for="co-website">网站</label><input type="text" id="co-website" placeholder="https://..."></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('workspace-modal')">关闭</button>
-                <button class="btn btn-primary" onclick="createCompany()">创建 workspace</button>
-            </div>
-        </div>
-        <div id="tab-identity" class="hidden">
-            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">配置当前选中 workspace 的 AI Agent 身份。系统会在对话时注入此内容。</p>
-            <div class="form-group"><label for="identity-editor">Agent 身份 (Markdown)</label>
-            <textarea id="identity-editor" placeholder="粘贴 agent-identity.md 内容..."></textarea></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('workspace-modal')">关闭</button>
-                <button class="btn btn-primary" onclick="saveCompanyIdentity()">保存</button>
-            </div>
+        <div class="form-actions">
+            <button class="btn" onclick="hideModal('workspace-modal')">关闭</button>
+            <button class="btn btn-primary" onclick="createWorkspace()" id="workspace-create-btn">创建工作区</button>
         </div>
     </div>
 </div>

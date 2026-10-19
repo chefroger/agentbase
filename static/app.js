@@ -1,784 +1,215 @@
-// ═════════════════════ STATE ═════════════════════
-let workspaces = [];
-let currentCompanyId = null;
-let currentView = 'chat';       // chat | customers | tasks | directory | history
-let currentChatContext = 'general';
-let currentChatName = '今日简报';
-let currentLibraryId = null;
-let currentCustomerId = null;
-let _currentConvId = null;       // 当前 AI 回复的 conversation_id，用于评分
-let editingCustomerData = null; // for customer detail panel
-let _onboardingStep = 1;          // 1 = welcome card, 2 = OSINT input + results
-let _onboardingInputText = '';    // user-entered workspace name/website
-let currentLang = 'zh';           // zh | en
+/* AgentBase 底座前端：设置门户 + API 调试控制台 + /dev 调试聊天。
+ * 原生 JS，无构建步骤；模块边界由 #region 标记（tests_js 依赖）。
+ */
 
-// ═════════════════════ I18N ═════════════════════
+// ═════════════════════ 全局状态 ═════════════════════
+let currentCompanyId = null;
+let workspaces = [];
+let currentLang = 'zh';
+let currentRoute = { view: 'settings', page: 'home' };
+let _debugEl = null;
+let _settingsEl = null;
+let _routeSeq = 0;
+let _branding = { workspaces: { term: '工作区', term_en: 'Workspace', mode: 'single' } };
+let _settingsCache = null;
+
+// #region i18n —— 文案集中管理；新增 key 必须 zh/en 同时存在
 const I18N = {
     zh: {
-        'btn.cancel':'取消',
-        'btn.close':'关闭',
-        'btn.save':'保存',
-        'chat.ph.general':'有什么可以帮你？',
-        'chat.clr':'🗑️ 清屏',
-        'guide.progress':'今日进度',
-        'guide.rest':'当前时段暂无安排',
-        'hist.confirm_delete':'确定删除这条对话记录？此操作不可恢复。',
-        'hist.delete_fail':'删除失败',
-        'hist.delete_title':'删除此对话',
-        'hist.deleted':'对话已删除',
-        'history.no_records':'暂无对话记录',
-        'history.title':'对话记录',
-        'import.confirm':'确认导入',
-        'import.importing':'导入中...',
-        'license.activate_btn':'🔑 输入激活码',
-        'license.active':'已激活',
-        'license.days_left':'剩余 {n} 天',
-        'license.expired':'已到期',
-        'license.expiring':'即将到期',
-        'license.req_code':'申请码',
-        'license.trial':'试用',
-        'misc.thinking':'正在思考...',
-        'modal.co.add_title':'创建工作区',
-        'modal.co.contact':'联系人',
-        'modal.co.contact_ph':'姓名',
-        'modal.co.create':'创建工作区',
-        'modal.co.email':'邮箱',
-        'modal.co.identity_label':'Agent 身份 (Markdown)',
-        'modal.co.identity_ph':'粘贴 agent-identity.md 内容...',
-        'modal.co.name':'工作区名称 *',
-        'modal.co.name_ph':'例如：我的业务',
-        'modal.co.slug_ph':'自动生成',
-        'modal.co.slug_tt':'由系统根据工作区名称自动生成',
-        'modal.co.tab_identity':'Agent 身份',
-        'modal.co.tab_list':'工作区列表',
-        'modal.co.title':'🏢 工作区设置',
-        'modal.co.website':'网站',
-        'nav.history':'对话记录',
-        'nav.tasks':'定时任务',
-        'quality.avg':'均分',
-        'quality.rated':'近30天评分',
-        'quality.worst':'待改进',
-        'sys.restart_fail':'❌ 重启失败: ',
-        'sys.restart_ok':'✅ 重启命令已发送，页面将在几秒后刷新',
-        'sys.restart_timeout':'⚠️ 服务重启超时，请手动刷新页面',
-        'sys.restart_toast':'🔄 正在重启服务...',
-        'sys.restart_wait':'🔄 服务正在重启，页面即将刷新...',
-        'sys.update_done':'✅ 更新完成。请点击"🔄 重启"以应用新版本。',
-        'sys.update_done_restart':'✅ 系统更新完成！正在重启...',
-        'sys.update_fail':'❌ 更新失败: ',
-        'sys.update_network':'⚠️ 更新请求失败，请检查网络连接后重试',
-        'sys.update_unknown':'⚠️ 更新结果未知，请检查网络后重试',
-        'toast.activate_fail':'激活失败',
-        'toast.complete_onboarding':'请先完成新手引导',
-        'toast.import_fail':'导入失败',
-        'toast.imported':'已导入 {n} 个文件到「{dir}」',
-        'toast.network_retry':'网络错误，请重试',
-        'toast.no_workspace':'请先选择 workspace',
-        'toast.request_timeout':'请求超时',
-        'workspace.add':'创建工作区',
-        'workspace.select':'— 选择工作区 —',
+        'nav.settings': '设置', 'nav.debug': '调试', 'nav.section': '底座',
+        'debug.title': '调试 / 示例', 'debug.banner': '开发调试用：仅用于验证后端 API，不是业务界面。',
+        'debug.placeholder': '输入消息，验证 /chat/stream …', 'debug.send': '发送', 'debug.stop': '停止',
+        'debug.clear': '清屏', 'debug.raw': '原始 SSE 事件', 'debug.probe': 'API 自检',
+        'debug.empty': '还没有消息。发送一条消息验证 SSE 全链路。',
+        'settings.title': '设置', 'settings.home': '设置', 'settings.back': '← 返回设置',
+        'settings.save': '保存', 'settings.saved': '已保存', 'settings.loading': '加载中…',
+        'settings.load_failed': '加载失败', 'settings.readonly': '只读',
+        'settings.group.models': '模型与 API Key', 'settings.group.models_desc': '选择 Provider、填写 Key、设置默认模型',
+        'settings.group.agent_behavior': 'Agent 行为', 'settings.group.agent_behavior_desc': 'MoA、YOLO 与审批规则',
+        'settings.group.workspaces': '工作区', 'settings.group.workspaces_desc': '称呼、单/多、自定义字段与实例',
+        'settings.group.agent': '智能体与提示词', 'settings.group.agent_desc': 'Agent 身份与 system prompt',
+        'settings.group.business': '业务与方向', 'settings.group.business_desc': '使用方向、品牌与 onboarding 字段',
+        'settings.group.skills': 'Skill 包与扩展', 'settings.group.skills_desc': '技能包、MCP、plugins、toolsets',
+        'settings.group.files': '文件与目录', 'settings.group.files_desc': 'work_dirs 与文件上传',
+        'settings.group.system': '系统', 'settings.group.system_desc': '服务、更新、备份、日志与 cron',
+        'settings.group.developer': '开发者', 'settings.group.developer_desc': 'API 调试控制台与接口文档',
+        'models.providers': 'Provider', 'models.configured': '已配置', 'models.not_configured': '未配置',
+        'models.key_placeholder': '填写 API Key', 'models.default_model': '默认模型',
+        'models.provider': 'Provider', 'models.model': '模型名', 'models.restart_hint': '保存后需重启服务生效',
+        'behavior.moa': 'MoA（多模型协作）', 'behavior.yolo': 'YOLO 模式', 'behavior.approvals': '审批拒绝规则',
+        'behavior.enabled': '已开启', 'behavior.disabled': '已关闭', 'behavior.none': '（无）',
+        'workspaces.term': '称呼', 'workspaces.term_en': '英文称呼', 'workspaces.mode': '模式',
+        'workspaces.mode_single': '单工作区', 'workspaces.mode_multi': '多工作区',
+        'workspaces.create_default': '启动时自动创建默认工作区', 'workspaces.fields': '自定义字段',
+        'workspaces.add_field': '添加字段', 'workspaces.instances': '实例',
+        'workspaces.new': '新建', 'workspaces.delete': '删除', 'workspaces.switch': '切换',
+        'workspaces.no_instances': '暂无实例',
+        'agent.name': '工作区名称', 'agent.identity': 'Agent 身份（Markdown）',
+        'agent.system_prompt': '全局 system prompt 覆盖', 'agent.priority': '优先级：Agent 身份 > 全局 system.md > business prompt_overrides > 内置默认',
+        'business.direction': '使用方向', 'business.name': '业务名称', 'business.tagline': '标语',
+        'business.brand_title': '前端标题', 'business.welcome': '欢迎语',
+        'business.onboarding': 'Onboarding 字段', 'business.apply': '应用推荐',
+        'business.recommend': '推荐', 'business.recommended_pack': '推荐技能包',
+        'business.direction_hint': '切换方向不会自动覆盖配置；点击“应用推荐”后再保存。',
+        'skills.packs': '技能包', 'skills.install_path': '本地 pack 目录（含 pack.yaml）',
+        'skills.install': '安装', 'skills.activate': '启用', 'skills.remove': '卸载',
+        'skills.active': '已启用', 'skills.update': '更新技能内容',
+        'skills.extensions': '扩展（只读）', 'skills.mcp': 'MCP servers', 'skills.plugins': 'Plugins',
+        'skills.toolsets': '启用的 toolsets', 'skills.no_packs': '尚未安装技能包',
+        'files.work_dirs': '工作目录分类', 'files.upload': '上传文件', 'files.subdir': '目标目录',
+        'files.choose': '选择文件', 'files.data_root': '数据目录',
+        'system.service': '服务', 'system.running': '运行中', 'system.autostart': '开机自启',
+        'system.quit': '退出服务', 'system.update': '检查并更新', 'system.restart': '重启服务',
+        'system.backup': '备份数据', 'system.logs': '日志', 'system.log_select': '选择日志',
+        'system.refresh': '刷新', 'system.cron': '定时任务（机器级）',
+        'system.confirm_quit': '确定退出服务？退出后定时任务会停止。',
+        'system.no_jobs': '暂无任务',
+        'dev.token': 'Session Token', 'dev.copy': '复制', 'dev.copied': '已复制',
+        'dev.openapi': 'OpenAPI', 'dev.swagger': 'Swagger UI', 'dev.docs': 'API 文档',
+        'dev.endpoints': '端点', 'dev.search': '搜索端点…', 'dev.console': '调试控制台',
+        'dev.send': '发送请求', 'dev.response': '响应', 'dev.workspace': 'Workspace ID',
+        'dev.body': 'JSON 请求体', 'dev.path_params': '路径参数',
+        'dev.token_note': 'token 随服务重启轮换',
+        'toast.request_timeout': '请求超时', 'toast.no_workspace': '请先选择工作区',
+        'toast.copied': '已复制', 'toast.save_failed': '保存失败',
+        'license.trial': '试用中', 'license.expired': '许可证已到期', 'license.activate': '激活',
+        'license.activated': '激活成功', 'license.activate_fail': '激活失败',
+        'license.enter_code': '请输入激活码',
+        'update.confirm': '本次更新内容：', 'update.backup_note': '更新前会自动备份；完成后服务会重启。现在更新吗？',
+        'update.restarting': '正在重启…', 'update.done': '更新完成', 'update.failed': '更新失败',
+        'common.close': '关闭', 'common.cancel': '取消', 'common.confirm': '确定',
     },
     en: {
-        'btn.cancel':'Cancel',
-        'btn.close':'Close',
-        'btn.save':'Save',
-        'chat.clr':'🗑️ Clear',
-        'guide.progress':'Today\'s Progress',
-        'guide.rest':'No task scheduled now',
-        'hist.confirm_delete':'Delete this conversation? This cannot be undone.',
-        'hist.delete_fail':'Delete failed',
-        'hist.delete_title':'Delete',
-        'hist.deleted':'Conversation deleted',
-        'history.no_records':'No chat history',
-        'history.title':'Chat History',
-        'import.confirm':'Confirm Upload',
-        'import.importing':'Importing...',
-        'license.activate_btn':'🔑 Enter Activation Code',
-        'license.active':'Active',
-        'license.days_left':'{n} days left',
-        'license.expired':'Expired',
-        'license.expiring':'Expiring Soon',
-        'license.req_code':'Request Code',
-        'license.trial':'Trial',
-        'misc.thinking':'Thinking...',
-        'modal.co.add_title':'Add Workspace',
-        'modal.co.contact':'Contact',
-        'modal.co.contact_ph':'Name',
-        'modal.co.create':'Create Workspace',
-        'modal.co.email':'Email',
-        'modal.co.identity_label':'Agent Identity (Markdown)',
-        'modal.co.identity_ph':'Paste agent-identity.md content...',
-        'modal.co.name':'Workspace Name *',
-        'modal.co.name_ph':'e.g. My Business',
-        'modal.co.slug_ph':'Auto-generated',
-        'modal.co.slug_tt':'Auto-generated from workspace name',
-        'modal.co.tab_identity':'Agent Identity',
-        'modal.co.tab_list':'Workspaces',
-        'modal.co.title':'🏢 Workspace Settings',
-        'modal.co.website':'Website',
-        'nav.history':'History',
-        'nav.tasks':'Tasks',
-        'quality.avg':'Avg',
-        'quality.rated':'Ratings (30d)',
-        'quality.worst':'Needs work',
-        'sys.restart_fail':'❌ Restart failed: ',
-        'sys.restart_ok':'✅ Restart command sent, page will refresh soon',
-        'sys.restart_timeout':'⚠️ Restart timeout, please refresh manually',
-        'sys.restart_toast':'🔄 Restarting service...',
-        'sys.restart_wait':'🔄 Service restarting, page will refresh...',
-        'sys.update_done':'✅ Update complete. Click "🔄 Restart" to apply.',
-        'sys.update_done_restart':'✅ Update complete! Restarting...',
-        'sys.update_fail':'❌ Update failed: ',
-        'sys.update_network':'⚠️ Update request failed, check network',
-        'sys.update_unknown':'⚠️ Update result unknown, check network',
-        'toast.activate_fail':'Activation failed',
-        'toast.complete_onboarding':'Please complete the tutorial first',
-        'toast.import_fail':'Import failed',
-        'toast.imported':'Imported {n} files to "{dir}"',
-        'toast.network_retry':'Network error, please retry',
-        'toast.no_workspace':'Please select a workspace first',
-        'toast.request_timeout':'Request timeout',
-        'workspace.add':'Create',
-        'workspace.select':'— Select Workspace —',
-    }
+        'nav.settings': 'Settings', 'nav.debug': 'Debug', 'nav.section': 'Base',
+        'debug.title': 'Debug / Example', 'debug.banner': 'For development only: verifies backend APIs, not a business UI.',
+        'debug.placeholder': 'Send a message to verify /chat/stream …', 'debug.send': 'Send', 'debug.stop': 'Stop',
+        'debug.clear': 'Clear', 'debug.raw': 'Raw SSE events', 'debug.probe': 'API probe',
+        'debug.empty': 'No messages yet. Send one to verify the SSE pipeline.',
+        'settings.title': 'Settings', 'settings.home': 'Settings', 'settings.back': '← Back to settings',
+        'settings.save': 'Save', 'settings.saved': 'Saved', 'settings.loading': 'Loading…',
+        'settings.load_failed': 'Failed to load', 'settings.readonly': 'Read-only',
+        'settings.group.models': 'Models & API Keys', 'settings.group.models_desc': 'Provider, keys and default model',
+        'settings.group.agent_behavior': 'Agent behaviour', 'settings.group.agent_behavior_desc': 'MoA, YOLO and approvals',
+        'settings.group.workspaces': 'Workspaces', 'settings.group.workspaces_desc': 'Term, mode, custom fields and instances',
+        'settings.group.agent': 'Agent & prompts', 'settings.group.agent_desc': 'Agent identity and system prompt',
+        'settings.group.business': 'Business & direction', 'settings.group.business_desc': 'Direction, branding and onboarding fields',
+        'settings.group.skills': 'Skill packs & extensions', 'settings.group.skills_desc': 'Packs, MCP, plugins, toolsets',
+        'settings.group.files': 'Files & directories', 'settings.group.files_desc': 'work_dirs and uploads',
+        'settings.group.system': 'System', 'settings.group.system_desc': 'Service, updates, backup, logs and cron',
+        'settings.group.developer': 'Developer', 'settings.group.developer_desc': 'API console and reference',
+        'models.providers': 'Providers', 'models.configured': 'Configured', 'models.not_configured': 'Not configured',
+        'models.key_placeholder': 'API Key', 'models.default_model': 'Default model',
+        'models.provider': 'Provider', 'models.model': 'Model name', 'models.restart_hint': 'Restart required after saving',
+        'behavior.moa': 'MoA (multi-model)', 'behavior.yolo': 'YOLO mode', 'behavior.approvals': 'Approval deny rules',
+        'behavior.enabled': 'Enabled', 'behavior.disabled': 'Disabled', 'behavior.none': '(none)',
+        'workspaces.term': 'Term', 'workspaces.term_en': 'English term', 'workspaces.mode': 'Mode',
+        'workspaces.mode_single': 'Single', 'workspaces.mode_multi': 'Multiple',
+        'workspaces.create_default': 'Create a default workspace on boot', 'workspaces.fields': 'Custom fields',
+        'workspaces.add_field': 'Add field', 'workspaces.instances': 'Instances',
+        'workspaces.new': 'New', 'workspaces.delete': 'Delete', 'workspaces.switch': 'Switch',
+        'workspaces.no_instances': 'No instances',
+        'agent.name': 'Workspace name', 'agent.identity': 'Agent identity (Markdown)',
+        'agent.system_prompt': 'Global system prompt override', 'agent.priority': 'Priority: identity > global system.md > business prompt_overrides > built-in default',
+        'business.direction': 'Usage direction', 'business.name': 'Business name', 'business.tagline': 'Tagline',
+        'business.brand_title': 'UI title', 'business.welcome': 'Welcome text',
+        'business.onboarding': 'Onboarding fields', 'business.apply': 'Apply recommendation',
+        'business.recommend': 'Recommendation', 'business.recommended_pack': 'Recommended pack',
+        'business.direction_hint': 'Switching direction does not overwrite config; apply the recommendation, then save.',
+        'skills.packs': 'Skill packs', 'skills.install_path': 'Local pack directory (contains pack.yaml)',
+        'skills.install': 'Install', 'skills.activate': 'Activate', 'skills.remove': 'Remove',
+        'skills.active': 'Active', 'skills.update': 'Update skill content',
+        'skills.extensions': 'Extensions (read-only)', 'skills.mcp': 'MCP servers', 'skills.plugins': 'Plugins',
+        'skills.toolsets': 'Enabled toolsets', 'skills.no_packs': 'No packs installed',
+        'files.work_dirs': 'Work directories', 'files.upload': 'Upload file', 'files.subdir': 'Target directory',
+        'files.choose': 'Choose file', 'files.data_root': 'Data directory',
+        'system.service': 'Service', 'system.running': 'Running', 'system.autostart': 'Autostart',
+        'system.quit': 'Quit service', 'system.update': 'Check & update', 'system.restart': 'Restart service',
+        'system.backup': 'Backup data', 'system.logs': 'Logs', 'system.log_select': 'Select log',
+        'system.refresh': 'Refresh', 'system.cron': 'Cron jobs (machine level)',
+        'system.confirm_quit': 'Quit the service? Cron jobs will stop.',
+        'system.no_jobs': 'No jobs',
+        'dev.token': 'Session Token', 'dev.copy': 'Copy', 'dev.copied': 'Copied',
+        'dev.openapi': 'OpenAPI', 'dev.swagger': 'Swagger UI', 'dev.docs': 'API reference',
+        'dev.endpoints': 'Endpoints', 'dev.search': 'Search endpoints…', 'dev.console': 'Console',
+        'dev.send': 'Send request', 'dev.response': 'Response', 'dev.workspace': 'Workspace ID',
+        'dev.body': 'JSON body', 'dev.path_params': 'Path parameters',
+        'dev.token_note': 'Token rotates when the service restarts',
+        'toast.request_timeout': 'Request timed out', 'toast.no_workspace': 'Select a workspace first',
+        'toast.copied': 'Copied', 'toast.save_failed': 'Save failed',
+        'license.trial': 'Trial', 'license.expired': 'License expired', 'license.activate': 'Activate',
+        'license.activated': 'Activated', 'license.activate_fail': 'Activation failed',
+        'license.enter_code': 'Enter activation code',
+        'update.confirm': 'What changed:', 'update.backup_note': 'A backup is created first; the service restarts afterwards. Update now?',
+        'update.restarting': 'Restarting…', 'update.done': 'Update complete', 'update.failed': 'Update failed',
+        'common.close': 'Close', 'common.cancel': 'Cancel', 'common.confirm': 'Confirm',
+    },
 };
+// #endregion i18n
 
 function t(key, params) {
-    var s = (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh && I18N.zh[key]) || key;
-    if (params) { for (var k in params) s = s.replace('{'+k+'}', params[k]); }
-    return s;
+    const table = I18N[currentLang] || I18N.zh;
+    let text = table[key] || I18N.zh[key] || key;
+    if (params) {
+        Object.keys(params).forEach(function(k) {
+            text = text.replace('{' + k + '}', params[k]);
+        });
+    }
+    return text;
 }
 
 function switchLang(lang) {
     if (lang === currentLang) return;
     currentLang = lang;
     try { localStorage.setItem('agentbase_lang', lang); } catch(_) {}
-    // 完整刷新 UI
-    _applyLanguage();
+    applyStaticCopy();
+    if (currentRoute.view === 'settings') {
+        const el = _settingsEl;
+        if (el) renderSettingsRoute(currentRoute.page, el);
+    }
 }
 
 function initLang() {
-    try { currentLang = localStorage.getItem('agentbase_lang') || 'zh'; } catch(_) { currentLang = 'zh'; }
-    var sel = document.getElementById('lang-select');
-    if (sel) sel.value = currentLang;
-    _applyLanguage();
+    let lang = 'zh';
+    try { lang = localStorage.getItem('agentbase_lang') || 'zh'; } catch(_) {}
+    currentLang = lang;
+    const sel = document.getElementById('lang-select');
+    if (sel) sel.value = lang;
+    applyStaticCopy();
 }
 
-function _applyLanguage() {
-    // 1. 侧边栏
-    _updateSidebarLabels();
-    // 2. 公司选择器
-    var cs = document.getElementById('workspace-select');
-    if (cs && cs.options[0]) cs.options[0].text = t('workspace.select');
-    var addBtn = document.querySelector('.csel-row button');
-    if (addBtn) { addBtn.title = t('workspace.add'); addBtn.textContent = '+'; }
-    // 3. Footer 按钮 —— 图标（textContent）写在 HTML 里，这里只填悬停提示。
-    //    早期把图标和文字一起塞进 i18n（'⬆️ 系统更新'），改图标要同步改两份翻译；
-    //    现在翻译只管文字。
-    var map = {
-        'system-update-btn': 'footer.update', 'system-restart-btn': 'footer.restart',
-'skills-update-btn': 'footer.skills_update',
-        'onboarding-btn': 'footer.onboarding',
-    };
-    for (var id in map) {
-        var b = document.getElementById(id);
-        if (b) b.setAttribute('data-tip', t(map[id]));
-    }
-    // 4. 静态 modal 文本更新
-    _updateStaticModals();
-    // 5. 重新渲染当前视图
-    if (currentView === 'chat') {
-        navToView('chat', currentChatContext, t('nav.' + currentChatContext));
-    } else {
-        navToView(currentView);
-    }
-    // 6. 更新页面标题
+function applyStaticCopy() {
+    document.getElementById('nav-label-settings').textContent = t('nav.settings');
+    document.getElementById('nav-label-debug').textContent = t('nav.debug');
+    document.getElementById('nav-section-main').textContent = t('nav.section');
+    document.title = (_branding.title && _branding.title !== 'AgentBase')
+        ? _branding.title + ' · AgentBase' : 'AgentBase';
+    const updateBtn = document.getElementById('system-update-btn');
+    if (updateBtn) updateBtn.title = t('system.update');
+    const restartBtn = document.getElementById('system-restart-btn');
+    if (restartBtn) restartBtn.title = t('system.restart');
 }
 
-function _updateSidebarLabels() {
-    var sectionKeys = ['nav.workbench', 'nav.outreach', 'nav.sales', 'nav.tools', 'nav.hist'];
-    document.querySelectorAll('.nav-section-title').forEach(function(el, i) {
-        if (i < sectionKeys.length) el.textContent = t(sectionKeys[i]);
-    });
-    var ctxMap = {
-        'daily':'nav.daily','lead':'nav.lead','platform':'nav.platform',
-        'docs':'nav.docs','docgen':'nav.docgen','osint':'nav.osint',
-    };
-    var viewMap = {'customers':'nav.customers','tasks':'nav.tasks','history':'nav.history'};
-    document.querySelectorAll('.nav-item').forEach(function(el) {
-        var ctx = el.getAttribute('data-chat-context');
-        var view = el.getAttribute('data-view');
-        var key = (ctx && ctxMap[ctx]) || (view && viewMap[view]);
-        if (key) {
-            var label = el.querySelector('.nav-label');
-            if (label) label.textContent = t(key);
-            if (ctx && view === 'chat') {
-                el.setAttribute('onclick', "navToView('chat','"+ctx+"','"+t(key)+"')");
-            }
-        }
-    });
-    if (currentView === 'chat') currentChatName = t('nav.' + currentChatContext);
-}
-
-function _updateStaticModals() {
-    // Workspace modal
-    var cm = document.getElementById('workspace-modal');
-    if (cm) {
-        var h3 = cm.querySelector('h3'); if (h3) h3.textContent = t('modal.co.title');
-        var tb1 = document.getElementById('tab-btn-workspaces'); if (tb1) tb1.textContent = t('modal.co.tab_list');
-        var tb2 = document.getElementById('tab-btn-identity'); if (tb2) tb2.textContent = t('modal.co.tab_identity');
-        var h4 = cm.querySelector('#tab-workspaces h4'); if (h4) h4.textContent = t('modal.co.add_title');
-        var lbls = cm.querySelectorAll('label');
-        lbls.forEach(function(l) {
-            var f = l.getAttribute('for');
-            if (f === 'co-name') l.textContent = t('modal.co.name');
-            else if (f === 'co-contact-name') l.textContent = t('modal.co.contact');
-            else if (f === 'co-contact-email') l.textContent = t('modal.co.email');
-            else if (f === 'co-website') l.textContent = t('modal.co.website');
-            else if (f === 'identity-editor') l.textContent = t('modal.co.identity_label');
-        });
-        var inps = cm.querySelectorAll('input');
-        inps.forEach(function(inp) {
-            if (inp.id === 'co-name') inp.placeholder = t('modal.co.name_ph');
-            else if (inp.id === 'co-slug') { inp.placeholder = t('modal.co.slug_ph'); inp.title = t('modal.co.slug_tt'); }
-            else if (inp.id === 'co-contact-name') inp.placeholder = t('modal.co.contact_ph');
-        });
-        var ta = cm.querySelector('#identity-editor'); if (ta) ta.placeholder = t('modal.co.identity_ph');
-        var btns = cm.querySelectorAll('.form-actions button');
-        btns.forEach(function(b) {
-            if (b.textContent.includes('创建') || b.textContent.includes('Create')) b.textContent = t('modal.co.create');
-            else if (b.textContent.includes('保存') || b.textContent.includes('Save')) b.textContent = t('btn.save');
-            else if (b.textContent.includes('关闭') || b.textContent.includes('Close')) b.textContent = t('btn.close');
-        });
-    }
-}
-
-let _onboardingOsinResponse = ''; // accumulated AI response text
-let _onboardingStreamCtl = null;  // AbortController for SSE stream
-
-// ═════════════════════ 通用 onboarding 向导 ═════════════════════
-// 字段来自 business.yaml 的 onboarding_fields（由 /api/branding 下发），框架不写死业务字段。
-let _wizardIndex = 0;
-let _wizardAnswers = {};
-let _wizardFields = [];
-let _onboardingFields = [];
-
-function isOnboardingCompleted() {
-    try { return localStorage.getItem('_onboarding_completed') === '1'; } catch(_) { return false; }
-}
-
-function showWizardInLeadView() {
-    var msgs = document.getElementById('chat-messages');
-    var empty = document.getElementById('chat-empty');
-    if (!msgs || !empty) return;
-    _wizardFields = _onboardingFields.slice();
-    if (!_wizardFields.length) return;
-    empty.style.display = 'none';
-    var old = document.getElementById('wizard-card');
-    if (old) old.remove();
-    _wizardIndex = 0;
-    var card = document.createElement('div');
-    card.id = 'wizard-card';
-    card.innerHTML = wizardRenderStep();
-    msgs.appendChild(card);
-    setTimeout(function() { var el = document.getElementById('wizard-input'); if (el) el.focus(); }, 200);
-}
-
-function wizardRenderStep() {
-    var field = _wizardFields[_wizardIndex] || {};
-    var total = _wizardFields.length;
-    var pct = Math.round((( _wizardIndex) / total) * 100);
-    return `<div class="onboarding-card" style="margin:0 auto;max-width:580px;">
-        <div style="height:4px;background:var(--border-light);border-radius:2px;overflow:hidden;margin-bottom:16px;">
-            <div style="width:${pct}%;height:100%;background:var(--primary);"></div>
-        </div>
-        <h2 class="onboarding-title" style="font-size:20px;">${esc(field.label || field.key || '')}</h2>
-        <p style="text-align:center;color:var(--text-secondary);font-size:14px;margin-bottom:16px;">
-            第 ${_wizardIndex + 1} / ${total} 项 · 随时可以跳过</p>
-        <div class="onboarding-input-row">
-            <input type="text" id="wizard-input" class="onboarding-text-input"
-                placeholder="${esc(field.example || '')}"
-                value="${esc(_wizardAnswers[field.key] || '')}"
-                onkeydown="if(event.key==='Enter')wizardNext()" autofocus />
-        </div>
-        <button class="btn btn-primary btn-lg" onclick="wizardNext()">${_wizardIndex + 1 === total ? '完成' : '下一步 →'}</button>
-        <div class="onboarding-skip" style="display:flex;justify-content:space-between;">
-            ${_wizardIndex > 0 ? '<a onclick="wizardBack()">← 返回</a>' : '<span></span>'}
-            <a onclick="wizardClose()">跳过</a>
-        </div>
-    </div>`;
-}
-
-function wizardNext() {
-    var field = _wizardFields[_wizardIndex];
-    var el = document.getElementById('wizard-input');
-    if (field) _wizardAnswers[field.key] = (el?.value || '').trim();
-    if (_wizardIndex + 1 < _wizardFields.length) {
-        _wizardIndex += 1;
-        updateWizardCard(wizardRenderStep());
-        setTimeout(function() { var i = document.getElementById('wizard-input'); if (i) i.focus(); }, 150);
-    } else {
-        wizardSubmit();
-    }
-}
-
-function wizardBack() {
-    if (_wizardIndex > 0) {
-        _wizardIndex -= 1;
-        updateWizardCard(wizardRenderStep());
-        setTimeout(function() { var i = document.getElementById('wizard-input'); if (i) i.focus(); }, 150);
-    }
-}
-
-function updateWizardCard(html) {
-    var card = document.getElementById('wizard-card');
-    if (card) card.innerHTML = html;
-}
-
-function wizardClose() {
-    _wizardIndex = 0; _wizardAnswers = {};
-    var card = document.getElementById('wizard-card'); if (card) card.remove();
-    var empty = document.getElementById('chat-empty'); if (empty) empty.style.display = '';
-}
-
-function wizardSubmit() {
-    var lines = _wizardFields.map(function(f) {
-        return '- ' + (f.label || f.key) + '：' + (_wizardAnswers[f.key] || '（未填写）');
-    });
-    var text = '请记住以下业务信息：\n' + lines.join('\n');
-    var textarea = document.getElementById('msg-input');
-    if (!textarea) return;
-    textarea.value = text;
-    try { localStorage.setItem('_onboarding_completed', '1'); } catch(_) {}
-    setTimeout(function() { wizardClose(); }, 300);
-    setTimeout(function() { sendMsg(); }, 400);
-}
-
-function saveState() {
-    if (currentCompanyId) sessionStorage.setItem('agentbase_cid', currentCompanyId);
-    else sessionStorage.removeItem('agentbase_cid');
-    sessionStorage.setItem('agentbase_view', currentView);
-    if (currentChatContext) sessionStorage.setItem('agentbase_ctx', currentChatContext);
-}
-function loadSavedCid() { return parseInt(sessionStorage.getItem('agentbase_cid') || '0') || null; }
-
-// ═════════════════════ API ═════════════════════
-let _authRecovering = false;
-
-// 把请求体里 id 类字段的空字符串规范化为 null，避免后端 422 int_parsing
-function normalizeBody(body) {
-    if (!body || typeof body !== 'object') return body;
-    var out = {};
-    var idFields = ['library_id', 'customer_id', 'workspace_id'];
-    for (var k in body) {
-        if (body[k] === '' && (idFields.indexOf(k) >= 0 || /(^|_)(id|ids)$/i.test(k))) {
-            out[k] = null;
-        } else {
-            out[k] = body[k];
-        }
-    }
-    return out;
-}
-
-// 401 自动恢复：token 失效（服务重启）→ 重取新 token；公司缺失 → 重载公司列表
-async function recoverAuth(method, path, body) {
-    if (_authRecovering) return null;
-    _authRecovering = true;
-    try {
-        // 服务重启后旧页面 token 失效：重新拉取 /agentbase 提取新 token
-        var fresh = await fetch('/agentbase?_=' + Date.now(), { cache: 'no-store' });
-        if (fresh.ok) {
-            var html = await fresh.text();
-            var m = html.match(/(?:const|let|var)\s+TOKEN\s*=\s*"([^"]+)"/);
-            if (m && m[1] && m[1] !== TOKEN) {
-                TOKEN = m[1];
-                var retry = await api(method, path, body);
-                if (retry !== null) return retry;
-            }
-        }
-        // token 没变 → 可能是 X-Workspace-ID 缺失/失效 → 重载公司
-        var prevCid = currentCompanyId;
-        currentCompanyId = null;
-        await loadCompanies();
-        if (prevCid && !workspaces.find(function(c) { return c.id === prevCid; })) {
-            toast(t('toast.no_workspace'));
-            return null;
-        }
-        if (currentCompanyId) {
-            var retry2 = await api(method, path, body);
-            if (retry2 !== null) return retry2;
-        }
-        return null;
-    } catch (e) {
-        return null;
-    } finally {
-        _authRecovering = false;
-    }
-}
-
-// #region api-opts —— 这段被 tests_js/api-opts.test.js 按标记整体抽取测试，勿删标记
-// 构造请求选项：鉴权头 + body 编码。
-// FormData（文件上传）必须原样透传且不设 Content-Type —— 否则会丢掉 multipart 的 boundary。
-function _buildApiOpts(method, body, token, companyId) {
-    const opts = { method: method, headers: {} };
-    if (token) opts.headers['X-Hermes-Session-Token'] = token;
-    if (companyId) opts.headers['X-Workspace-ID'] = String(companyId);
-    if (body instanceof FormData) {
-        opts.body = body;
-    } else if (body) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(normalizeBody(body));
-    }
-    return opts;
-}
-// #endregion api-opts
-
-async function api(method, path, body) {
-    const opts = _buildApiOpts(method, body, TOKEN, currentCompanyId);
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 120000);
-    opts.signal = ctrl.signal;
-    try {
-        const r = await fetch(path, opts);
-        clearTimeout(tid);
-        if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            const msg = err.detail || `请求失败 (${r.status})`;
-            if (r.status === 401) {
-                // 自动恢复一次：重取 token / 重载公司
-                const recovered = await recoverAuth(method, path, body);
-                if (recovered !== null) return recovered;
-                toast(t('toast.no_workspace'));
-            }
-            else if (r.status === 402) showLicenseExpired(msg);
-            else if (r.status === 404) toast(msg);
-            else if (r.status === 409) toast(msg);
-            else toast(msg);
-            return null;
-        }
-        return r.json();
-    } catch(e) {
-        clearTimeout(tid);
-        if (e.name === 'AbortError') { toast(t('toast.request_timeout')); return null; }
-        throw e;
-    }
-}
-
-// ── 许可证 ──
-
-async function loadLicenseStatus() {
-    try {
-        const r = await fetch('/api/agentbase/license/status');
-        const data = await r.json();
-        const bar = document.getElementById('license-bar');
-        if (!bar) return;
-
-        var _daysLeft = (typeof data.days_remaining === 'number') ? data.days_remaining : 999;
-        var _bgColor = _daysLeft <= 7 ? '#FEF3C7' : '#DBEAFE';
-        if (data.status === 'expired' || data.status === 'tampered') _bgColor = '#FEE2E2';
-        var reqCodeHtml = data.request_code
-            ? ' · ' + t('license.req_code') + ': <code style="background:' + _bgColor + ';padding:1px 6px;border-radius:3px;font-size:11px;user-select:all;cursor:text;" onclick="navigator.clipboard.writeText(this.textContent);toast(t(\'toast.copied\'))">' + esc(data.request_code) + '</code>'
-            : '';
-
-        if (data.status === 'expired') {
-            bar.style.display = 'block'; bar.style.background = '#FEF2F2'; bar.style.color = '#991B1B';
-            bar.innerHTML = '⚠️ ' + t('license.expired') + ' · <a href="#" onclick="showActivateModal()" style="color:#DC2626;text-decoration:underline;">' + t('license.activate_btn') + '</a>' + reqCodeHtml;
-        } else if (data.status === 'active' && data.days_remaining <= 7) {
-            bar.style.display = 'block';
-            bar.style.background = data.days_remaining === 0 ? '#FEF2F2' : '#FFFBEB';
-            bar.style.color = data.days_remaining === 0 ? '#991B1B' : '#92400E';
-            bar.innerHTML = '✅ ' + t('license.active') + ' · ' + t('license.expiring') + (data.expires_at ? ' ' + data.expires_at.slice(0, 10) : '') + ' · <a href="#" onclick="showActivateModal()" style="color:' + (data.days_remaining===0?'#DC2626':'#D97706') + ';text-decoration:underline;font-weight:600;">' + t('license.activate_btn') + '</a>' + reqCodeHtml;
-        } else if (data.status === 'active') {
-            bar.style.display = 'block'; bar.style.background = '#F0FDF4'; bar.style.color = '#166534';
-            bar.innerHTML = '✅ ' + t('license.active') + (data.expires_at ? ' · ' + t('license.expiring') + ' ' + data.expires_at.substring(0, 10) : '');
-        } else if (data.status === 'trial') {
-            bar.style.display = 'block';
-            bar.style.background = data.days_remaining <= 7 ? '#FFFBEB' : '#EFF6FF';
-            bar.style.color = data.days_remaining <= 7 ? '#92400E' : '#1E40AF';
-            bar.innerHTML = '⏳ ' + t('license.trial') + ' ' + t('license.days_left', {n: data.days_remaining}) + ' · <a href="#" onclick="showActivateModal()" style="color:' + (data.days_remaining <= 7 ? '#D97706' : '#2563EB') + ';text-decoration:underline;">' + t('license.activate_btn') + '</a>' + reqCodeHtml;
-        } else if (data.status === 'tampered') {
-            bar.style.display = 'block'; bar.style.background = '#FEF2F2'; bar.style.color = '#991B1B';
-            bar.innerHTML = '⚠️ License Error · <a href="#" onclick="showActivateModal()" style="color:#DC2626;text-decoration:underline;font-weight:600;">Reactivate</a>' + reqCodeHtml;
-        }
-    } catch(e) {}
-}
-
-function showLicenseExpired(msg) {
-    const div = document.createElement('div');
-    div.className = 'modal-backdrop';
-    div.innerHTML = '<div class="modal" style="text-align:center;max-width:420px;">' +
-        '<h3>⏰ ' + esc(msg || t('license.expired')) + '</h3>' +
-        '<p style="margin:8px 0;color:var(--text-secondary);">' + (currentLang==='en'?'Contact Roger Lococo for activation':'请联系 Roger Lococo 获取激活码继续使用') + '</p>' +
-        '<img src="/static/wechat-contact.jpeg" alt="WeChat QR" style="width:200px;border-radius:8px;margin:8px 0;">' +
-        '<p style="font-size:11px;color:var(--text-muted);">' + (currentLang==='en'?'Contact support':'联系技术支持') + '</p>' +
-        '<p style="font-size:11px;color:var(--text-muted);">📧 lauroge@gmail.com</p>' +
-        '<button class="btn btn-primary" onclick="showActivateModal()">' + t('license.activate_btn') + '</button>' +
-        '<button class="btn" onclick="this.closest(\'.modal-backdrop\').remove()" style="margin-top:8px;">' + t('btn.close') + '</button>' +
-    '</div>';
-    document.body.appendChild(div);
-}
-
-async function showActivateModal() {
-    _removeDynamicModals();
-    var reqCode = '';
-    try {
-        var s = await fetch('/api/agentbase/license/status');
-        var sd = await s.json();
-        reqCode = sd.request_code || '';
-    } catch(e) {}
-    const div = document.createElement('div');
-    div.className = 'modal-backdrop';
-    div.innerHTML = '<div class="modal" style="text-align:center;">' +
-        '<h3>🔑 ' + (currentLang==='en'?'Activate agentbase':'激活 agentbase') + '</h3>' +
-        '<p style="margin:8px 0;color:var(--text-secondary);">' + (currentLang==='en'?'Send the code below to the author to get an activation code':'请将下方申请码发送给作者获取激活码') + '</p>' +
-        (reqCode ? '<div style="background:var(--bg-secondary);padding:10px 14px;border-radius:var(--radius-sm);font-family:monospace;font-size:16px;letter-spacing:2px;margin:8px 0;cursor:pointer;user-select:all;" onclick="navigator.clipboard.writeText(this.textContent);toast(t(\'toast.copied\'))" title="' + (currentLang==='en'?'Click to copy':'点击复制') + '">' + reqCode + '</div>' : '') +
-        '<input type="text" id="activate-code-input" aria-label="Activation code" placeholder="' + (currentLang==='en'?'Paste activation code':'粘贴作者提供的激活码') + '" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:monospace;font-size:14px;text-align:center;text-transform:uppercase;margin:12px 0;">' +
-        '<button class="btn btn-primary" onclick="doActivate()" style="margin-top:8px;">✅ ' + (currentLang==='en'?'Activate':'激活') + '</button>' +
-        '<button class="btn" onclick="this.closest(\'.modal-backdrop\').remove()">' + t('btn.cancel') + '</button>' +
-        '<p id="activate-msg" style="margin-top:10px;font-size:12px;"></p>' +
-    '</div>';
-    document.body.appendChild(div);
-    setTimeout(() => document.getElementById('activate-code-input')?.focus(), 100);
-}
-
-async function doActivate() {
-    const input = document.getElementById('activate-code-input');
-    const msg = document.getElementById('activate-msg');
-    const code = input.value.trim();
-    if (!code) { msg.textContent = currentLang === 'en' ? 'Please enter the activation code' : '请输入激活码'; msg.style.color = 'var(--accent-red)'; return; }
-    try {
-        // 走统一 api 包装：激活是写操作，必须带 session token
-        const data = await api('POST', '/license/activate', {code});
-        if (!data) {
-            msg.textContent = t('toast.activate_fail');
-            msg.style.color = 'var(--accent-red)';
-            return;
-        }
-        if (data.ok) {
-            msg.textContent = data.message;
-            msg.style.color = 'var(--accent-green)';
-            setTimeout(() => {
-                _removeDynamicModals();
-                loadLicenseStatus();
-            }, 1500);
-        } else {
-            msg.textContent = data.error || t('toast.activate_fail');
-            msg.style.color = 'var(--accent-red)';
-        }
-    } catch(e) {
-        msg.textContent = t('toast.network_retry');
-        msg.style.color = 'var(--accent-red)';
-    }
-}
-
-// ── 重启协调 ──
-// 清理前端运行时缓存，但保留用户上下文（agentbase_cid 让重启后不必重新选公司）
-function _clearRuntimeCaches() {
-    try {
-        // 清理视图缓存（DOM 引用 + 渲染状态），强制重启后重新拉取
-        if (typeof viewCache === 'object') {
-            for (const k of Object.keys(viewCache)) delete viewCache[k];
-        }
-        // 仅清理与服务端 schema 强耦合的会话状态，保留 agentbase_cid（公司选择）
-        const preserveKeys = new Set(['agentbase_cid', '_agentbase_reload_state']);
-        const ssKeys = [];
-        for (let i = 0; i < sessionStorage.length; i++) ssKeys.push(sessionStorage.key(i));
-        ssKeys.forEach(k => { if (!preserveKeys.has(k)) sessionStorage.removeItem(k); });
-    } catch(_) { /* sessionStorage 在隐私模式下可能抛错，忽略 */ }
-}
-
-// ── 重启前状态保存 / 恢复（避免 hard reload 丢失阅读位置）──────────
-
-function _saveReloadState() {
-    try {
-        const state = {
-            view: currentView || 'chat',
-            scrollY: window.scrollY || document.documentElement.scrollTop || 0,
-            chatCtx: currentView === 'chat' ? (currentChatContext || '') : '',
-            chatName: currentView === 'chat' ? (currentChatName || '') : '',
-            ts: Date.now(),
-        };
-        sessionStorage.setItem('_agentbase_reload_state', JSON.stringify(state));
-    } catch(_) {}
-}
-
-function _restoreReloadState() {
-    try {
-        const raw = sessionStorage.getItem('_agentbase_reload_state');
-        if (!raw) return null;
-        sessionStorage.removeItem('_agentbase_reload_state');
-        const state = JSON.parse(raw);
-        // 超过 5 分钟的旧状态丢弃（可能是残留）
-        if (Date.now() - state.ts > 300000) return null;
-        return state;
-    } catch(_) { return null; }
-}
-
-// 通过 /api/status 的 started_at 时间戳检测进程是否已重启，然后 hard-reload
-// 不依赖 DOWN→UP 序列：新进程启动快时 DOWN 瞬间无法捕捉
-//
-// maxSeconds：兜底等待秒数，默认 120（重启场景足够）。
-// **重建运行环境必须传更大的值** —— 那一步要建 venv + 装全部依赖，5~10 分钟是常态，
-// 用默认的 2 分钟会在真正成功之前就报「超时」，把用户吓去手动折腾。
-async function _waitForRestartAndReload(onTimeout, maxSeconds) {
-    let attempts = 0;
-    const maxAttempts = maxSeconds || 120;   // 每 1 秒一次轮询
-    // 保存当前 started_at，重启后新进程的时间戳会不同
-    let oldStartedAt = -1;  // -1 = 无法获取（旧服务无此字段 / 请求失败）
-    try {
-        const r0 = await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' });
-        if (r0.ok) {
-            const d0 = await r0.json();
-            // 旧服务可能无此字段 → 存 -1，只要能获取到新值就视为重启成功
-            oldStartedAt = (typeof d0.started_at === 'number') ? d0.started_at : -1;
-        }
-    } catch(_) {}
-
-    console.log('[重启] 开始轮询 /api/status (old started_at=' + oldStartedAt + ') ...');
-    const tick = async () => {
-        attempts++;
-        try {
-            const r = await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' });
-            if (r.ok) {
-                const d = await r.json();
-                const cur = (typeof d.started_at === 'number') ? d.started_at : -1;
-                // 检测到重启：started_at 从旧值变为新值（-1→数值也算）
-                if (cur > 0 && cur !== oldStartedAt) {
-                    console.log('[重启] 第 ' + attempts + ' 次 — 检测到新进程 (started_at=' + cur + ')，刷新页面');
-                    _saveReloadState();  // 保存当前浏览位置，reload 后恢复
-                    _clearRuntimeCaches();
-                    try { sessionStorage.removeItem('_upgrade_in_progress'); } catch(_) {}
-                    location.href = '/agentbase?_=' + Date.now();
-                    return;
-                }
-            }
-        } catch(_) { /* 旧进程已下线但新进程未就绪，继续等 */ }
-        if (attempts >= maxAttempts) {
-            console.error('[重启] 超时 (' + maxAttempts + ' 次轮询)，请手动刷新');
-            toast(t('sys.restart_timeout'));
-            if (typeof onTimeout === 'function') onTimeout();
-            return;
-        }
-        setTimeout(tick, 1000);
-    };
-    setTimeout(tick, 500);
-}
-
-/**
- * 切换侧边栏按钮的「忙」态：忙时图标换成沙漏并禁用，闲时恢复原图标。
- *
- * 图标化之后不能再沿用旧写法（把 textContent 设成「更新中…」这样的文字）——
- * 那会把按钮上的图标直接抹掉，恢复时还得重新知道原图标长什么样。
- * 原图标记在 dataset 里，连续多次 busy 也不会把沙漏本身记成原图标。
- */
-function _setBtnBusy(btn, busy) {
-    if (!btn) return;
-    if (busy) {
-        if (btn.dataset.idleIcon === undefined) btn.dataset.idleIcon = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '⏳';
-    } else {
-        btn.disabled = false;
-        if (btn.dataset.idleIcon !== undefined) btn.textContent = btn.dataset.idleIcon;
-    }
-}
-
-// ── 系统更新 ──
-async function _confirmUpdate() {
-    // 任务书 §12：更新前显示人话说明，并让用户明确确认。
-    let latest = '';
-    try {
-        const st = await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' });
-        const d = await st.json();
-        latest = d.latest_version || '';
-    } catch(e) { /* 拿不到最新版本号不影响更新 */ }
-
-    let notes = '修复与稳定性改进';
-    try {
-        const c = await api('GET', '/api/agentbase/system/changelog?latest=' + encodeURIComponent(latest));
-        if (c && c.notes) notes = c.notes;
-    } catch(e) { /* 兜底文案 */ }
-
-    return confirm('本次更新内容：\n\n' + notes + '\n\n更新前会自动备份；更新完成后服务会重启。现在更新吗？');
-}
-
-async function doSystemUpdate(e) {
-    // 用 currentTarget 或回退到事件对象，再不行直接查 DOM
-    const btn = (e && (e.currentTarget || e.target)) || document.querySelector('#system-update-btn');
-    if (!btn) return;
-    if (!(await _confirmUpdate())) return;
-    _setBtnBusy(btn, true);
-    toast(t('sys.restart_toast').replace('Restarting','Updating'));
-    var updateFailed = false;
-    var restartScheduled = false;
-    try {
-        const resp = await api('POST', '/api/agentbase/system/update');
-        if (!resp) {
-            updateFailed = true;
-        } else if (resp.ok) {
-            restartScheduled = !!resp.restart_scheduled;
-            if (restartScheduled) {
-                toast(t('sys.update_done_restart'));
-            } else {
-                toast(t('sys.update_done'));
-            }
-            // 非致命步骤（skills 同步等）失败只算警告，不阻止升级，但必须让用户看见
-            if (resp.warnings && resp.warnings.length) {
-                toast('⚠️ 升级完成，但有 ' + resp.warnings.length + ' 项警告：' + resp.warnings.join('; '));
-            }
-        } else if (resp.error || (resp.errors && resp.errors.length)) {
-            const errMsg = resp.error || resp.errors.join('; ');
-            toast(t('sys.update_fail') + errMsg);
-            updateFailed = true;
-        } else {
-            toast(t('sys.update_unknown'));
-            updateFailed = true;
-        }
-    } catch(e) {
-        toast(t('sys.update_network'));
-        updateFailed = true;
-    }
-    if (updateFailed || !restartScheduled) {
-        _setBtnBusy(btn, false);
-        return;
-    }
-    // 存入标记，页面 reload 后检测并显示 toast
-    try { sessionStorage.setItem('_agentbase_upgrade_done', '1'); } catch(_) {}
-    _waitForRestartAndReload(() => {
-        _setBtnBusy(btn, false);
-    });
-}
-
-// ── 数据备份 ──
-async function doSystemRestart(e) {
-    const btn = (e && (e.currentTarget || e.target)) || document.querySelector('#system-restart-btn');
-    if (!btn) return;
-    _setBtnBusy(btn, true);
-    toast(t('sys.restart_toast'));
-    try {
-        const resp = await api('POST', '/api/agentbase/system/restart');
-        if (resp && resp.ok) {
-            toast(t('sys.restart_ok'));
-        } else {
-            toast(t('sys.restart_fail') + (resp?.error || ''));
-        }
-    } catch(e) {
-        toast(t('sys.restart_wait'));
-    }
-    _waitForRestartAndReload(() => {
-        _setBtnBusy(btn, false);
-    });
-}
-
-
-function $(id) { return document.getElementById(id); }
-function showModal(id) { $(id).classList.remove('hidden'); }
-function hideModal(id) { $(id).classList.add('hidden'); }
+// ═════════════════════ 基础工具 ═════════════════════
 function toast(msg) {
-    const c = $('toast-container');
-    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-    c.appendChild(t); setTimeout(() => t.remove(), 3000);
+    const box = document.getElementById('toast-container');
+    if (!box) return;
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = String(msg || '');
+    box.appendChild(el);
+    setTimeout(function() { el.remove(); }, 3500);
 }
+
+function showModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('hidden');
+}
+
+function hideModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+}
+
 // #region html-escape-utils —— 这段被 tests_js/esc.test.js 按标记整体抽取测试，勿删标记
 // HTML 转义表：& < > 三个是文本上下文必需，" 和 ' 是属性上下文必需
 // （不转引号时，值里的一个 " 就能闭合 value="..." 并注入新属性）
@@ -807,8 +238,95 @@ function _removeDynamicModals() {
         if (!_STATIC_MODAL_IDS.has(e.id)) e.remove();
     });
 }
-
 // #endregion modal-utils
+
+// ═════════════════════ API ═════════════════════
+let _authRecovering = false;
+
+// 把请求体里 id 类字段的空字符串规范化为 null，避免后端 422 int_parsing
+function normalizeBody(body) {
+    if (!body || typeof body !== 'object') return body;
+    var out = {};
+    var idFields = ['library_id', 'customer_id', 'workspace_id'];
+    for (var k in body) {
+        if (body[k] === '' && (idFields.indexOf(k) >= 0 || /(^|_)(id|ids)$/i.test(k))) {
+            out[k] = null;
+        } else {
+            out[k] = body[k];
+        }
+    }
+    return out;
+}
+
+// #region api-opts —— 这段被 tests_js/api-opts.test.js 按标记整体抽取测试，勿删标记
+// 构造请求选项：鉴权头 + body 编码。
+// FormData（文件上传）必须原样透传且不设 Content-Type —— 否则会丢掉 multipart 的 boundary。
+function _buildApiOpts(method, body, token, companyId) {
+    const opts = { method: method, headers: {} };
+    if (token) opts.headers['X-Hermes-Session-Token'] = token;
+    if (companyId) opts.headers['X-Workspace-ID'] = String(companyId);
+    if (body instanceof FormData) {
+        opts.body = body;
+    } else if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(normalizeBody(body));
+    }
+    return opts;
+}
+// #endregion api-opts
+
+async function api(method, path, body) {
+    const opts = _buildApiOpts(method, body, TOKEN, currentCompanyId);
+    const ctrl = new AbortController();
+    const tid = setTimeout(function() { ctrl.abort(); }, 120000);
+    opts.signal = ctrl.signal;
+    try {
+        const r = await fetch(path, opts);
+        clearTimeout(tid);
+        if (!r.ok) {
+            const err = await r.json().catch(function() { return {}; });
+            const msg = err.detail || ('HTTP ' + r.status);
+            if (r.status === 401) {
+                const recovered = await recoverAuth(method, path, body);
+                if (recovered !== null) return recovered;
+                toast(t('toast.no_workspace'));
+            } else if (r.status === 402) {
+                showLicenseExpired(msg);
+            } else {
+                toast(msg);
+            }
+            return null;
+        }
+        return r.json();
+    } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') { toast(t('toast.request_timeout')); return null; }
+        throw e;
+    }
+}
+
+async function recoverAuth(method, path, body) {
+    if (_authRecovering) return null;
+    _authRecovering = true;
+    try {
+        const fresh = await fetch('/agentbase?_=' + Date.now(), { cache: 'no-store' });
+        if (fresh.ok) {
+            const html = await fresh.text();
+            const m = html.match(/(?:const|let|var)\s+TOKEN\s*=\s*"([^"]+)"/);
+            if (m && m[1] && m[1] !== TOKEN) {
+                TOKEN = m[1];
+                const retry = await api(method, path, body);
+                if (retry !== null) return retry;
+            }
+        }
+        await loadWorkspaces();
+        return null;
+    } catch (_) {
+        return null;
+    } finally {
+        _authRecovering = false;
+    }
+}
 
 // #region cron-task-line
 function _cronTaskLine(t) {
@@ -848,10 +366,9 @@ function _sseStreamOutcome(sawResponse, sawDone) {
 // #endregion sse-outcome
 
 // #region stream-guard —— 这段被 tests_js/stream-guard.test.js 按标记整体抽取测试，勿删标记
-// 聊天流的归属记账：记录「当前这条流属于哪个公司」。
-// 存在的理由：sendMsg 里的 AbortController 是局部变量，切换公司时无人能中止它，
-// 旧流跑完后又会走 addMsg()，而 addMsg 读全局 currentChatContainer（已指向新公司），
-// 于是 A 公司的回复被写进 B 公司的会话窗口。归属记账让切公司能统一作废旧流。
+// 聊天流的归属记账：记录「当前这条流属于哪个工作区」。
+// 存在的理由：sendDebugMsg 里的 AbortController 是局部变量，切换工作区时无人能中止它，
+// 旧流跑完后又会往页面写内容；归属记账让切换工作区能统一作废旧流。
 let _chatStream = null;  // { cid, ctl }
 
 // 开始一条属于 cid 的聊天流，返回它的 AbortController
@@ -861,7 +378,7 @@ function _beginChatStream(cid) {
     return ctl;
 }
 
-// 作废当前聊天流（切换公司时调用），保证旧流不再往页面写内容
+// 作废当前聊天流（切换工作区时调用），保证旧流不再往页面写内容
 function _abortChatStream() {
     if (_chatStream) {
         _chatStream.ctl.abort();
@@ -869,1587 +386,1158 @@ function _abortChatStream() {
     }
 }
 
-// 流收尾时清理自己那条（仅当它仍是当前流，避免误清用户切公司后新建的流）
+// 流收尾时清理自己那条（仅当它仍是当前流，避免误清用户切工作区后新建的流）
 function _endChatStream(ctl) {
     if (_chatStream && _chatStream.ctl === ctl) _chatStream = null;
 }
 
-// 该公司的流是否仍是当前活跃流（旧流据此丢弃输出）
+// 该工作区的流是否仍是当前活跃流（旧流据此丢弃输出）
 function _chatStreamBelongsTo(cid) {
     return !!_chatStream && _chatStream.cid === cid;
 }
 // #endregion stream-guard
 
-// ═════════════════════ NAVIGATION ═════════════════════
-// 视图缓存：{ viewKey: { element, rendered, context } }
-const viewCache = {};
-// 当前活跃的 chat 容器（用于解决多视图 DOM 中相同 ID 元素的查找问题）
-let currentChatContainer = null;
+// #region route-utils
+const SETTINGS_PAGES = ['home', 'models', 'agent-behavior', 'workspaces', 'agent',
+    'business', 'skills', 'files', 'system', 'developer'];
 
-function navToView(view, chatCtx, chatName) {
-    // 新手引导进行中时阻止导航
-    if (!isOnboardingCompleted() && document.getElementById('onboarding-panel')) {
-        toast(t('toast.complete_onboarding'));
-        return;
+function parseHashRoute(hash) {
+    const raw = String(hash || '').replace(/^#\/?/, '');
+    if (raw === 'dev') return { view: 'debug', page: 'dev' };
+    const parts = raw.split('/').filter(Boolean);
+    if (parts[0] === 'settings') {
+        const page = parts[1] || 'home';
+        return { view: 'settings', page: SETTINGS_PAGES.indexOf(page) >= 0 ? page : 'home' };
     }
-    // 未选择公司时，所有菜单点击都显示固定提示页
-    if (!currentCompanyId) {
-        renderNoCompanyPage();
-        return;
-    }
-
-    currentView = view;
-    if (chatCtx) { currentChatContext = chatCtx; currentChatName = chatName || ''; }
-    saveState();
-
-    // Update sidebar active
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    const activeItem = document.querySelector(`.nav-item[data-view="${view}"][data-chat-context="${chatCtx||''}"]`) ||
-                       document.querySelector(`.nav-item[data-view="${view}"]`);
-    if (activeItem) activeItem.classList.add('active');
-
-    // 隐藏所有视图，并清除非缓存内容（如 empty state）
-    const main = $('main-content');
-    for (const key in viewCache) {
-        viewCache[key].element.style.display = 'none';
-    }
-    // 移除 main 中不属于视图缓存的子元素（首次从 empty state 切换时）
-    const cachedIds = new Set(Object.keys(viewCache).map(k => 'view-' + k));
-    for (const child of Array.from(main.children)) {
-        if (child.id === 'guidance-bar') continue;  // 不删除全局横幅
-        if (!cachedIds.has(child.id)) {
-            child.remove();
-        }
-    }
-
-    // 构建缓存 key
-    const cacheKey = view + (chatCtx ? '-' + chatCtx : '');
-
-    if (!viewCache[cacheKey]) {
-        // 首次渲染此视图：创建容器 div 并挂到 main
-        const container = document.createElement('div');
-        container.className = view === 'chat' ? 'chat-view' : 'panel-view';
-        container.id = 'view-' + cacheKey;
-        main.appendChild(container);
-        viewCache[cacheKey] = { element: container, rendered: false };
-
-        switch (view) {
-            case 'chat':
-                currentChatContainer = container;
-                renderChatViewInto(container, chatCtx, chatName);
-                break;
-            case 'tasks':
-                renderTasksViewInto(container);
-                break;
-            case 'history':
-                renderHistoryViewInto(container);
-                break;
-            case 'settings':
-                renderSettingsViewInto(container);
-                break;
-        }
-        viewCache[cacheKey].rendered = true;
-    }
-
-    viewCache[cacheKey].element.style.display = 'flex';
-    // 记录当前活跃的 chat 容器
-    if (view === 'chat') {
-        currentChatContainer = viewCache[cacheKey].element;
-        // 切换到聊天视图时直接滚动到底部（最新消息）
-        requestAnimationFrame(() => {
-            const msg = currentChatContainer?.querySelector('#chat-messages');
-            if (msg) msg.scrollTop = msg.scrollHeight;
-        });
-        // 绑定滚动监听——每次激活聊天视图都重新挂载浮标
-        setTimeout(() => {
-            const msg = currentChatContainer?.querySelector('#chat-messages');
-            if (msg) _ensureScrollHint(msg);
-        }, 300);
-    }
+    return { view: 'settings', page: 'home' };
 }
 
-// ═════════════════════ CHAT VIEW ═════════════════════
-function renderChatViewInto(container, ctx, name) {
-    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
-
-    container.innerHTML = `
-        <div class="chat-topbar">
-            <div style="display:flex;align-items:center;gap:8px;">
-                <h2>${esc(name)}</h2>
-                ${coName ? `<span class="workspace-badge" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 ${esc(coName)}</span>` : ''}
-                <span class="chat-context-tag" id="chat-context-tag"></span>
-            </div>
-            <div class="chat-topbar-actions">
-                <input type="file" id="chat-file-input" multiple hidden onchange="uploadChatFiles(this.files)">
-                <button onclick="document.getElementById('chat-file-input').click()" title="${t('chat.upload')}">📎</button>
-                <button onclick="clearChat()">${t('chat.clr')}</button>
-            </div>
-        </div>
-        <div class="chat-messages" id="chat-messages">
-            <div class="empty-state" id="chat-empty">
-                <div class="empty-icon">💬</div>
-                <h2>${esc(name)}</h2>
-                <p>${t('chat.ph.' + ctx)}</p>
-            </div>
-        </div>
-        <div class="chat-input-area">
-            <div class="chat-input-inner">
-                <textarea id="msg-input" aria-label="输入消息" placeholder="${t('chat.ph.' + ctx)}" rows="1"
-                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"
-                    oninput="this.style.height='24px';this.style.height=(this.scrollHeight>80?80:this.scrollHeight)+'px';"></textarea>
-                <button onclick="sendMsg()" id="send-btn" title="发送">↑</button>
-                <button id="stop-btn" class="hidden" title="停止">■</button>
-            </div>
-        </div>
-        <div class="drop-overlay" id="drop-overlay"><div class="drop-overlay-inner">&#128193; ${currentLang==='en'?'Drop files to add':'释放以添加文件'}</div></div>`;
-
-    loadChatHistory();
-    // 首次使用且未完成 onboarding 时显示引导
-    if (ctx === 'general' && !isOnboardingCompleted()) {
-        setTimeout(function() { showWizardInLeadView(); }, 300);
-    }
-    // 每日简报视图：额外拉取一次 cron 状态（全局轮询已覆盖）
-    if (ctx === 'daily') {
-        _shownCronOutputs = new Set();
-        loadCronStatus(false);
-    }
+function routeHash(route) {
+    if (route.view === 'debug') return '#/dev';
+    return '#/settings' + (route.page && route.page !== 'home' ? '/' + route.page : '');
 }
+// #endregion route-utils
 
-// ═════════════════════ 全局 cron 轮询与工作台横幅 ═════════════════════
-let _cronPollTimer = null;
-let _shownCronOutputs = new Set();  // 已展示过的 cron 输出任务名
-
-// 框架不含固定的业务任务表：任务全部来自 Hermes cron。
-
-function _renderGuidanceBar(currentTimeStr, completed, pending) {
-    const guidance = _getCurrentTaskGuidance(currentTimeStr);
-    const doneCount = completed.length, totalPending = pending.length;
-
-    let barHtml = `<div id="guidance-bar" style="flex-shrink:0;max-height:20vh;overflow-y:auto;background:var(--bg-card);border-bottom:1px solid var(--border);padding:6px 12px;line-height:1.4;font-size:12px;">`;
-
-    // 当前任务行
-    if (guidance) {
-        barHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">`;
-        barHtml += `<span style="font-size:15px;">⏰</span>`;
-        barHtml += `<span style="font-weight:600;font-size:13px;color:var(--primary);">${esc(guidance.name)}</span>`;
-        barHtml += `<span style="font-size:13px;color:var(--text-secondary);">${guidance.desc}</span>`;
-        barHtml += `</div>`;
+// ═════════════════════ 路由与视图 ═════════════════════
+function navigateTo(hash) {
+    if (location.hash === hash) {
+        showRoute(parseHashRoute(hash));
     } else {
-        barHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">`;
-        barHtml += `<span style="font-size:15px;">☕</span>`;
-        barHtml += '<span style="font-size:13px;color:var(--text-secondary);">'+t('guide.rest')+' · '+esc(currentTimeStr)+'</span>';
-        barHtml += `</div>`;
+        location.hash = hash;
     }
-
-    // 进度条
-    const total = doneCount + totalPending;
-    const pct = total > 0 ? Math.round(doneCount/total*100) : 0;
-    barHtml += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:1px;"><span>'+t('guide.progress')+'</span><span>'+doneCount+'/'+total+'</span></div>';
-    barHtml += `<div style="height:3px;background:var(--bg-main);border-radius:2px;overflow:hidden;margin-bottom:4px;"><div style="height:100%;width:${pct}%;background:var(--accent-green);border-radius:2px;transition:width 0.3s;"></div></div>`;
-
-    // 今日所有定时任务列表（从 completed + pending 合并，按时间排序）
-    const _stripEmoji = s => s.replace(/[\u{1F600}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{200D}\u{FE0F}]/gu, '').trim();
-    const all = [...completed, ...pending].sort((a, b) => {
-        const ta = (a.time || '').split('-')[0], tb = (b.time || '').split('-')[0];
-        return ta.localeCompare(tb);
-    });
-    const items = all.map(t => `<div style="font-size:11px;color:var(--text-muted);line-height:1.6;">${esc(t.time)} ${esc(_stripEmoji(t.name))}</div>`);
-    barHtml += `<div>${items.join('')}</div>`;
-
-    barHtml += `</div>`;
-    return barHtml;
 }
 
-function startCronPolling() {
-    stopCronPolling();
-    _cronPollTimer = setInterval(() => {
-        if (currentCompanyId) loadCronStatus(true);
-    }, 30000);
-}
-
-function stopCronPolling() {
-    if (_cronPollTimer) { clearInterval(_cronPollTimer); _cronPollTimer = null; }
-}
-
-// ── 版本更新检查 ──
-let _versionPollTimer = null;
-
-async function checkVersion() {
-    // 关闭版本升级提醒：用户手上版本稳定就不强制升级
-    try {
-        const r = await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' });
-        if (!r.ok) return;
-        const data = await r.json();
-        console.log('Version check: current=' + data.version + ' latest=' + (data.latest_version || ''));
-    } catch(e) { /* 静默 */ }
-}
-
-function startVersionCheck() {
-    stopVersionCheck();
-    checkVersion();
-    _versionPollTimer = setInterval(checkVersion, 10 * 60 * 1000); // 每 10 分钟
-}
-
-function stopVersionCheck() {
-    if (_versionPollTimer) { clearInterval(_versionPollTimer); _versionPollTimer = null; }
-}
-
-async function doUpdateSystem() {
-    if (!(await _confirmUpdate())) return;
-    const btn = document.getElementById('update-banner');
-    if (btn) btn.textContent = '更新中...';
-    var restartScheduled = false;
-    try {
-        const resp = await api('POST', '/api/agentbase/system/update');
-        if (resp?.ok) {
-            restartScheduled = !!resp.restart_scheduled;
-            toast(restartScheduled ? '✅ 系统更新完成！正在重启...' : '✅ 更新完成。请点击"🔄 重启"以应用新版本。');
-            // 非致命步骤失败只算警告，不阻止升级，但必须让用户看见
-            if (resp.warnings && resp.warnings.length) {
-                toast('⚠️ 升级完成，但有 ' + resp.warnings.length + ' 项警告：' + resp.warnings.join('; '));
-            }
-        } else if (resp?.error || (resp?.errors && resp.errors.length)) {
-            toast('⚠️ 更新失败');
-        }
-        // resp 为 null 时 api() 已 toast，不重复提示
-    } catch(e) {
-        // 升级请求路径上服务器有可能抢先重启，吞异常并继续走重启等待流程
-        toast('🔄 服务正在重启，页面即将刷新...');
-        restartScheduled = true;
-    }
-    if (!restartScheduled) {
-        // 升级未触发重启（可能已是最新版本或更新失败），立即重新检查版本状态
-        if (btn) { btn.remove(); }
-        checkVersion();
-        return;
-    }
-    // 后端 BackgroundTasks 已调度重启——等待 DOWN→UP 后强制刷新（清 cache + cache-bust）
-    _waitForRestartAndReload(() => {
-        if (btn) btn.textContent = '⬆️ 升级';
+function _setActiveNav(view) {
+    document.querySelectorAll('.nav-item').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-view') === view);
     });
 }
 
-async function loadCronStatus(isPoll = false) {
-    if (!currentCompanyId) return;
-    const data = await api('GET', '/api/agentbase/cron/today');
-    if (!data) return;
-    const {completed, pending, current_time} = data;
+function showRoute(route) {
+    currentRoute = route;
+    _routeSeq += 1;
+    const main = document.getElementById('main-content');
+    if (!main) return;
+    _setActiveNav(route.view);
 
-    // 更新全局顶部横幅
-    const main = $('main-content');
-    let bar = document.getElementById('guidance-bar');
-    const barHtml = _renderGuidanceBar(current_time, completed, pending);
-    if (bar) {
-        bar.outerHTML = barHtml;
-    } else {
-        main.insertAdjacentHTML('afterbegin', barHtml);
+    if (route.view === 'debug') {
+        if (_settingsEl) _settingsEl.style.display = 'none';
+        if (!_debugEl) {
+            _debugEl = document.createElement('div');
+            _debugEl.id = 'view-debug';
+            _debugEl.className = 'debug-view';
+            main.appendChild(_debugEl);
+            renderDebugViewInto(_debugEl);
+        }
+        _debugEl.style.display = '';
+        return;
     }
 
-    // 在今日简报视图更新 cron 面板；在任意聊天视图追加 cron 输出
-    const ct = currentChatContainer;
-    if (!ct || currentView !== 'chat') return;
-    const container = ct.querySelector('#chat-messages');
-    if (!container) return;
-
-    const isDailyView = currentChatContext === 'daily';
-
-    // 只在今日简报视图更新 cron 面板
-    if (isDailyView) {
-        let panel = container.querySelector('.cron-panel');
-        let panelHtml = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">`;
-        panelHtml += `<div style="font-weight:600;font-size:14px;">📋 今日任务清单 <span style="font-weight:400;color:var(--text-muted);font-size:12px;">${current_time}</span></div>`;
-        panelHtml += `<div style="font-size:12px;color:${pending.length === 0 ? 'var(--accent-green)' : 'var(--accent)'};">${pending.length === 0 ? '✅ 全部完成' : '⏳ ' + pending.length + ' 项待处理'}</div>`;
-        panelHtml += `</div>`;
-        if (completed.length) {
-            panelHtml += `<div style="font-size:12px;color:var(--accent-green);margin-bottom:6px;">已完成 (${completed.length})</div>`;
-            for (const t of completed) {
-                panelHtml += `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;"><span style="color:var(--accent-green);">✓</span><span style="font-weight:500;">${esc(t.name)}</span><span style="color:var(--text-muted);font-size:11px;">${t.time}</span></div>`;
-            }
-        }
-        if (pending.length) {
-            panelHtml += `<div style="font-size:12px;color:var(--text-secondary);margin:6px 0;">待处理 (${pending.length})</div>`;
-            for (const t of pending) {
-                panelHtml += _cronTaskLine(t);
-            }
-        }
-        if (panel) {
-            panel.innerHTML = panelHtml;
-        } else {
-            panel = document.createElement('div');
-            panel.className = 'cron-panel';
-            panel.style.cssText = 'background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm);';
-            panel.innerHTML = panelHtml;
-            const emptyEl = container.querySelector('.empty-state');
-            if (emptyEl) emptyEl.insertAdjacentElement('afterend', panel);
-            else container.insertAdjacentElement('afterbegin', panel);
-        }
+    if (_debugEl) _debugEl.style.display = 'none';
+    if (!_settingsEl) {
+        _settingsEl = document.createElement('div');
+        _settingsEl.id = 'view-settings';
+        _settingsEl.className = 'settings-view';
+        main.appendChild(_settingsEl);
     }
-
-    // 增量追加已完成任务的 AI 输出（仅今日简报视图，避免干扰其他对话）
-    if (isDailyView) {
-        for (const t of completed) {
-            if (!t.output || _shownCronOutputs.has(t.name)) continue;
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message assistant msg-cron-output';
-            // 截断 cron 输出中的冗余管理指令
-            let cleanOutput = t.output || '';
-            const truncIdx = cleanOutput.search(/管理命令参考|##?\s*管理命令|crontab\s*命令参考/i);
-            if (truncIdx >= 0) cleanOutput = cleanOutput.substring(0, truncIdx).trimEnd();
-            msgDiv.innerHTML = `<div class="bubble"><div class="bubble-meta"><span class="cron-badge" style="display:inline-block;padding:2px 8px;background:var(--primary);color:#fff;border-radius:999px;font-size:10px;margin-bottom:6px;">⏰ ${esc(t.name)} · ${esc(t.time)}</span></div><div class="cron-output-content">${DOMPurify.sanitize(marked.parse(cleanOutput))}</div></div>`;
-            container.appendChild(msgDiv);
-            _shownCronOutputs.add(t.name);
-        }
-        if (completed.length) {
-            const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-            if (nearBottom) container.scrollTop = container.scrollHeight;
-        }
-    }
+    _settingsEl.style.display = '';
+    renderSettingsRoute(route.page, _settingsEl);
 }
 
-// ── 滚动到底部浮标（用户不在底部时始终显示）─────────
-
-let _lastHintContainer = null;
-
-function _ensureScrollHint(container) {
-    // 同一个容器不重复绑定 scroll 监听
-    if (container === _lastHintContainer) return;
-    _lastHintContainer = container;
-    container.style.position = 'relative';
-
-    // 创建浮标（全局唯一，跟随活跃容器）
-    const _getHint = () => {
-        let h = document.getElementById('scroll-hint');
-        if (!h) {
-            h = document.createElement('div');
-            h.id = 'scroll-hint';
-            h.title = '回到底部';
-            h.innerHTML = '▼';
-            h.style.cssText = 'position:absolute;right:16px;bottom:80px;width:36px;height:36px;'
-                + 'background:var(--primary);color:#fff;border-radius:50%;display:none;align-items:center;justify-content:center;'
-                + 'cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.2);z-index:10;transition:transform 0.15s;animation:pulseHint 2s infinite;';
-            h.onmouseenter = () => h.style.transform = 'scale(1.1)';
-            h.onmouseleave = () => h.style.transform = 'scale(1)';
-            h.onclick = () => {
-                const ct = currentChatContainer;
-                const msg = ct?.querySelector('#chat-messages');
-                if (msg) msg.scrollTop = msg.scrollHeight;
-                h.style.display = 'none';
-            };
-        }
-        return h;
-    };
-
-    const _update = () => {
-        const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-        const hint = _getHint();
-        if (nearBottom) {
-            hint.style.display = 'none';
-        } else {
-            if (hint.parentElement !== container) {
-                // 切换视图时把浮标移到新容器
-                if (hint.parentElement) hint.remove();
-                container.appendChild(hint);
-            }
-            hint.style.display = 'flex';
-        }
-    };
-
-    container.addEventListener('scroll', _update, { passive: true });
-    _update();
+function renderSettingsRoute(page, container) {
+    const seq = _routeSeq;
+    container.innerHTML = '<div class="settings-loading">' + esc(t('settings.loading')) + '</div>';
+    const render = SETTINGS_RENDERERS[page] || SETTINGS_RENDERERS.home;
+    Promise.resolve(render(container, seq)).catch(function(err) {
+        if (seq !== _routeSeq) return;
+        container.innerHTML = '<div class="settings-page"><p>' + esc(t('settings.load_failed')) + ': ' + esc(err && err.message) + '</p></div>';
+    });
 }
 
-function _formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / 1048576).toFixed(1) + ' MB';
-}
-
-const _IMAGE_EXTENSIONS = new Set(['png','jpg','jpeg','gif','bmp','webp','svg','ico']);
-
-function _isImageFile(name) {
-    const dot = name.lastIndexOf('.');
-    return dot > -1 && _IMAGE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
-}
-
-let _pendingDropFiles = [];
-
-async function _collectFilesFromDataTransfer(dt) {
-    const files = [];
-    const entries = [];
-    // 先尝试 webkitGetAsEntry（支持递归目录）
-    if (dt.items && dt.items.length) {
-        for (const item of dt.items) {
-            if (item.kind === 'file') {
-                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                if (entry) { entries.push(entry); } else { files.push(item.getAsFile()); }
-            }
-        }
-    }
-    // 回退到直接取 files
-    if (!entries.length && dt.files && dt.files.length) {
-        for (const f of dt.files) files.push(f);
-    }
-
-    // 递归读取目录
-    async function _readEntry(entry, prefix) {
-        if (entry.isFile) {
-            const f = await new Promise(r => entry.file(r));
-            Object.defineProperty(f, '_relPath', { value: prefix + entry.name, writable: true });
-            files.push(f);
-        } else if (entry.isDirectory) {
-            const reader = entry.createReader();
-            // readEntries 每次最多返回 ~100 条，需循环读取直到空
-            const allEntries = [];
-            while (true) {
-                const batch = await new Promise(r => reader.readEntries(r));
-                if (!batch.length) break;
-                allEntries.push(...batch);
-            }
-            for (const e of allEntries) await _readEntry(e, prefix + entry.name + '/');
-        }
-    }
-    for (const e of entries) await _readEntry(e, '');
-    return files;
-}
-
-// 公司工作目录下的 9 个子目录名 — 与 agentbase/workspace.py _WORK_DIR_CATEGORIES 同步
-let _WORK_SUBDIRS = ['documents'];
-
-// 品牌与工作目录配置来自后端的 business.yaml（/api/branding）
 async function loadBranding() {
     try {
-        const resp = await fetch('/api/agentbase/branding');
-        const data = await resp.json();
-        if (data.title) {
-            // 稳定标记 "AgentBase" 永远留在标题里：桌面端靠它匹配已打开的窗口
-            document.title = data.title === 'AgentBase' ? 'AgentBase' : data.title + ' · AgentBase';
-            const logo = document.getElementById('brand-logo');
-            if (logo) logo.textContent = data.title;
-        }
-        if (Array.isArray(data.work_dirs) && data.work_dirs.length) {
-            _WORK_SUBDIRS = data.work_dirs;
-        }
-        if (Array.isArray(data.onboarding_fields)) {
-            _onboardingFields = data.onboarding_fields;
-        }
-    } catch (e) {
-        console.warn('branding load failed', e);
-    }
+        const data = await (await fetch('/api/agentbase/branding', { cache: 'no-store' })).json();
+        _branding = data || _branding;
+        document.title = data.title === 'AgentBase' ? 'AgentBase' : (data.title + ' · AgentBase');
+        document.getElementById('brand-logo').textContent = data.title || 'AgentBase';
+        _branding.workspaces = data.workspaces || _branding.workspaces;
+    } catch (_) { /* 品牌失败不阻断 */ }
 }
 
-// 顶栏上传按钮：单个配置目录时直接传；多个目录时弹选择框
-async function uploadChatFiles(fileList) {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
-    try {
-        if (_WORK_SUBDIRS.length === 1) {
-            const result = await _uploadToWorkDir(files, _WORK_SUBDIRS[0]);
-            toast(t('toast.imported', {n: result.uploaded, dir: _WORK_SUBDIRS[0]}));
-        } else {
-            _showDropModal(files);
-        }
-    } catch (e) {
-        toast('上传失败：' + (e && e.message ? e.message : e));
-    } finally {
-        const input = document.getElementById('chat-file-input');
-        if (input) input.value = '';
-    }
-}
-
-// 上传文件到后端指定子目录
-async function _uploadToWorkDir(files, subdir) {
-    const form = new FormData();
-    form.append('subdir', subdir);
-    for (const f of files) {
-        form.append('files', f, f._relPath || f.name);
-    }
-    // 走 api() 统一封装：拿到 120s 超时与 401 自愈。
-    // 历史上这里裸 fetch 且无超时，上传卡死时确认按钮会永久 disabled。
-    const resp = await api('POST', '/api/agentbase/upload-files', form);
-    if (!resp) throw new Error(t('toast.import_fail'));
-    return resp;
-}
-
-function _showDropModal(files) {
-    _removeDynamicModals();
-    _pendingDropFiles = files;
-
-    const totalSize = files.reduce((s, f) => s + f.size, 0);
-    const fileListHtml = files.slice(0, 20).map(f =>
-        `<div class="file-item">${esc(f._relPath || f.name)} <span style="color:var(--text-muted)">${_formatBytes(f.size)}</span></div>`
-    ).join('') + (files.length > 20 ? `<div class="file-item" style="color:var(--text-muted)">... 还有 ${files.length - 20} 个文件</div>` : '');
-
-    const subdirOpts = _WORK_SUBDIRS.map(d => `<option value="${d}">${d}</option>`).join('');
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.id = 'drop-file-modal';
-    backdrop.onclick = function(e) { if (e.target === backdrop) backdrop.remove(); };
-    backdrop.innerHTML = `
-    <div class="modal" style="max-width:440px;width:95%;" onclick="event.stopPropagation()">
-        <h3 style="margin:0 0 4px;">拖入 ${files.length} 个文件 (${_formatBytes(totalSize)})</h3>
-        <div class="drop-file-list">${fileListHtml}</div>
-        <div style="margin:10px 0;">
-            <label style="font-size:13px;color:var(--text-muted);">存入工作目录：</label>
-            <select id="drop-subdir-select" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);font-size:14px;margin-top:4px;">${subdirOpts}</select>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" id="drop-confirm-btn" style="flex:1;">确认导入</button>
-            <button class="btn" onclick="this.closest('.modal-backdrop').remove()">取消</button>
-        </div>
-    </div>`;
-    document.body.appendChild(backdrop);
-
-    backdrop.querySelector('#drop-confirm-btn').onclick = async function() {
-        const subdir = backdrop.querySelector('#drop-subdir-select').value;
-        const btn = backdrop.querySelector('#drop-confirm-btn');
-        btn.disabled = true; btn.textContent = t('import.importing');
-        try {
-            const result = await _uploadToWorkDir(_pendingDropFiles, subdir);
-            toast(t('toast.imported', {n: result.uploaded, dir: subdir}));
-            const input = document.getElementById('msg-input');
-            if (input) {
-                // 检查是否有图片文件，提示 Agent 使用 vision 识别
-                const hasImages = _pendingDropFiles.some(f => _isImageFile(f._relPath || f.name));
-                let hint = `[已导入 ${result.uploaded} 个文件到「${result.target_path}」，请递归读取该目录下的所有文件并分析`;
-                if (hasImages) {
-                    hint += `。图片文件请使用 vision 工具识别文字内容`;
-                }
-                hint += ']\n\n';
-                input.value = hint + input.value;
-                input.focus();
-            }
-            backdrop.remove();
-        } catch (e) {
-            toast(t('toast.import_fail') + ': ' + e.message);
-            btn.disabled = false; btn.textContent = t('import.confirm');
-        }
-    };
-}
-
-function setupDropZone() {
-    const overlay = document.getElementById('drop-overlay');
-    let _dragCounter = 0;
-
-    function handleDragOver(e) {
-        e.preventDefault(); e.stopPropagation();
-    }
-
-    function handleDragEnter(e) {
-        e.preventDefault(); e.stopPropagation();
-        _dragCounter++;
-        if (overlay) overlay.classList.add('show');
-    }
-
-    function handleDragLeave(e) {
-        e.preventDefault(); e.stopPropagation();
-        _dragCounter--;
-        if (_dragCounter <= 0) { _dragCounter = 0; if (overlay) overlay.classList.remove('show'); }
-    }
-
-    async function handleDrop(e) {
-        e.preventDefault(); e.stopPropagation();
-        _dragCounter = 0;
-        if (overlay) overlay.classList.remove('show');
-        // 不拦截拖到已有弹窗上的文件（如用户在库弹窗上误拖）
-        if (e.target.closest('.modal-backdrop')) return;
-        const dt = e.dataTransfer;
-        if (!dt || !dt.files.length) return;
-        const files = await _collectFilesFromDataTransfer(dt);
-        if (!files.length) return;
-        _showDropModal(files);
-    }
-
-    document.body.addEventListener('dragover', handleDragOver, false);
-    document.body.addEventListener('dragenter', handleDragEnter, false);
-    document.body.addEventListener('dragleave', handleDragLeave, false);
-    document.body.addEventListener('drop', handleDrop, false);
-
-    document.addEventListener('paste', async function(e) {
-        if (!e.clipboardData || !e.clipboardData.files.length) return;
-        if (e.target.tagName === 'TEXTAREA' && e.target.id === 'msg-input') {
-            e.preventDefault();
-            const files = await _collectFilesFromDataTransfer(e.clipboardData);
-            if (!files.length) return;
-            _showDropModal(files);
-        }
-    });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupDropZone);
-} else {
-    setupDropZone();
-}
-
-async function clearChat() {
-    const ct = currentChatContainer;
-    if (!ct) return;
-    ct.querySelector('#chat-messages').innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div><h2>${esc(currentChatName)}</h2></div>`;
-}
-
-// ═════════════════════ CHAT MESSAGES ═════════════════════
-function addMsg(role, content, files, save, convId) {
-    const ct = currentChatContainer;
-    if (!ct) return;
-    const container = ct.querySelector('#chat-messages');
-    // Remove empty state
-    const emptyEl = container.querySelector('.empty-state');
-    if (emptyEl) emptyEl.remove();
-
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar';
-    avatar.textContent = role === 'user' ? '👤' : '🤖';
-    const body = document.createElement('div');
-    body.className = 'msg-body';
-    const raw = marked.parse(content || '');
-    body.innerHTML = DOMPurify.sanitize(raw, {
-        ALLOWED_TAGS: ['p','br','strong','em','b','i','ul','ol','li','h1','h2','h3','h4','h5','h6',
-            'blockquote','code','pre','a','table','thead','tbody','tr','th','td','hr','span','div','img'],
-        ALLOWED_ATTR: ['href','target','class','id','style','src','alt','width','height'],
-    });
-    if (files && files.length) {
-        const s = document.createElement('div'); s.className = 'sources';
-        s.innerHTML = '<div class="sources-title">📄 '+(currentLang==='en'?'References':'参考文件')+'</div>' + files.map(f => '<div>📎 '+esc(f.file||f)+'</div>').join('');
-        body.appendChild(s);
-    }
-    div.appendChild(avatar); div.appendChild(body);
-
-    // AI 回复右侧加「📋 复制」按钮，点击写入剪贴板
-    if (role === 'assistant' && content) {
-        const copyBtn = document.createElement('button');
-        copyBtn.textContent = '📋';
-        copyBtn.title = currentLang==='en'?'Copy to clipboard':'复制到剪贴板';
-        copyBtn.style.cssText = 'position:absolute;top:6px;right:8px;background:none;border:1px solid #D1D5DB;border-radius:4px;padding:2px 6px;font-size:12px;cursor:pointer;color:#9CA3AF;opacity:0.5;transition:opacity 0.15s;';
-        copyBtn.onmouseenter = function() { this.style.opacity = '1'; };
-        copyBtn.onmouseleave = function() { this.style.opacity = '0.5'; };
-        copyBtn.onclick = function(e) {
-            e.stopPropagation();
-            navigator.clipboard.writeText(content).then(function() {
-                copyBtn.textContent = '✅'; setTimeout(function() { copyBtn.textContent = '📋'; }, 1500);
-            }).catch(function() {
-                copyBtn.textContent = '❌'; setTimeout(function() { copyBtn.textContent = '📋'; }, 1500);
-            });
-        };
-        div.style.position = 'relative';
-        div.appendChild(copyBtn);
-
-        // 评分按钮 — 仅传入 convId 时显示（避免全局变量竞态）
-        const convIdForRating = convId;
-        if (convIdForRating) {
-            const ratingDiv = document.createElement('div');
-            ratingDiv.className = 'msg-rating';
-            ratingDiv.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-light);';
-            ratingDiv.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">'+(currentLang==='en'?'Rate this reply: ':'评价此回复：')+'</span>'
-                + '<button class="rating-btn" data-r="👍" style="border:1px solid #D1D5DB;border-radius:4px;padding:2px 8px;font-size:13px;cursor:pointer;background:#fff;">👍</button>'
-                + '<button class="rating-btn" data-r="👎" style="border:1px solid #D1D5DB;border-radius:4px;padding:2px 8px;font-size:13px;cursor:pointer;background:#fff;">👎</button>';
-            body.appendChild(ratingDiv);
-
-            ratingDiv.querySelectorAll('.rating-btn').forEach(function(btn) {
-                btn.addEventListener('click', async function(e) {
-                    e.stopPropagation();
-                    var rVal = this.dataset.r === '👍' ? 4 : 2;
-                    await api('POST', '/api/agentbase/conversations/' + convIdForRating + '/rate', { rating: rVal, feedback: '' });
-                    ratingDiv.innerHTML = '<span style="font-size:11px;color:var(--accent-green);">✅ '+(currentLang==='en'?'Thanks for feedback':'感谢反馈')+'</span>';
-                });
-            });
-        }
-    }
-
-    container.appendChild(div);
-    // 只在用户发消息或新 AI 回复流式到达时自动滚到底部
-    // 历史加载和手动浏览不强制滚动
-}
-
-async function loadChatHistory() {
-    if (!currentCompanyId) return;
-    const ct = currentChatContainer;
-    if (!ct) return;
-    // 按 context 过滤，避免不同主题的对话混在一起
-    const ctx = encodeURIComponent(currentChatContext || '');
-    const params = currentLibraryId
-        ? `?library_id=${currentLibraryId}&limit=30`
-        : `?context=${ctx}&limit=30`;
-    const data = await api('GET', `/api/agentbase/conversations${params}`);
-    if (!data || !data.length) return;
-    const container = ct.querySelector('#chat-messages');
-    if (!container) return;
-    // Remove empty state
-    const emptyEl = container.querySelector('.empty-state');
-    if (emptyEl) emptyEl.remove();
-
-    container.innerHTML = '';
-    data.reverse().forEach(c => {
-        let filesRead = [];
-        try { filesRead = c.files_read ? JSON.parse(c.files_read) : []; } catch(e) { filesRead = []; }
-        if (c.query) addMsg('user', c.query, filesRead, false);
-        if (c.response) addMsg('assistant', c.response, null, false);
-    });
-    // 加载历史后直接滚动到底部（最新消息）
-    container.scrollTop = container.scrollHeight;
-}
-
-// ═════════════════════ SSE STREAMING ═════════════════════
-const TOOL_NAMES = {
-    read_file:'📄 读取文件',list_files:'📂 列出文件',file_extract:'📋 提取文档',
-    web_search:'🌐 搜索',web_fetch:'📥 抓取',memory_recall:'🧠 回忆',
-    memory_retain:'💾 保存',execute_code:'💻 代码',terminal:'🖥️ 终端',
-    delegate_task:'🤖 委派',vision:'👁️ 图像',skill_load:'📦 技能',
-};
-function fmtTool(name) { return TOOL_NAMES[name] || `🔧 ${name.replace(/_/g,' ')}`; }
-function fmtArg(v) { return typeof v==='string' ? (v.length>80?v.slice(0,77)+'...':v) : JSON.stringify(v).slice(0,80); }
-
-async function sendMsg() {
-    if (!currentCompanyId) { toast('请先选择 workspace'); return; }
-    const ct = currentChatContainer;
-    if (!ct) { toast('请先点击一个聊天入口'); return; }
-    const input = ct.querySelector('#msg-input');
-    const query = input.value.trim();
-    if (!query) return;
-
-    // 本地触发：显示工作清单 → 拉取 cron 状态，不调 Agent
-    if (query === '显示工作清单' || query === '工作清单' || query === '今日任务') {
-        addMsg('user', query, null);
-        input.value = '';
-        input.style.height = '24px';  // 复位输入框高度
-        await loadCronStatus();
-        return;
-    }
-
-    addMsg('user', query, null);
-    input.value = '';
-    input.style.height = '24px';  // 复位输入框高度
-    const sendBtn = ct.querySelector('#send-btn');
-    if (sendBtn) sendBtn.disabled = true;
-
-    // 用户可主动取消 SSE 流（替代原硬性 10 分钟超时）
-    // 网站诊断等复杂 skill 可能需要 >10 分钟，依赖 SSE 心跳保活即可
-    // 归属记账：让切换公司时能统一作废这条流（否则旧流会写进新公司的窗口）
-    const ownerCid = currentCompanyId;
-    const streamCtl = _beginChatStream(ownerCid);
-    // 切公司后旧流的输出必须丢弃：addMsg 写的是全局 currentChatContainer
-    function deliver(role, text, save, convId) {
-        if (!_chatStreamBelongsTo(ownerCid)) return;
-        addMsg(role, text, null, save, convId);
-    }
-    const stopBtn = ct.querySelector('#stop-btn');
-    if (stopBtn) {
-        stopBtn.classList.remove('hidden');
-        stopBtn.onclick = () => streamCtl.abort();
-    }
-    // 计时器：显示已用时，让用户知道仍在工作
-    const elapsedTimer = setInterval(() => {
-        const sec = Math.floor((Date.now() - startMs) / 1000);
-        const m = Math.floor(sec / 60), s = sec % 60;
-        const tEl = progDiv.querySelector('.elapsed');
-        if (tEl) tEl.textContent = `⏱ ${m}:${s.toString().padStart(2,'0')}`;
-    }, 1000);
-    const startMs = Date.now();
-
-    const container = ct.querySelector('#chat-messages');
-    const progDiv = document.createElement('div');
-    progDiv.className = 'message assistant';
-    const pid = 'prog-' + Date.now();
-    progDiv.id = pid;
-    progDiv.innerHTML = '<div class="msg-avatar">🤖</div><div class="msg-body"><div class="thinking-msg">💭 '+t('misc.thinking')+'</div><div class="elapsed" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div></div>';
-    container.appendChild(progDiv);
-    container.scrollTop = container.scrollHeight;
-
-    const toolEls = {};
-    let progressDiv = null;
-    let responseText = '';
-    let responseConvId = null;
-    let sawDone = false;  // 服务端是否发过 done（区分「服务端没内容」与「连接断了」）
-    _currentConvId = null;
-
-    function ensureProgress() {
-        if (!progressDiv) { progressDiv = document.createElement('div'); progressDiv.className = 'tool-progress'; progDiv.appendChild(progressDiv); }
-        return progressDiv;
-    }
-    function addToolItem(tcId, name, status, detail) {
-        const div = ensureProgress();
-        const el = document.createElement('div');
-        el.className = `tool-item ${status}`; el.id = `tool-${tcId}`;
-        // 安全构建 DOM：textContent 防止工具参数中的 HTML 注入
-        const icon = document.createElement('span');
-        icon.className = 'tool-icon';
-        icon.textContent = status === 'running' ? '◌' : status === 'done' ? '✓' : '✗';
-        const body = document.createElement('div');
-        body.className = 'tool-body';
-        const nameEl = document.createElement('div');
-        nameEl.className = 'tool-name';
-        nameEl.textContent = fmtTool(name);
-        const detailEl = document.createElement('div');
-        detailEl.className = 'tool-detail';
-        detailEl.textContent = detail || '';
-        body.appendChild(nameEl);
-        body.appendChild(detailEl);
-        el.appendChild(icon);
-        el.appendChild(body);
-        div.appendChild(el); container.scrollTop = container.scrollHeight;
-        toolEls[tcId] = el;
-    }
-    function updateTool(tcId, status, detail) {
-        const el = toolEls[tcId]; if (!el) return;
-        el.className = `tool-item ${status}`;
-        el.querySelector('.tool-icon').textContent = status==='running'?'◌':status==='done'?'✓':'✗';
-        if (detail) el.querySelector('.tool-detail').textContent = detail;
-        container.scrollTop = container.scrollHeight;
-    }
-
-    try {
-        const r = await fetch('/api/agentbase/chat/stream', {
-            method:'POST',
-            headers:{'Content-Type':'application/json','X-Hermes-Session-Token':TOKEN,'X-Workspace-ID':String(currentCompanyId)},
-            body:JSON.stringify({library_id:currentLibraryId,customer_id:currentCustomerId,query,context:currentChatContext,language:currentLang}),
-            signal:streamCtl.signal,
-        });
-        if (!r.ok) { progDiv.remove(); deliver('assistant', `⚠️ 请求失败 (${r.status})`); sendBtn.disabled = false; return; }
-
-        const reader = r.body.getReader(); const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-            const {done,value} = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, {stream:true});
-            const lines = buffer.split('\n'); buffer = lines.pop()||'';
-            let eventType='',dataStr='';
-            for (const raw of lines) {
-                const line = raw.replace(/\r$/,'');
-                if (line.startsWith('event: ')) { eventType=line.slice(7).trim(); continue; }
-                if (line.startsWith('data: ')) { dataStr=line.slice(6).trimStart(); continue; }
-                if (line===''&&eventType&&dataStr) {
-                    let data;
-                    try { data = JSON.parse(dataStr); } catch(e) { eventType='';dataStr='';continue; }
-                    switch(eventType) {
-                    case 'tool_start': addToolItem(data.tool_call_id,data.name,'running',data.args?Object.entries(data.args).map(([k,v])=>`${k}=${fmtArg(v)}`).join(', '):''); break;
-                    case 'tool_complete': updateTool(data.tool_call_id,'done',data.result_preview||'完成'); break;
-                    case 'thinking':
-                        if (!progDiv.querySelector('.thinking-msg')) { const t=document.createElement('div'); t.className='thinking-msg'; t.style.cssText='font-size:12px;color:var(--text-muted);padding:4px 0;'; t.textContent='💭 '+(data.message||'思考中...'); progDiv.appendChild(t); }
-                        break;
-                    case 'analysis_gate': {
-                        // 不通过时正文会给出完整原因，这里只做一行进度提示。
-                        const files = (data.files||[]).length;
-                        const skipped = (data.skipped||[]);
-                        const note = document.createElement('div'); note.className='thinking-msg';
-                        const ok = data.status === 'complete';
-                        note.style.cssText = 'font-size:12px;color:'+(ok?'var(--text-muted)':'var(--accent-red)')+';padding:4px 0;';
-                        note.textContent = (ok ? '✓ 已完整读取 ' : '⚠ 完整读取未通过，已完整读取 ') + files + ' 个文件'
-                            + (skipped.length ? '；未纳入：' + skipped.map(function(s){return s.file;}).join(', ') : '');
-                        // 能力边界如实披露：本机无法逐 Sheet/逐页核验时必须说出来
-                        if (data.coverage_note) {
-                            const cap = document.createElement('div');
-                            cap.className = 'thinking-msg';
-                            cap.style.cssText = 'font-size:12px;color:var(--text-muted);padding:2px 0 4px;';
-                            cap.textContent = 'ℹ️ ' + data.coverage_note;
-                            progDiv.appendChild(note);
-                            progDiv.appendChild(cap);
-                            break;
-                        }
-                        progDiv.appendChild(note);
-                        break;
-                    }
-                    case 'response': responseText = data.text||''; responseConvId = data.conversation_id || null; _currentConvId = data.conversation_id || null; break;
-                    case 'done': sawDone = true; break;  // 服务端正常收尾的标记（用于区分「服务端没内容」与「连接断了」）
-                    case 'error': progDiv.innerHTML=`<div class="msg-avatar" style="background:var(--accent-red);color:#fff;">⚠</div><div class="msg-body" style="color:var(--accent-red);">${esc(data.message)}</div>`; sendBtn.disabled = false; return;
-                    }
-                    eventType='';dataStr='';
-                }
-            }
-        }
-        progDiv.remove();
-        const outcome = _sseStreamOutcome(!!responseText, sawDone);
-        if (outcome.kind === 'response') deliver('assistant', responseText, true, responseConvId);
-        else deliver('assistant', outcome.message, true, null);
-    } catch(e) {
-        progDiv.remove();
-        _currentConvId = null;
-        // AbortError 分两种：用户主动停止（应提示）与切公司导致的作废（不该再往页面写）
-        if (e.name==='AbortError') deliver('assistant','🛑 已停止生成。');
-        else deliver('assistant',`网络错误：${e.message}`);
-    } finally {
-        clearInterval(elapsedTimer);
-        _currentConvId = null;
-        _endChatStream(streamCtl);
-        if (stopBtn) { stopBtn.classList.add('hidden'); stopBtn.onclick = null; }
-    }
-    sendBtn.disabled = false;
-}
-
-// ═════════════════════ CUSTOMERS VIEW ═════════════════════
-let allCustomers = [];
-// ── Customer Detail Slide Panel ────────────────────────────────
-// ── Order List / Modal ─────────────────────────────────────
-
-// ── Customer CRUD Modal ──────────────────────────────────────
-// ── 批量导入 ───────────────────────────────────────────
-// ── 下载管理表格 Excel ──────────────────────────────
-// ── 下载 CSV 模板（需携带 auth header） ─────────────
-
-async function renderTasksViewInto(container) {
-    container.innerHTML = `
-    <div class="panel-view" style="display:flex;flex-direction:column;height:100%;">
-        <div class="panel-topbar">
-            <h2>⏰ 定时任务</h2>
-            <div class="panel-topbar-actions">
-                <button class="btn" onclick="loadActiveCronJobs()">刷新</button>
-            </div>
-        </div>
-        <div class="panel-body" style="overflow-y:auto;padding:16px 20px;">
-            <div id="tasks-body" style="color:var(--text-muted);font-size:12px;">加载中...</div>
-        </div>
-    </div>`;
-    await loadActiveCronJobs();
-}
-
-function runSingleTask(taskName, prompt) {
-    if (!currentCompanyId) { toast('请先选择 workspace'); return; }
-    navToView('chat', 'general', taskName);
-    setTimeout(() => {
-        const ct = currentChatContainer;
-        const input = ct ? ct.querySelector('#msg-input') : null;
-        if (input) {
-            input.value = prompt;
-            sendMsg();
-        }
-    }, 300);
-}
-
-async function loadActiveCronJobs() {
-    if (!currentCompanyId) return;
-    const data = await api('GET', '/api/agentbase/cron/jobs');
-    const grid = document.getElementById('tasks-body');
-    if (!grid) return;
-    if (!data || !data.length) {
-        grid.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:12px;">暂无定时任务。可通过 Hermes cron 创建。</div>';
-        return;
-    }
-    grid.innerHTML = data.map(j => `
-        <div class="task-card">
-            <div class="task-card-header">
-                <span class="task-card-name">${esc(j.name)}</span>
-                <span style="font-size:10px;color:${j.enabled ? 'var(--accent-green)' : 'var(--text-muted)'};">${j.enabled ? '● 运行中' : '○ 已暂停'}</span>
-            </div>
-            <div class="task-card-schedule">🕐 ${esc(j.schedule)}</div>
-            ${j.next_run ? `<div style="font-size:11px;color:var(--accent-green);margin-bottom:6px;">▶ 下次执行：${esc(j.next_run)}</div>` : ''}
-            <div class="task-card-actions">
-                <button onclick="runActiveJob(${escJs(j.id)})">▶ 立即执行</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function runActiveJob(jobId) {
-    if (!currentCompanyId) return;
-    navToView('chat', 'general', '立即执行任务');
-    setTimeout(() => {
-        const ct = currentChatContainer;
-        const input = ct ? ct.querySelector('#msg-input') : null;
-        if (input) {
-            input.value = `请使用 cronjob 工具手动触发一次任务 ID ${jobId}，将结果输出到当前对话。`;
-            sendMsg();
-        }
-    }, 300);
-}
-
-function renderDirectoryViewInto(container) {
-    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
-    container.innerHTML = `
-        <div class="panel-topbar">
-            <h2>📂 数据目录${coName ? `<span style="margin-left:10px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 ${esc(coName)}</span>` : ''}</h2>
-            <div class="panel-topbar-actions">
-                <button class="btn" onclick="toast('功能开发中：将在文件管理器中打开')">📂 打开目录</button>
-            </div>
-        </div>
-        <div class="panel-body" style="display:flex;gap:16px;">
-            <div style="width:320px;flex-shrink:0;">
-                <div class="dir-tree" id="dir-tree">
-                    <div class="loading-row"><div class="spinner"></div>加载目录结构...</div>
-                </div>
-            </div>
-            <div style="flex:1;">
-                <div class="file-preview" id="file-preview">
-                    <div style="color:var(--text-muted);text-align:center;padding:40px;">👈 点击左侧文件查看内容</div>
-                </div>
-            </div>
-        </div>`;
-    loadDirectoryTree();
-}
-
-async function loadDirectoryTree() {
-    // Build tree from known structure since we can't browse server filesystem via API
-    // Show the standard ~/.agentbase/ layout
-    const co = workspaces.find(c => c.id === currentCompanyId);
-    const slug = co?.slug || 'default';
-
-    const tree = [
-        {name:'workspace-profile.md',icon:'📄',type:'file'},
-        {name:'products.md',icon:'📄',type:'file'},
-        {name:'agent-identity.md',icon:'📄',type:'file'},
-        {name:'business-scope.md',icon:'📄',type:'file'},
-        {name:'competitors.md',icon:'📄',type:'file'},
-        {name:'certifications.md',icon:'📄',type:'file'},
-        {name:'marketing-strategy.md',icon:'📄',type:'file'},
-        {name:'sales-playbook.md',icon:'📄',type:'file'},
-        {name:'libraries/',icon:'📂',type:'dir',children:[
-            {name:'{lib-slug}/',icon:'📂',type:'dir',children:[
-                {name:'index.md',icon:'📄',type:'file'},
-                {name:'changelog.md',icon:'📄',type:'file'},
-                {name:'metadata.md',icon:'📄',type:'file'},
-            ]}
-        ]},
-        {name:'clients/',icon:'📂',type:'dir',children:[
-            {name:'{client-slug}/',icon:'📂',type:'dir',children:[
-                {name:'profile.md',icon:'📄',type:'file'},
-                {name:'contacts.md',icon:'📄',type:'file'},
-                {name:'interactions.md',icon:'📄',type:'file'},
-                {name:'requirements.md',icon:'📄',type:'file'},
-                {name:'quotes.md',icon:'📄',type:'file'},
-                {name:'orders.md',icon:'📄',type:'file'},
-                {name:'notes.md',icon:'📄',type:'file'},
-            ]}
-        ]},
-    ];
-
-    $('dir-tree').innerHTML = `<div style="font-weight:600;margin-bottom:8px;color:var(--text-secondary);">~/.agentbase/${esc(slug)}/</div>` +
-        renderTreeItems(tree, 0);
-
-    // 委托事件：文件树点击（避免 onclick 中直接拼接文件名导致 XSS）
-    $('dir-tree').onclick = function(e) {
-        var el = e.target.closest && e.target.closest('[data-file-click]');
-        if (el && el.getAttribute('data-file-click') === 'preview') {
-            previewFile(el.getAttribute('data-file-name'));
-        }
-    };
-
-    // Also load agent identity preview if available
-    const identity = await api('GET', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`);
-    if (identity?.agent_identity_md) {
-        $('file-preview').innerHTML = `<div class="file-preview-header"><h3>📄 agent-identity.md</h3></div>
-            <div>${DOMPurify.sanitize(marked.parse(identity.agent_identity_md), {ALLOWED_TAGS:['p','br','strong','em','ul','ol','li','h1','h2','h3','blockquote','code','pre','a','table','thead','tbody','tr','th','td','hr','span'],ALLOWED_ATTR:['href','target','class']})}</div>`;
-    }
-}
-
-function renderTreeItems(items, depth) {
-    return items.map(item => {
-        const indent = depth * 20;
-        const attrs = item.type === 'file'
-            ? `data-file-name="${esc(item.name)}" data-file-click="preview"`
-            : '';
-        return `<div class="dir-tree-item ${item.type}" style="padding-left:${indent}px;" ${attrs}>
-            <span class="tree-icon">${item.icon}</span> ${esc(item.name)}
-        </div>` + (item.children ? renderTreeItems(item.children, depth+1) : '');
-    }).join('');
-}
-
-function previewFile(name) {
-    $('file-preview').innerHTML = `<div class="file-preview-header"><h3>📄 ${esc(name)}</h3></div>
-        <p style="color:var(--text-muted);">文件内容通过 Agent 对话中的 read_file 工具访问。在侧边栏中选择对应功能入口后，Agent 会自动读取相关文件。</p>`;
-}
-
-// ═════════════════════ HISTORY VIEW ═════════════════════
-async function renderHistoryViewInto(container) {
-    const coName = currentCompanyId ? (workspaces.find(c => c.id === currentCompanyId)?.name || '') : '';
-    container.innerHTML = `
-        <div class="panel-topbar">
-            <h2>💬 ${t('history.title')}${coName ? '<span style="margin-left:10px;padding:3px 10px;background:rgba(59,130,246,0.08);color:var(--primary);border-radius:999px;font-size:12px;font-weight:500;">🏢 '+esc(coName)+'</span>' : ''}</h2>
-            <div class="panel-topbar-actions">
-                <input class="panel-search" id="conv-search" aria-label="搜索对话" placeholder="${currentLang==='en'?'Search conversations...':'搜索对话...'}" oninput="filterConversations()">
-            </div>
-        </div>
-        <div class="panel-body">
-            <div class="quality-bar" id="quality-bar" style="display:none;"></div>
-            <div class="conv-list" id="conv-list">
-                <div class="loading-row"><div class="spinner"></div>加载对话记录...</div>
-            </div>
-        </div>`;
-    await loadConversations();
-    loadQualityStats();
-}
-
-// 质量概览（rating 闭环）：近 30 天评分总数 / 均分 / 低分最多的技能
-async function loadQualityStats() {
-    const bar = $('quality-bar');
-    if (!bar || !currentCompanyId) return;
-    const s = await api('GET', '/api/agentbase/conversations/quality-stats?days=30');
-    // 无评分数据时不占位（新用户/未评分公司）
-    if (!s || !s.total_rated) { bar.style.display = 'none'; return; }
-    // by_skill 已按「低分优先」排序，取第一个有低分的技能作为待改进项
-    const worst = (s.by_skill || []).find(x => x.low_count > 0);
-    let txt = `📊 ${t('quality.rated')} ${s.total_rated} · ${t('quality.avg')} ${s.avg_rating}`;
-    if (worst) txt += ` · ${t('quality.worst')} ${worst.skill} (👎×${worst.low_count})`;
-    // 用 textContent 赋值，避免技能名/上下文注入 HTML
-    bar.textContent = txt;
-    bar.style.display = 'block';
-}
-
-let allConversations = [];
-async function loadConversations() {
-    if (!currentCompanyId) return;
-    allConversations = await api('GET', '/api/agentbase/conversations?limit=100') || [];
-    renderConversationsList(allConversations);
-}
-
-function renderConversationsList(data) {
-    const container = $('conv-list');
-    if (!data.length) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><h2>'+t('history.no_records')+'</h2></div>';
-        return;
-    }
-    container.innerHTML = data.map(c => `
-        <div class="conv-list-item" style="display:flex;align-items:flex-start;gap:8px;">
-            <div style="flex:1;min-width:0;" onclick="showConversationDetail(${c.id})">
-                <div class="conv-meta">
-                    <span>${esc((c.created_at||'').slice(0,16))}</span>
-                    ${c.library_id ? '<span style="background:#EFF6FF;color:var(--primary);padding:2px 6px;border-radius:4px;">📁 '+t('nav.docs')+'</span>' : ''}
-                </div>
-                <div class="conv-q">${esc(c.query||'').slice(0,100)}</div>
-                <div class="conv-a">${esc(c.response||'').slice(0,150)}</div>
-            </div>
-            <button class="btn-xs" style="color:var(--accent-red);border-color:var(--accent-red);flex-shrink:0;margin-top:2px;"
-                onclick="event.stopPropagation();deleteConversation(${c.id})" title="${t('hist.delete_title')}">🗑</button>
-        </div>
-    `).join('');
-}
-
-async function deleteConversation(cid) {
-    if (!confirm(t('hist.confirm_delete'))) return;
-    const r = await api('DELETE', `/api/agentbase/conversations/${cid}`);
-    if (r && r.ok) {
-        toast(t('hist.deleted'));
-        allConversations = allConversations.filter(c => c.id !== cid);
-        renderConversationsList(allConversations);
-    } else {
-        toast(r?.detail || t('hist.delete_fail'));
-    }
-}
-
-function filterConversations() {
-    const search = ($('conv-search')?.value||'').toLowerCase();
-    if (!search) { renderConversationsList(allConversations); return; }
-    const filtered = allConversations.filter(c =>
-        (c.query||'').toLowerCase().includes(search) || (c.response||'').toLowerCase().includes(search)
-    );
-    renderConversationsList(filtered);
-}
-
-function showConversationDetail(cid) {
-    const c = allConversations.find(x => x.id === cid);
-    if (!c) return;
-
-    // 从对话记录读取真实的 context；旧数据无 context 则回退到旧逻辑
-    if (c.context) {
-        currentChatContext = c.context;
-    } else if (c.library_id) {
-        currentChatContext = 'docs';
-    } else {
-        currentChatContext = 'daily';
-    }
-    currentLibraryId = c.library_id || null;
-    currentChatName = '对话详情';
-    currentCustomerId = null;
-
-    // 强制重建目标视图
-    const cacheKey = 'chat-' + currentChatContext;
-    if (viewCache[cacheKey]) {
-        viewCache[cacheKey].element.remove();
-        delete viewCache[cacheKey];
-    }
-
-    navToView('chat', currentChatContext, currentChatName);
-
-    // 用 MutationObserver 等 DOM 渲染完成后再拉取数据
-    const tryLoad = () => {
-        const ct = currentChatContainer;
-        if (!ct || !ct.querySelector('#chat-messages')) {
-            // DOM 还没到位，再等一轮
-            requestAnimationFrame(tryLoad);
-            return;
-        }
-        loadChatHistory();
-    };
-    requestAnimationFrame(tryLoad);
-}
-
-// ═════════════════════ ONBOARDING GUIDE ═════════════════════
-
-function showOnboardingGuide() {
-    // 通用引导：打开对话视图并显示由 business.yaml 驱动的字段向导
-    navToView('chat', 'general', '对话');
-    setTimeout(function() { showWizardInLeadView(); }, 300);
-}
-
-function restartOnboarding() {
-    try { localStorage.removeItem('_onboarding_completed'); } catch(_) {}
-    showOnboardingGuide();
-}
-
-// ═════════════════════ WORKSPACE MANAGEMENT ═════════════════════
-function showAddCompanyModal() {
-    switchModalTab('tab-workspaces');
-    showModal('workspace-modal');
-    loadCompanyListUI();
-}
-
-function switchModalTab(tab) {
-    $('tab-workspaces').classList.toggle('hidden', tab !== 'tab-workspaces');
-    $('tab-identity').classList.toggle('hidden', tab !== 'tab-identity');
-    $('tab-btn-workspaces').classList.toggle('active', tab === 'tab-workspaces');
-    $('tab-btn-identity').classList.toggle('active', tab === 'tab-identity');
-    if (tab === 'tab-identity') loadIdentityForCurrentCompany();
-}
-
-async function loadCompanies() {
+async function loadWorkspaces() {
     const prev = currentCompanyId;
     workspaces = await api('GET', '/api/agentbase/workspaces') || [];
-    const sel = $('workspace-select');
-    sel.innerHTML = '<option value="">— 选择工作区 —</option>' +
-        workspaces.map(c => `<option value="${c.id}" ${c.id===prev?'selected':''}>${esc(c.name)}</option>`).join('');
-    if (prev && !workspaces.find(c=>c.id===prev)) {
-        // Previously selected workspace was deleted
-        currentCompanyId = null;
-        saveState();
+    const sel = document.getElementById('workspace-select');
+    if (sel) {
+        sel.innerHTML = workspaces.map(function(w) {
+            return '<option value="' + w.id + '"' + (w.id === prev ? ' selected' : '') + '>' + esc(w.name) + '</option>';
+        }).join('');
     }
     _applyWorkspaceVisibility();
 }
 
-function _applyWorkspaceVisibility() {
-    // 单业务框架：只有一个工作区时不向用户暴露选择器/添加入口。
-    // 0 个工作区（自动创建失败）仍显示，作为兜底创建入口。
-    var row = document.querySelector('.csel-row');
-    if (row) row.style.display = (workspaces.length === 1) ? 'none' : '';
+function _workspaceTerm() {
+    const ws = (_branding && _branding.workspaces) || {};
+    if (currentLang === 'en' && ws.term_en) return ws.term_en;
+    return ws.term || '工作区';
 }
 
-function loadCompanyListUI() {
-    const container = $('workspace-list-ui');
+function _applyWorkspaceVisibility() {
+    const wrap = document.getElementById('workspace-select-wrap');
+    if (!wrap) return;
+    const mode = (_branding.workspaces && _branding.workspaces.mode) || 'single';
+    // 单工作区：隐藏选择器；多工作区或没有实例（兜底创建）时显示
+    wrap.style.display = (mode === 'multi' || workspaces.length !== 1) ? '' : 'none';
+}
+
+async function onWorkspaceChange(id) {
+    const cid = Number(id);
+    if (!cid) return;
+    _abortChatStream();
+    const resp = await api('POST', '/api/agentbase/workspaces/' + cid + '/switch', {});
+    if (resp) {
+        currentCompanyId = cid;
+        saveState();
+        if (_debugEl) {
+            _debugEl.innerHTML = '';
+            renderDebugViewInto(_debugEl);
+        }
+    }
+}
+
+function saveState() {
+    try {
+        if (currentCompanyId) sessionStorage.setItem('agentbase_cid', String(currentCompanyId));
+        else sessionStorage.removeItem('agentbase_cid');
+    } catch (_) {}
+}
+
+function loadSavedCid() {
+    try {
+        const raw = sessionStorage.getItem('agentbase_cid');
+        return raw ? Number(raw) : null;
+    } catch (_) { return null; }
+}
+
+// ═════════════════════ 工作区实例管理 ═════════════════════
+function showWorkspaceModal() {
+    const title = _workspaceTerm();
+    document.getElementById('workspace-modal-title').textContent = title + ' 设置';
+    document.getElementById('workspace-create-title').textContent = '新建' + title;
+    document.getElementById('workspace-create-btn').textContent = '创建' + title;
+    loadWorkspaceListUI();
+    showModal('workspace-modal');
+}
+
+function loadWorkspaceListUI() {
+    const box = document.getElementById('workspace-list-ui');
+    if (!box) return;
     if (!workspaces.length) {
-        container.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">暂无公司，请下方创建。</p>';
+        box.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">' + esc(t('workspaces.no_instances')) + '</p>';
         return;
     }
-    container.innerHTML = workspaces.map(c => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-light);">
-            <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${esc(c.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted);">${esc(c.slug)} · ${c.contact_email ? ' · ' + esc(c.contact_email) : ''}</div></div>
-            <button class="btn btn-danger btn-xs" onclick="deleteCompany(${c.id})">删除</button>
-        </div>`).join('');
+    box.innerHTML = workspaces.map(function(w) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-light);">'
+            + '<div style="flex:1;"><div style="font-weight:600;font-size:13px;">' + esc(w.name) + '</div>'
+            + '<div style="font-size:11px;color:var(--text-muted);">' + esc(w.slug) + '</div></div>'
+            + '<button class="btn btn-xs" onclick="switchWorkspaceFromModal(' + w.id + ')">' + esc(t('workspaces.switch')) + '</button>'
+            + '<button class="btn btn-danger btn-xs" onclick="deleteWorkspace(' + w.id + ')">' + esc(t('workspaces.delete')) + '</button>'
+            + '</div>';
+    }).join('');
+}
+
+async function switchWorkspaceFromModal(id) {
+    await onWorkspaceChange(id);
+    hideModal('workspace-modal');
+    renderSettingsRoute('workspaces', _settingsEl);
 }
 
 function autoSlug() {
-    const name = $('co-name').value.trim();
-    const slugEl = $('co-slug');
-    if (!name) {
-        slugEl.value = '';
-        slugEl.placeholder = '自动生成';
-        slugEl.style.color = 'var(--text-muted)';
-        return;
-    }
-    // 前端实时生成 slug 预览（与后端的 _slugify 逻辑一致）
-    let s = name.toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/[\s_]+/g, '-')
-        .replace(/--+/g, '-')
-        .replace(/^-|-$/g, '') || 'workspace';
-    slugEl.value = s;
-    slugEl.style.color = '';
+    const name = (document.getElementById('co-name') || {}).value || '';
+    const slugEl = document.getElementById('co-slug');
+    if (!slugEl) return;
+    if (!name.trim()) { slugEl.value = ''; return; }
+    slugEl.value = name.toLowerCase().replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '') || '';
 }
 
-async function createCompany() {
-    const name = $('co-name').value.trim();
-    if (!name) { toast('请填写公司名称'); return; }
-    const slug = $('co-slug').value.trim();
-    const body = {name};
+async function createWorkspace() {
+    const name = ((document.getElementById('co-name') || {}).value || '').trim();
+    if (!name) { toast(t('workspaces.term') + ' *'); return; }
+    const body = { name: name };
+    const slug = ((document.getElementById('co-slug') || {}).value || '').trim();
     if (slug) body.slug = slug;
-    ['contact_name','contact_email','website'].forEach(f => {
-        const elId = 'co-' + f.replace(/_/g, '-');
-        const v = (document.getElementById(elId)?.value || '').trim();
-        if (v) body[f] = v;
-    });
-    const r = await api('POST', '/api/agentbase/workspaces', body);
-    if (r?.id) {
-        if (r.work_dir_is_new === false) {
-            toast(`桌面目录已存在，已创建为：${r.work_dir.split('/').pop()}`);
-        } else {
-            toast('公司创建成功，桌面工作目录已就绪');
-        }
-        ['co-name','co-slug','co-contact-name','co-contact-email','co-website'].forEach(id=>$(id).value='');
-        await loadCompanies();
-        onCompanyChange(r.id);
-    } else toast(r?.detail||'创建失败');
-}
-
-async function deleteCompany(id) {
-    if (!confirm('确定停用该公司？数据将保留 30 天后自动清理。')) return;
-    const r = await api('DELETE', `/api/agentbase/workspaces/${id}`);
-    if (r?.ok) { toast('已删除'); if (currentCompanyId===id) onCompanyChange(''); await loadCompanies(); loadCompanyListUI(); }
-    else toast(r?.detail||'删除失败');
-}
-
-async function onCompanyChange(cid) {
-    // 清空视图缓存
-    for (const key in viewCache) {
-        viewCache[key].element.remove();
-        delete viewCache[key];
-    }
-    // 中止进行中的新手引导流，防止 reader 泄漏
-    if (_onboardingStreamCtl) { _onboardingStreamCtl.abort(); _onboardingStreamCtl = null; }
-    // 中止进行中的聊天流：否则它会继续消耗 token，且结束后把回复写进新公司的会话窗口
-    _abortChatStream();
-    // 清空 cron 输出记录，防止跨公司污染
-    _shownCronOutputs = new Set();
-    if (cid) {
-        const newCid = parseInt(cid);
-        // 先更新前端状态（让后续 API 调用带上正确的 X-Workspace-ID header）
-        currentCompanyId = newCid;
-        // 通知后端切换 session 绑定（旧 cid 会触发 403，因此 _enforce_workspace_binding 需放行 /switch 端点）
-        try { await api('POST', '/api/agentbase/workspaces/' + newCid + '/switch'); } catch(_) {}
+    const resp = await api('POST', '/api/agentbase/workspaces', body);
+    if (resp && resp.id) {
+        toast(t('settings.saved'));
+        document.getElementById('co-name').value = '';
+        document.getElementById('co-slug').value = '';
+        await loadWorkspaces();
+        currentCompanyId = resp.id;
         saveState();
-        // 首个公司 + 引导未完成 → 显示新手引导
-        if (workspaces.length === 1 && !isOnboardingCompleted()) {
-            showOnboardingGuide();
-            return;
-        }
-        navToView('chat', 'daily', '今日简报');
-    } else {
-        currentCompanyId = null;
-        saveState();
-        renderNoCompanyPage();
+        hideModal('workspace-modal');
+        if (_settingsEl) renderSettingsRoute(currentRoute.page, _settingsEl);
     }
 }
 
-async function loadIdentityForCurrentCompany() {
-    if (!currentCompanyId) return;
-    const r = await api('GET', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`);
-    if (r) $('identity-editor').value = r.agent_identity_md || '';
+async function deleteWorkspace(id) {
+    if (!confirm(t('workspaces.delete') + '?')) return;
+    // 后端要求二次确认头，api() 不支持自定义头，直接 fetch
+    let resp = null;
+    try {
+        const r = await fetch('/api/agentbase/workspaces/' + id, {
+            method: 'DELETE',
+            headers: {
+                'X-Hermes-Session-Token': TOKEN,
+                'X-Workspace-ID': String(currentCompanyId || id),
+                'X-Confirm-Delete': 'yes',
+            },
+        });
+        resp = r.ok ? await r.json() : null;
+        if (!r.ok) toast('HTTP ' + r.status);
+    } catch (err) {
+        toast(err.message || String(err));
+    }
+    if (resp) {
+        if (currentCompanyId === id) currentCompanyId = null;
+        await loadWorkspaces();
+        if (!currentCompanyId && workspaces.length === 1) {
+            currentCompanyId = workspaces[0].id;
+            saveState();
+        }
+        loadWorkspaceListUI();
+        if (_settingsEl) renderSettingsRoute(currentRoute.page, _settingsEl);
+    }
 }
 
-async function saveCompanyIdentity() {
-    if (!currentCompanyId) return;
-    const identity = $('identity-editor').value;
-    const r = await api('PUT', `/api/agentbase/workspaces/${currentCompanyId}/agent-identity`, {agent_identity_md:identity});
-    if (r?.workspace_id) { toast('身份配置已保存'); hideModal('workspace-modal'); }
-    else toast(r?.detail||'保存失败');
+// ═════════════════════ 设置页 ═════════════════════
+const SETTINGS_GROUPS = [
+    { page: 'models', icon: '🧠', title: 'settings.group.models', desc: 'settings.group.models_desc' },
+    { page: 'agent-behavior', icon: '🎛️', title: 'settings.group.agent_behavior', desc: 'settings.group.agent_behavior_desc' },
+    { page: 'workspaces', icon: '🗂️', title: 'settings.group.workspaces', desc: 'settings.group.workspaces_desc' },
+    { page: 'agent', icon: '🤖', title: 'settings.group.agent', desc: 'settings.group.agent_desc' },
+    { page: 'business', icon: '🧭', title: 'settings.group.business', desc: 'settings.group.business_desc' },
+    { page: 'skills', icon: '🧩', title: 'settings.group.skills', desc: 'settings.group.skills_desc' },
+    { page: 'files', icon: '📁', title: 'settings.group.files', desc: 'settings.group.files_desc' },
+    { page: 'system', icon: '🛠️', title: 'settings.group.system', desc: 'settings.group.system_desc' },
+    { page: 'developer', icon: '🧪', title: 'settings.group.developer', desc: 'settings.group.developer_desc' },
+];
+
+function settingsShell(pageTitle, bodyHtml) {
+    return '<div class="settings-page">'
+        + '<div class="settings-back"><a onclick="navigateTo(\'#/settings\')">' + esc(t('settings.back')) + '</a></div>'
+        + '<h2 class="settings-page-title">' + esc(pageTitle) + '</h2>'
+        + bodyHtml + '</div>';
 }
 
-// ═════════════════════ SETTINGS ═════════════════════
-async function renderSettingsViewInto(container) {
-    container.innerHTML = `<div class="panel-view" style="display:flex;flex-direction:column;height:100%;">
-        <div class="panel-topbar"><h2>⚙️ 设置</h2></div>
-        <div class="panel-body" id="settings-body" style="overflow-y:auto;padding:16px 20px;color:var(--text-muted);font-size:13px;">加载中...</div>
-    </div>`;
-    await loadSettings();
+async function renderSettingsHome(container, seq) {
+    const results = await Promise.all([
+        api('GET', '/api/agentbase/settings'),
+        api('GET', '/api/agentbase/business/config'),
+        api('GET', '/api/agentbase/skill-packs'),
+        api('GET', '/api/agentbase/system/service-status'),
+    ]);
+    if (seq !== _routeSeq) return;
+    const [settings, business, packs, service] = results;
+    const meta = {
+        models: settings ? (settings.active && (settings.active.provider || '—') + ' / ' + (settings.active.model || '—')) : '—',
+        'agent-behavior': settings && settings.moa ? (settings.moa.enabled ? t('behavior.enabled') : t('behavior.disabled')) : '—',
+        workspaces: business && business.config ? (business.config.workspaces.term + ' · ' + business.config.workspaces.mode) : '—',
+        agent: currentCompanyId ? ('#' + currentCompanyId) : '—',
+        business: business && business.config ? (business.config.business_name + ' · ' + business.config.usage_direction) : '—',
+        skills: packs ? (packs.active || t('skills.no_packs')) : '—',
+        files: business && business.config ? (business.config.work_dirs || []).map(function(d) { return d.name; }).join(', ') : '—',
+        system: service ? (service.running ? t('system.running') : '—') : '—',
+        developer: 'API',
+    };
+    container.innerHTML = '<div class="settings-page">'
+        + '<h2 class="settings-page-title">' + esc(t('settings.title')) + '</h2>'
+        + '<div class="settings-home">'
+        + SETTINGS_GROUPS.map(function(g) {
+            return '<div class="settings-item" onclick="navigateTo(\'#/settings/' + g.page + '\')">'
+                + '<div class="settings-item-icon">' + g.icon + '</div>'
+                + '<div class="settings-item-text"><div class="settings-item-title">' + esc(t(g.title)) + '</div>'
+                + '<div class="settings-item-desc">' + esc(t(g.desc)) + '</div></div>'
+                + '<div class="settings-item-meta">' + esc(meta[g.page] || '') + '</div>'
+                + '<div class="settings-item-chevron">›</div></div>';
+        }).join('')
+        + '</div></div>';
 }
 
-async function loadSettings() {
-    const body = document.getElementById('settings-body');
-    if (!body) return;
+// ── 模型与 API Key ──
+async function renderSettingsModels(container, seq) {
     const data = await api('GET', '/api/agentbase/settings');
-    if (!data) { body.textContent = '加载失败'; return; }
+    if (seq !== _routeSeq) return;
+    if (!data) { container.innerHTML = settingsShell(t('settings.group.models'), '<p>' + esc(t('settings.load_failed')) + '</p>'); return; }
+    _settingsCache = data;
+    const providers = (data.providers || []).filter(function(p) { return (p.key_env_vars || []).length; });
+    const rows = providers.map(function(p) {
+        const envInputs = (p.key_env_vars || []).map(function(env) {
+            return '<div class="settings-field-row"><input type="password" id="key-' + esc(p.id) + '-' + esc(env) + '" placeholder="' + esc(env) + '">'
+                + '<button class="btn" onclick="saveProviderKey(\'' + escJs(p.id) + '\',\'' + escJs(env) + '\')">' + esc(t('settings.save')) + '</button></div>';
+        }).join('');
+        return '<details class="settings-section"><summary><span>' + esc(p.name || p.id) + '</span>'
+            + '<span class="pill ' + (p.has_key ? 'pill-ok' : 'pill-muted') + '">' + esc(p.has_key ? t('models.configured') : t('models.not_configured')) + '</span></summary>'
+            + envInputs + '</details>';
+    }).join('') || '<p>' + esc(t('settings.load_failed')) + '</p>';
 
-    const providers = (data.providers || []).filter(p => (p.key_env_vars || []).length);
-    const providerRows = providers.map(p => `
-        <div class="task-card" style="margin-bottom:10px;">
-            <div class="task-card-header"><span class="task-card-name">${esc(p.name || p.id)}</span>
-                <span style="font-size:11px;color:${p.has_key ? 'var(--accent-green)' : 'var(--text-muted)'};">${p.has_key ? '● 已配置' : '○ 未配置'}</span>
-            </div>
-            ${(p.key_env_vars || []).map(env => `
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <input type="password" id="key-${esc(p.id)}-${esc(env)}" placeholder="${esc(env)}" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
-                    <button class="btn" onclick="saveProviderKey('${escJs(p.id)}','${escJs(env)}')">保存</button>
-                </div>`).join('')}
-        </div>`).join('') || '<p>暂无需要填写 Key 的 provider。</p>';
+    const modelOptions = (data.providers || []).map(function(p) {
+        return '<option value="' + esc(p.id) + '"' + (p.id === (data.active || {}).provider ? ' selected' : '') + '>' + esc(p.name || p.id) + '</option>';
+    }).join('');
 
-    const modelOptions = (data.providers || []).map(p => `<option value="${esc(p.id)}" ${p.id === data.active?.provider ? 'selected' : ''}>${esc(p.name || p.id)}</option>`).join('');
-
-    body.innerHTML = `
-        <h3 style="font-size:15px;margin:0 0 10px;">模型与 API Key</h3>
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Key 只保存在本机 <code>~/.agentbase/.env</code>，不会上传。</p>
-        ${providerRows}
-        <h3 style="font-size:15px;margin:18px 0 10px;">默认模型</h3>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <select id="default-provider" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;">${modelOptions}</select>
-            <input id="default-model" value="${esc(data.active?.model || '')}" placeholder="模型名，如 deepseek-chat" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;min-width:220px;">
-            <button class="btn btn-primary" onclick="saveDefaultModel()">保存</button>
-            <span style="font-size:12px;color:var(--text-muted);">当前：${esc(data.active?.provider || '未设置')} / ${esc(data.active?.model || '未设置')}</span>
-        </div>
-        <h3 style="font-size:15px;margin:18px 0 10px;">MoA（多模型协作）</h3>
-        <p style="font-size:12px;color:var(--text-secondary);">${data.moa_available ? '已配置 ' + data.configured_provider_count + ' 个 provider，可开启 MoA。' : '至少配置 2 个 provider 的 Key 才能开启 MoA。'}<br>${esc(data.moa_hint || '')}</p>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px;${data.moa_available ? '' : 'opacity:.5;'}">
-            <input type="checkbox" id="moa-toggle" ${data.moa?.enabled ? 'checked' : ''} ${data.moa_available ? '' : 'disabled'} onchange="setMoa(this.checked)">
-            启用 MoA
-        </label>
-        ${data.moa?.presets?.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:4px;">预设：${esc((data.moa.presets || []).join(', '))}</p>` : ''}
-        <h3 style="font-size:15px;margin:18px 0 10px;">后台服务</h3>
-        <div id="service-body" style="font-size:13px;">加载中...</div>
-        <h3 style="font-size:15px;margin:18px 0 10px;">业务技能包</h3>
-        <div id="packs-body" style="font-size:13px;">加载中...</div>
-    `;
-    loadPacks();
-    loadServiceSettings();
-}
-
-async function loadServiceSettings() {
-    const el = document.getElementById('service-body');
-    if (!el) return;
-    const data = await api('GET', '/api/agentbase/system/service-status');
-    if (!data) { el.textContent = '加载失败'; return; }
-    el.innerHTML = `
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <input type="checkbox" id="autostart-toggle" ${data.autostart ? 'checked' : ''} onchange="setAutostart(this.checked)">
-            开机自动启动（登录后后台运行，无窗口）
-        </label>
-        <button class="btn" onclick="quitService()">退出服务</button>
-        <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">退出后定时任务会停止；再次双击图标即可重新启动。</p>`;
-}
-
-async function setAutostart(enabled) {
-    const resp = await api('POST', '/api/agentbase/system/autostart', { enabled });
-    if (resp?.ok) { toast(resp.message || '已保存'); }
-    else {
-        toast(resp?.error || '设置失败');
-        const el = document.getElementById('autostart-toggle');
-        if (el) el.checked = !enabled;
-    }
-    loadServiceSettings();
-}
-
-async function quitService() {
-    if (!confirm('确定退出 AgentBase 服务？退出后定时任务将停止。')) return;
-    const resp = await api('POST', '/api/agentbase/system/quit', {});
-    if (resp?.ok) toast('服务正在退出…');
+    container.innerHTML = settingsShell(t('settings.group.models'),
+        '<div class="settings-section"><h3>' + esc(t('models.providers')) + '</h3>' + rows + '</div>'
+        + '<div class="settings-section"><h3>' + esc(t('models.default_model')) + '</h3>'
+        + '<div class="settings-field-row"><select id="default-provider">' + modelOptions + '</select>'
+        + '<input id="default-model" value="' + esc((data.active || {}).model || '') + '" placeholder="deepseek-chat">'
+        + '<button class="btn btn-primary" onclick="saveDefaultModel()">' + esc(t('settings.save')) + '</button></div>'
+        + '<p class="settings-hint">' + esc(t('models.restart_hint')) + '</p></div>');
 }
 
 async function saveProviderKey(providerId, envVar) {
     const el = document.getElementById('key-' + providerId + '-' + envVar);
-    const value = (el?.value || '').trim();
-    if (!value) { toast('请输入 Key'); return; }
-    const resp = await api('POST', '/api/agentbase/settings/keys', { keys: { [envVar]: value } });
-    if (resp?.ok) { el.value = ''; toast('已保存'); loadSettings(); }
-}
-
-async function setMoa(enabled) {
-    const resp = await api('POST', '/api/agentbase/settings/moa', { enabled });
-    if (resp?.ok) { toast(enabled ? '已开启 MoA，重启后生效' : '已关闭 MoA，重启后生效'); }
-    else { const el = document.getElementById('moa-toggle'); if (el) el.checked = !enabled; }
-    loadSettings();
+    const value = ((el && el.value) || '').trim();
+    if (!value) return;
+    const retry = await api('POST', '/api/agentbase/settings/keys', { keys: { [envVar]: value } });
+    if (retry) {
+        toast(t('settings.saved'));
+        el.value = '';
+        if (_settingsEl) renderSettingsRoute('models', _settingsEl);
+    }
 }
 
 async function saveDefaultModel() {
-    const provider = document.getElementById('default-provider')?.value || '';
-    const model = (document.getElementById('default-model')?.value || '').trim();
-    if (!provider || !model) { toast('请填写 provider 和模型名'); return; }
-    const resp = await api('POST', '/api/agentbase/settings/model', { provider, model });
-    if (resp?.ok) toast('已保存，重启服务后生效');
+    const provider = (document.getElementById('default-provider') || {}).value || '';
+    const model = ((document.getElementById('default-model') || {}).value || '').trim();
+    if (!provider || !model) { toast(t('settings.save') + ' *'); return; }
+    const resp = await api('POST', '/api/agentbase/settings/model', { provider: provider, model: model });
+    if (resp) toast(t('settings.saved') + ' · ' + t('models.restart_hint'));
 }
 
-async function loadPacks() {
-    const body = document.getElementById('packs-body');
-    if (!body) return;
-    const data = await api('GET', '/api/agentbase/skill-packs');
-    if (!data) { body.textContent = '加载失败'; return; }
-    const rows = (data.packs || []).map(p => `
-        <div class="task-card" style="margin-bottom:8px;">
-            <div class="task-card-header"><span class="task-card-name">${esc(p.name)}</span>
-                ${data.active === p.path ? '<span style="font-size:11px;color:var(--accent-green);">● 已启用</span>' : ''}
-            </div>
-            <div class="task-card-actions">
-                <button onclick="activatePack('${escJs(p.name)}')">启用</button>
-                <button onclick="removePack('${escJs(p.name)}')">卸载</button>
-            </div>
-        </div>`).join('') || '<p style="color:var(--text-muted);">尚未安装业务技能包。框架仍可正常聊天。</p>';
-    body.innerHTML = rows + `
-        <div style="display:flex;gap:8px;margin-top:10px;">
-            <input id="pack-install-path" placeholder="本地 pack 目录（含 pack.yaml）" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
-            <button class="btn" onclick="installPack()">安装</button>
-        </div>`;
+// ── Agent 行为 ──
+async function renderSettingsAgentBehavior(container, seq) {
+    const data = await api('GET', '/api/agentbase/settings');
+    if (seq !== _routeSeq) return;
+    if (!data) { container.innerHTML = settingsShell(t('settings.group.agent_behavior'), '<p>' + esc(t('settings.load_failed')) + '</p>'); return; }
+    const behavior = data.agent_behavior || {};
+    const deny = (behavior.approvals_deny || []);
+    container.innerHTML = settingsShell(t('settings.group.agent_behavior'),
+        '<div class="settings-section"><h3>' + esc(t('behavior.yolo')) + '</h3>'
+        + '<span class="pill ' + (behavior.yolo ? 'pill-ok' : 'pill-muted') + '">' + esc(behavior.yolo ? t('behavior.enabled') : t('behavior.disabled')) + '</span></div>'
+        + '<div class="settings-section"><h3>' + esc(t('behavior.approvals')) + '</h3>'
+        + (deny.length ? '<pre class="settings-pre">' + esc(deny.join('\n')) + '</pre>' : '<p class="settings-hint">' + esc(t('behavior.none')) + '</p>') + '</div>'
+        + '<div class="settings-section"><h3>' + esc(t('behavior.moa')) + '</h3>'
+        + '<p class="settings-hint">' + esc(t('models.restart_hint')) + '</p>'
+        + '<label class="settings-checkbox"><input type="checkbox" id="moa-toggle" ' + (data.moa && data.moa.enabled ? 'checked' : '')
+        + (data.moa_available ? '' : ' disabled') + ' onchange="setMoa(this.checked)"> ' + esc(t('behavior.enabled')) + '</label>'
+        + (data.moa && data.moa.presets && data.moa.presets.length ? '<p class="settings-hint">' + esc(data.moa.presets.join(', ')) + '</p>' : '')
+        + '</div>');
+}
+
+async function setMoa(enabled) {
+    const resp = await api('POST', '/api/agentbase/settings/moa', { enabled: enabled });
+    if (resp) toast(t('settings.saved') + ' · ' + t('models.restart_hint'));
+    if (_settingsEl) renderSettingsRoute('agent-behavior', _settingsEl);
+}
+
+// ── 工作区语义与实例 ──
+async function renderSettingsWorkspaces(container, seq) {
+    const [business, list] = await Promise.all([
+        api('GET', '/api/agentbase/business/config'),
+        api('GET', '/api/agentbase/workspaces'),
+    ]);
+    if (seq !== _routeSeq) return;
+    if (!business) { container.innerHTML = settingsShell(t('settings.group.workspaces'), '<p>' + esc(t('settings.load_failed')) + '</p>'); return; }
+    const ws = (business.config && business.config.workspaces) || {};
+    const fields = ws.fields || [];
+    const fieldRows = fields.map(function(f, i) { return workspaceFieldRow(f, i); }).join('');
+    const instances = (list || []).map(function(w) {
+        return '<div class="settings-list-row"><span>' + esc(w.name) + ' <span class="pill pill-muted">' + esc(w.slug) + '</span></span>'
+            + '<span><button class="btn btn-xs" onclick="switchWorkspaceFromModal(' + w.id + ')">' + esc(t('workspaces.switch')) + '</button> '
+            + '<button class="btn btn-danger btn-xs" onclick="deleteWorkspace(' + w.id + ')">' + esc(t('workspaces.delete')) + '</button></span></div>';
+    }).join('') || '<p class="settings-hint">' + esc(t('workspaces.no_instances')) + '</p>';
+
+    container.innerHTML = settingsShell(t('settings.group.workspaces'),
+        '<div class="settings-section"><div class="settings-form-grid">'
+        + '<label>' + esc(t('workspaces.term')) + '<input id="ws-term" value="' + esc(ws.term || '') + '"></label>'
+        + '<label>' + esc(t('workspaces.term_en')) + '<input id="ws-term-en" value="' + esc(ws.term_en || '') + '"></label>'
+        + '<label>' + esc(t('workspaces.mode')) + '<select id="ws-mode"><option value="single"' + (ws.mode === 'single' ? ' selected' : '') + '>' + esc(t('workspaces.mode_single')) + '</option>'
+        + '<option value="multi"' + (ws.mode === 'multi' ? ' selected' : '') + '>' + esc(t('workspaces.mode_multi')) + '</option></select></label>'
+        + '<label class="settings-checkbox"><input type="checkbox" id="ws-create-default" ' + (ws.create_default ? 'checked' : '') + '> ' + esc(t('workspaces.create_default')) + '</label>'
+        + '</div></div>'
+        + '<div class="settings-section"><h3>' + esc(t('workspaces.fields')) + '</h3><div id="ws-fields">' + fieldRows + '</div>'
+        + '<button class="btn" onclick="addWorkspaceField()">+ ' + esc(t('workspaces.add_field')) + '</button></div>'
+        + '<div class="settings-actions"><button class="btn btn-primary" onclick="saveWorkspacesConfig()">' + esc(t('settings.save')) + '</button></div>'
+        + '<div class="settings-section"><h3>' + esc(t('workspaces.instances')) + '</h3>' + instances
+        + '<button class="btn" onclick="showWorkspaceModal()">+ ' + esc(t('workspaces.new')) + '</button></div>');
+}
+
+function workspaceFieldRow(field, index) {
+    return '<div class="settings-field-row" data-ws-field="' + index + '">'
+        + '<input class="ws-field-key" value="' + esc((field && field.key) || '') + '" placeholder="key">'
+        + '<input class="ws-field-label" value="' + esc((field && field.label) || '') + '" placeholder="label">'
+        + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button></div>';
+}
+
+function addWorkspaceField() {
+    const box = document.getElementById('ws-fields');
+    if (!box) return;
+    const div = document.createElement('div');
+    div.className = 'settings-field-row';
+    div.innerHTML = '<input class="ws-field-key" placeholder="key"><input class="ws-field-label" placeholder="label">'
+        + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button>';
+    box.appendChild(div);
+}
+
+async function saveWorkspacesConfig() {
+    const fields = Array.from(document.querySelectorAll('[data-ws-field], #ws-fields > .settings-field-row')).map(function(row) {
+        return {
+            key: (row.querySelector('.ws-field-key') || {}).value || '',
+            label: (row.querySelector('.ws-field-label') || {}).value || '',
+            type: 'text',
+        };
+    }).filter(function(f) { return f.key.trim(); });
+    const payload = {
+        workspaces: {
+            term: (document.getElementById('ws-term') || {}).value || '工作区',
+            term_en: (document.getElementById('ws-term-en') || {}).value || 'Workspace',
+            mode: (document.getElementById('ws-mode') || {}).value || 'single',
+            create_default: !!(document.getElementById('ws-create-default') || {}).checked,
+            fields: fields,
+        },
+    };
+    const resp = await api('PUT', '/api/agentbase/business/config', payload);
+    if (resp) {
+        toast(t('settings.saved'));
+        await loadBranding();
+        _applyWorkspaceVisibility();
+        if (_settingsEl) renderSettingsRoute('workspaces', _settingsEl);
+    }
+}
+
+// ── 智能体与提示词 ──
+async function renderSettingsAgent(container, seq) {
+    if (!currentCompanyId) {
+        container.innerHTML = settingsShell(t('settings.group.agent'), '<p>' + esc(t('toast.no_workspace')) + '</p>');
+        return;
+    }
+    const [ws, identity, business] = await Promise.all([
+        api('GET', '/api/agentbase/workspaces/' + currentCompanyId),
+        api('GET', '/api/agentbase/workspaces/' + currentCompanyId + '/agent-identity'),
+        api('GET', '/api/agentbase/business/config'),
+    ]);
+    if (seq !== _routeSeq) return;
+    const promptOverride = (business && business.config && business.config.prompt_overrides && business.config.prompt_overrides.system) || '';
+    container.innerHTML = settingsShell(t('settings.group.agent'),
+        '<div class="settings-section"><label>' + esc(t('agent.name')) + '<input id="agent-ws-name" value="' + esc((ws && ws.name) || '') + '"></label>'
+        + '<button class="btn" onclick="saveWorkspaceName()">' + esc(t('settings.save')) + '</button></div>'
+        + '<div class="settings-section"><h3>' + esc(t('agent.identity')) + '</h3>'
+        + '<textarea id="agent-identity" rows="12">' + esc((identity && identity.agent_identity_md) || '') + '</textarea>'
+        + '<button class="btn btn-primary" onclick="saveWorkspaceIdentity()">' + esc(t('settings.save')) + '</button></div>'
+        + '<div class="settings-section"><h3>' + esc(t('agent.system_prompt')) + '</h3>'
+        + '<textarea id="agent-system-prompt" rows="8">' + esc(promptOverride) + '</textarea>'
+        + '<button class="btn" onclick="saveSystemPromptOverride()">' + esc(t('settings.save')) + '</button>'
+        + '<p class="settings-hint">' + esc(t('agent.priority')) + '</p></div>');
+}
+
+async function saveWorkspaceName() {
+    if (!currentCompanyId) return;
+    const name = ((document.getElementById('agent-ws-name') || {}).value || '').trim();
+    if (!name) return;
+    const resp = await api('PUT', '/api/agentbase/workspaces/' + currentCompanyId, { name: name });
+    if (resp) { toast(t('settings.saved')); await loadWorkspaces(); renderSettingsRoute('agent', _settingsEl); }
+}
+
+async function saveWorkspaceIdentity() {
+    if (!currentCompanyId) return;
+    const md = (document.getElementById('agent-identity') || {}).value || '';
+    const resp = await api('PUT', '/api/agentbase/workspaces/' + currentCompanyId + '/agent-identity', { agent_identity_md: md });
+    if (resp) toast(t('settings.saved'));
+}
+
+async function saveSystemPromptOverride() {
+    const text = (document.getElementById('agent-system-prompt') || {}).value || '';
+    const resp = await api('PUT', '/api/agentbase/business/config', { prompt_overrides: { system: text } });
+    if (resp) toast(t('settings.saved'));
+}
+
+// ── 业务与方向 ──
+async function renderSettingsBusiness(container, seq) {
+    const data = await api('GET', '/api/agentbase/business/config');
+    if (seq !== _routeSeq) return;
+    if (!data) { container.innerHTML = settingsShell(t('settings.group.business'), '<p>' + esc(t('settings.load_failed')) + '</p>'); return; }
+    _settingsCache = data;
+    const cfg = data.config || {};
+    const currentDirection = cfg.usage_direction || 'general';
+    const options = (data.directions || []).map(function(d) {
+        return '<option value="' + esc(d.id) + '"' + (d.id === currentDirection ? ' selected' : '') + '>' + esc(currentLang === 'en' ? d.label_en : d.label) + '</option>';
+    }).join('');
+    const fields = (cfg.onboarding_fields || []).map(function(f, i) {
+        return '<div class="settings-field-row" data-onboarding-field="' + i + '">'
+            + '<input class="ob-key" value="' + esc(f.key) + '" placeholder="key">'
+            + '<input class="ob-label" value="' + esc(f.label) + '" placeholder="label">'
+            + '<input class="ob-example" value="' + esc(f.example || '') + '" placeholder="example">'
+            + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button></div>';
+    }).join('');
+
+    container.innerHTML = settingsShell(t('settings.group.business'),
+        '<div class="settings-section"><h3>' + esc(t('business.direction')) + '</h3>'
+        + '<select id="business-direction" onchange="renderDirectionRecommendation()">' + options + '</select>'
+        + '<p class="settings-hint">' + esc(t('business.direction_hint')) + '</p>'
+        + '<div id="direction-recommend" class="settings-recommend"></div></div>'
+        + '<div class="settings-section"><div class="settings-form-grid">'
+        + '<label>' + esc(t('business.name')) + '<input id="business-name" value="' + esc(cfg.business_name || '') + '"></label>'
+        + '<label>' + esc(t('business.tagline')) + '<input id="business-tagline" value="' + esc(cfg.tagline || '') + '"></label>'
+        + '<label>' + esc(t('business.brand_title')) + '<input id="brand-title" value="' + esc((cfg.branding || {}).title || '') + '"></label>'
+        + '<label>' + esc(t('business.welcome')) + '<input id="brand-welcome" value="' + esc((cfg.branding || {}).welcome || '') + '"></label>'
+        + '</div></div>'
+        + '<div class="settings-section"><h3>' + esc(t('business.onboarding')) + '</h3><div id="onboarding-fields">' + fields + '</div>'
+        + '<button class="btn" onclick="addOnboardingField()">+ ' + esc(t('workspaces.add_field')) + '</button></div>'
+        + '<div class="settings-actions"><button class="btn btn-primary" onclick="saveBusinessConfig()">' + esc(t('settings.save')) + '</button></div>');
+    renderDirectionRecommendation();
+}
+
+function _currentDirectionPreset() {
+    const sel = document.getElementById('business-direction');
+    const id = sel ? sel.value : 'general';
+    const directions = (_settingsCache && _settingsCache.directions) || [];
+    return directions.find(function(d) { return d.id === id; }) || null;
+}
+
+function renderDirectionRecommendation() {
+    const preset = _currentDirectionPreset();
+    const box = document.getElementById('direction-recommend');
+    if (!box) return;
+    if (!preset) { box.innerHTML = ''; return; }
+    const fields = (preset.onboarding_fields || []).map(function(f) { return f.label; }).join('、');
+    box.innerHTML = '<div class="settings-recommend-head">' + esc(t('business.recommend')) + ': ' + esc(currentLang === 'en' ? preset.label_en : preset.label) + '</div>'
+        + '<p>' + esc(currentLang === 'en' ? preset.description_en : preset.description) + '</p>'
+        + '<p><strong>' + esc(t('business.name')) + ':</strong> ' + esc(currentLang === 'en' ? preset.default_business_name_en : preset.default_business_name) + '</p>'
+        + (fields ? '<p><strong>' + esc(t('business.onboarding')) + ':</strong> ' + esc(fields) + '</p>' : '')
+        + '<p><strong>' + esc(t('workspaces.mode')) + ':</strong> ' + esc(preset.workspaces.mode) + '</p>'
+        + (preset.recommended_skill_pack ? '<p><strong>' + esc(t('business.recommended_pack')) + ':</strong> ' + esc(preset.recommended_skill_pack)
+            + ' — ' + esc(currentLang === 'en' ? preset.recommended_skill_pack_reason_en : preset.recommended_skill_pack_reason) + '</p>' : '')
+        + '<button class="btn" onclick="applyDirectionRecommendation()">' + esc(t('business.apply')) + '</button>';
+}
+
+function applyDirectionRecommendation() {
+    const preset = _currentDirectionPreset();
+    if (!preset) return;
+    const nameEl = document.getElementById('business-name');
+    if (nameEl) nameEl.value = currentLang === 'en' ? preset.default_business_name_en : preset.default_business_name;
+    const box = document.getElementById('onboarding-fields');
+    if (box && preset.onboarding_fields) {
+        box.innerHTML = preset.onboarding_fields.map(function(f, i) {
+            return '<div class="settings-field-row" data-onboarding-field="' + i + '">'
+                + '<input class="ob-key" value="' + esc(f.key) + '" placeholder="key">'
+                + '<input class="ob-label" value="' + esc(currentLang === 'en' ? (f.label_en || f.label) : f.label) + '" placeholder="label">'
+                + '<input class="ob-example" value="' + esc(currentLang === 'en' ? (f.example_en || f.example) : f.example) + '" placeholder="example">'
+                + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button></div>';
+        }).join('');
+    }
+    toast(t('settings.saved'));
+}
+
+function addOnboardingField() {
+    const box = document.getElementById('onboarding-fields');
+    if (!box) return;
+    const div = document.createElement('div');
+    div.className = 'settings-field-row';
+    div.innerHTML = '<input class="ob-key" placeholder="key"><input class="ob-label" placeholder="label">'
+        + '<input class="ob-example" placeholder="example"><button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button>';
+    box.appendChild(div);
+}
+
+async function saveBusinessConfig() {
+    const fields = Array.from(document.querySelectorAll('#onboarding-fields > .settings-field-row')).map(function(row) {
+        return {
+            key: ((row.querySelector('.ob-key') || {}).value || '').trim(),
+            label: ((row.querySelector('.ob-label') || {}).value || '').trim(),
+            example: ((row.querySelector('.ob-example') || {}).value || '').trim(),
+        };
+    }).filter(function(f) { return f.key && f.label; });
+    if (!fields.length) { toast(t('business.onboarding') + ' *'); return; }
+    const payload = {
+        business_name: ((document.getElementById('business-name') || {}).value || '').trim(),
+        tagline: ((document.getElementById('business-tagline') || {}).value || '').trim(),
+        usage_direction: (document.getElementById('business-direction') || {}).value || 'general',
+        onboarding_fields: fields,
+        branding: {
+            title: ((document.getElementById('brand-title') || {}).value || '').trim(),
+            welcome: ((document.getElementById('brand-welcome') || {}).value || '').trim(),
+        },
+    };
+    const resp = await api('PUT', '/api/agentbase/business/config', payload);
+    if (resp) {
+        toast(t('settings.saved'));
+        await loadBranding();
+        applyStaticCopy();
+    }
+}
+
+// ── Skill 包与扩展 ──
+async function renderSettingsSkills(container, seq) {
+    const [packs, settings] = await Promise.all([
+        api('GET', '/api/agentbase/skill-packs'),
+        api('GET', '/api/agentbase/settings'),
+    ]);
+    if (seq !== _routeSeq) return;
+    const rows = ((packs && packs.packs) || []).map(function(p) {
+        const active = packs.active === p.path;
+        return '<div class="settings-list-row"><span>' + esc(p.name) + (active ? ' <span class="pill pill-ok">' + esc(t('skills.active')) + '</span>' : '') + '</span>'
+            + '<span>' + (active ? '' : '<button class="btn btn-xs" onclick="activatePack(\'' + escJs(p.name) + '\')">' + esc(t('skills.activate')) + '</button> ')
+            + '<button class="btn btn-danger btn-xs" onclick="removePack(\'' + escJs(p.name) + '\')">' + esc(t('skills.remove')) + '</button></span></div>';
+    }).join('') || '<p class="settings-hint">' + esc(t('skills.no_packs')) + '</p>';
+    const ext = (settings && settings.extensions) || {};
+    const mcp = (ext.mcp_servers || []).map(function(s) { return s.name + (s.enabled ? '' : ' (off)'); }).join(', ') || t('behavior.none');
+    const plugins = ((ext.plugins || {}).enabled || []).join(', ') || t('behavior.none');
+    const toolsets = (ext.toolsets || []).join(', ') || t('behavior.none');
+
+    container.innerHTML = settingsShell(t('settings.group.skills'),
+        '<div class="settings-section"><h3>' + esc(t('skills.packs')) + '</h3>' + rows
+        + '<div class="settings-field-row"><input id="pack-install-path" placeholder="' + esc(t('skills.install_path')) + '">'
+        + '<button class="btn" onclick="installPack()">' + esc(t('skills.install')) + '</button></div></div>'
+        + '<div class="settings-actions"><button class="btn" onclick="updateSkills(event)">' + esc(t('skills.update')) + '</button></div>'
+        + '<div class="settings-section"><h3>' + esc(t('skills.extensions')) + '</h3>'
+        + '<p><strong>MCP:</strong> ' + esc(mcp) + '</p><p><strong>Plugins:</strong> ' + esc(plugins) + '</p>'
+        + '<p><strong>Toolsets:</strong> ' + esc(toolsets) + '</p></div>');
 }
 
 async function installPack() {
-    const path = (document.getElementById('pack-install-path')?.value || '').trim();
-    if (!path) { toast('请填写目录路径'); return; }
-    const resp = await api('POST', '/api/agentbase/skill-packs/install', { path });
-    if (resp?.ok) { toast('已安装：' + resp.name); loadPacks(); }
+    const path = ((document.getElementById('pack-install-path') || {}).value || '').trim();
+    if (!path) return;
+    const resp = await api('POST', '/api/agentbase/skill-packs/install', { path: path });
+    if (resp) { toast(t('settings.saved')); renderSettingsRoute('skills', _settingsEl); }
 }
 
 async function activatePack(name) {
-    const resp = await api('POST', '/api/agentbase/skill-packs/activate', { name });
-    if (resp?.ok) { toast('已启用，加载 ' + resp.skills + ' 个技能'); loadPacks(); }
+    const resp = await api('POST', '/api/agentbase/skill-packs/activate', { name: name });
+    if (resp) { toast(t('settings.saved')); renderSettingsRoute('skills', _settingsEl); }
 }
 
 async function removePack(name) {
-    if (!confirm('确定卸载该技能包？')) return;
-    const resp = await api('DELETE', '/api/agentbase/skill-packs/' + encodeURIComponent(name));
-    if (resp?.ok) { toast('已卸载'); loadPacks(); }
+    if (!confirm(t('skills.remove') + ' ' + name + '?')) return;
+    const resp = await api('DELETE', '/api/agentbase/skill-packs/' + encodeURIComponent(name), null);
+    if (resp) { toast(t('settings.saved')); renderSettingsRoute('skills', _settingsEl); }
 }
 
-// ═════════════════════ INIT ═════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
-    // 初始化语言 + 业务品牌/目录配置
+async function updateSkills(event) {
+    const btn = event && (event.currentTarget || event.target);
+    if (btn) btn.disabled = true;
+    try {
+        const resp = await api('POST', '/api/agentbase/skills/update', {});
+        if (resp && resp.ok) toast(t('settings.saved'));
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ── 文件与目录 ──
+async function renderSettingsFiles(container, seq) {
+    const data = await api('GET', '/api/agentbase/business/config');
+    if (seq !== _routeSeq) return;
+    const cfg = (data && data.config) || {};
+    const dirs = (cfg.work_dirs || []).map(function(d, i) {
+        return '<div class="settings-field-row" data-work-dir="' + i + '">'
+            + '<input class="wd-name" value="' + esc(d.name || '') + '" placeholder="documents">'
+            + '<input class="wd-desc" value="' + esc(d.description || '') + '" placeholder="description">'
+            + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button></div>';
+    }).join('');
+    const dirNames = (cfg.work_dirs || []).map(function(d) { return '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>'; }).join('');
+    container.innerHTML = settingsShell(t('settings.group.files'),
+        '<div class="settings-section"><h3>' + esc(t('files.work_dirs')) + '</h3><div id="work-dirs">' + dirs + '</div>'
+        + '<button class="btn" onclick="addWorkDir()">+ ' + esc(t('workspaces.add_field')) + '</button></div>'
+        + '<div class="settings-actions"><button class="btn btn-primary" onclick="saveWorkDirs()">' + esc(t('settings.save')) + '</button></div>'
+        + '<div class="settings-section"><h3>' + esc(t('files.upload')) + '</h3>'
+        + '<div class="settings-field-row"><select id="upload-subdir">' + dirNames + '</select>'
+        + '<input type="file" id="upload-file">'
+        + '<button class="btn btn-primary" onclick="uploadFile()">' + esc(t('files.upload')) + '</button></div>'
+        + '<p class="settings-hint">' + esc(t('files.data_root')) + ': ~/.agentbase</p></div>');
+}
+
+function addWorkDir() {
+    const box = document.getElementById('work-dirs');
+    if (!box) return;
+    const div = document.createElement('div');
+    div.className = 'settings-field-row';
+    div.innerHTML = '<input class="wd-name" placeholder="documents"><input class="wd-desc" placeholder="description">'
+        + '<button class="btn btn-danger btn-xs" onclick="this.parentNode.remove()">×</button>';
+    box.appendChild(div);
+}
+
+async function saveWorkDirs() {
+    const dirs = Array.from(document.querySelectorAll('#work-dirs > .settings-field-row')).map(function(row) {
+        return {
+            name: ((row.querySelector('.wd-name') || {}).value || '').trim(),
+            description: ((row.querySelector('.wd-desc') || {}).value || '').trim(),
+        };
+    }).filter(function(d) { return d.name; });
+    if (!dirs.length) { toast(t('files.work_dirs') + ' *'); return; }
+    const resp = await api('PUT', '/api/agentbase/business/config', { work_dirs: dirs });
+    if (resp) { toast(t('settings.saved')); renderSettingsRoute('files', _settingsEl); }
+}
+
+async function uploadFile() {
+    const input = document.getElementById('upload-file');
+    const subdir = (document.getElementById('upload-subdir') || {}).value || '';
+    if (!input || !input.files || !input.files.length) { toast(t('files.choose')); return; }
+    const body = new FormData();
+    body.append('subdir', subdir);
+    Array.from(input.files).forEach(function(f) { body.append('files', f); });
+    const resp = await api('POST', '/api/agentbase/upload-files', body);
+    if (resp) { toast(t('settings.saved')); input.value = ''; }
+}
+
+// ── 系统 ──
+async function renderSettingsSystem(container, seq) {
+    const [service, logs, jobs] = await Promise.all([
+        api('GET', '/api/agentbase/system/service-status'),
+        api('GET', '/api/agentbase/system/logs'),
+        currentCompanyId ? api('GET', '/api/agentbase/cron/jobs') : Promise.resolve([]),
+    ]);
+    if (seq !== _routeSeq) return;
+    const logOptions = ((logs && logs.files) || []).map(function(name) { return '<option value="' + esc(name) + '">' + esc(name) + '</option>'; }).join('');
+    const cronRows = (jobs || []).map(function(j) {
+        return '<div class="settings-list-row"><span>' + esc(j.name || j.id) + '</span><span class="settings-hint">' + esc(j.schedule || '') + '</span></div>';
+    }).join('') || '<p class="settings-hint">' + esc(t('system.no_jobs')) + '</p>';
+
+    container.innerHTML = settingsShell(t('settings.group.system'),
+        '<div class="settings-section"><h3>' + esc(t('system.service')) + '</h3>'
+        + '<p><span class="pill ' + (service && service.running ? 'pill-ok' : 'pill-muted') + '">' + esc(service && service.running ? t('system.running') : '—') + '</span></p>'
+        + '<label class="settings-checkbox"><input type="checkbox" id="autostart-toggle" ' + (service && service.autostart ? 'checked' : '') + ' onchange="setAutostart(this.checked)"> ' + esc(t('system.autostart')) + '</label>'
+        + '<div class="settings-actions"><button class="btn" onclick="doSystemUpdate(event)">' + esc(t('system.update')) + '</button>'
+        + '<button class="btn" onclick="doSystemRestart(event)">' + esc(t('system.restart')) + '</button>'
+        + '<button class="btn" onclick="backupNow()">' + esc(t('system.backup')) + '</button>'
+        + '<button class="btn btn-danger" onclick="quitService()">' + esc(t('system.quit')) + '</button></div></div>'
+        + '<div class="settings-section"><h3>' + esc(t('system.logs')) + '</h3>'
+        + '<div class="settings-field-row"><select id="log-file">' + logOptions + '</select>'
+        + '<input id="log-lines" type="number" min="1" max="500" value="200" style="max-width:100px;">'
+        + '<button class="btn" onclick="loadLogs()">' + esc(t('system.refresh')) + '</button></div>'
+        + '<pre id="log-output" class="settings-pre">' + esc(t('system.log_select')) + '</pre></div>'
+        + '<div class="settings-section"><h3>' + esc(t('system.cron')) + '</h3>' + cronRows + '</div>');
+}
+
+async function setAutostart(enabled) {
+    const resp = await api('POST', '/api/agentbase/system/autostart', { enabled: enabled });
+    if (!resp || !resp.ok) {
+        toast((resp && resp.error) || t('toast.save_failed'));
+        const el = document.getElementById('autostart-toggle');
+        if (el) el.checked = !enabled;
+        return;
+    }
+    toast(t('settings.saved'));
+}
+
+async function quitService() {
+    if (!confirm(t('system.confirm_quit'))) return;
+    const resp = await api('POST', '/api/agentbase/system/quit', {});
+    if (resp) toast(t('system.confirm_quit'));
+}
+
+async function backupNow() {
+    const resp = await api('POST', '/api/agentbase/system/backup', {});
+    if (resp && resp.ok) toast((resp.file || t('settings.saved')));
+}
+
+async function loadLogs() {
+    const name = ((document.getElementById('log-file') || {}).value || '');
+    const lines = ((document.getElementById('log-lines') || {}).value || '200');
+    const out = document.getElementById('log-output');
+    if (!name || !out) return;
+    const resp = await api('GET', '/api/agentbase/system/logs?name=' + encodeURIComponent(name) + '&lines=' + encodeURIComponent(lines));
+    if (!resp) return;
+    out.textContent = (resp.lines || []).join('\n') + (resp.truncated ? '\n… (truncated)' : '');
+}
+
+// ── 开发者：API 控制台 ──
+async function renderSettingsDeveloper(container, seq) {
+    const [meta, docs] = await Promise.all([
+        api('GET', '/api/agentbase/meta/endpoints'),
+        api('GET', '/api/agentbase/meta/api-docs'),
+    ]);
+    if (seq !== _routeSeq) return;
+    const endpoints = (meta && meta.endpoints) || [];
+    container.innerHTML = settingsShell(t('settings.group.developer'),
+        '<div class="settings-section"><h3>' + esc(t('dev.token')) + '</h3>'
+        + '<div class="settings-field-row"><input id="dev-token" value="' + esc(TOKEN) + '" readonly>'
+        + '<button class="btn" onclick="copyDevToken()">' + esc(t('dev.copy')) + '</button></div>'
+        + '<p class="settings-hint">' + esc(t('dev.token_note')) + '</p>'
+        + '<p><a href="/docs" target="_blank" rel="noopener">' + esc(t('dev.swagger')) + '</a> · '
+        + '<a href="/openapi.json" target="_blank" rel="noopener">' + esc(t('dev.openapi')) + '</a></p></div>'
+        + '<div class="settings-section"><h3>' + esc(t('dev.console')) + '</h3>'
+        + '<div class="settings-field-row"><input id="dev-search" placeholder="' + esc(t('dev.search')) + '" oninput="filterEndpoints()"></div>'
+        + '<div id="dev-endpoint-list" class="settings-endpoints">' + endpoints.map(function(e, i) {
+            return '<div class="settings-endpoint" data-path="' + esc(e.path) + '" onclick="selectEndpoint(' + i + ')">'
+                + '<span class="pill pill-muted">' + esc(e.method) + '</span> <code>' + esc(e.path) + '</code>'
+                + '<span class="settings-hint">' + esc(e.summary || '') + '</span></div>';
+        }).join('') + '</div>'
+        + '<div id="dev-console" class="settings-console"></div></div>'
+        + '<div class="settings-section"><h3>' + esc(t('dev.docs')) + '</h3>'
+        + '<div id="api-docs" class="api-doc">' + (docs ? DOMPurify.sanitize(marked.parse(docs.content || '')) : '<p>' + esc(t('settings.load_failed')) + '</p>') + '</div></div>');
+    window._devEndpoints = endpoints;
+}
+
+function filterEndpoints() {
+    const q = ((document.getElementById('dev-search') || {}).value || '').toLowerCase();
+    document.querySelectorAll('#dev-endpoint-list .settings-endpoint').forEach(function(el) {
+        el.style.display = el.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+    });
+}
+
+function selectEndpoint(index) {
+    const endpoints = window._devEndpoints || [];
+    const e = endpoints[index];
+    const box = document.getElementById('dev-console');
+    if (!e || !box) return;
+    const pathParams = (e.path_params || []).map(function(p) {
+        return '<label>' + esc(p) + '<input id="console-param-' + esc(p) + '" placeholder="{ ' + esc(p) + ' }"></label>';
+    }).join('');
+    box.innerHTML = '<h4>' + esc(e.method) + ' ' + esc(e.path) + '</h4>'
+        + '<div class="settings-form-grid">' + pathParams
+        + '<label>' + esc(t('dev.workspace')) + '<input id="console-workspace" value="' + esc(currentCompanyId || '') + '"></label></div>'
+        + (e.has_body ? '<label>' + esc(t('dev.body')) + '<textarea id="console-body" rows="6">{\n  \n}</textarea></label>' : '')
+        + '<button class="btn btn-primary" onclick="sendConsoleRequest(' + index + ')">' + esc(t('dev.send')) + '</button>'
+        + '<pre id="console-output" class="settings-pre"></pre>';
+}
+
+async function sendConsoleRequest(index) {
+    const endpoints = window._devEndpoints || [];
+    const e = endpoints[index];
+    if (!e) return;
+    let path = e.path;
+    (e.path_params || []).forEach(function(p) {
+        const el = document.getElementById('console-param-' + p);
+        path = path.replace('{' + p + '}', encodeURIComponent((el && el.value) || ''));
+    });
+    const bodyEl = document.getElementById('console-body');
+    let body = null;
+    if (bodyEl && bodyEl.value.trim()) {
+        try { body = JSON.parse(bodyEl.value); } catch (err) {
+            document.getElementById('console-output').textContent = 'JSON 解析失败: ' + err.message;
+            return;
+        }
+    }
+    const workspaceEl = document.getElementById('console-workspace');
+    const ws = workspaceEl && workspaceEl.value ? workspaceEl.value : currentCompanyId;
+    const headers = { 'X-Hermes-Session-Token': TOKEN };
+    if (ws && e.requires_workspace) headers['X-Workspace-ID'] = String(ws);
+    const opts = { method: e.method, headers: headers };
+    if (body) {
+        headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+    }
+    const out = document.getElementById('console-output');
+    try {
+        const resp = await fetch(path, opts);
+        const text = await resp.text();
+        let pretty = text;
+        try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+        out.textContent = 'HTTP ' + resp.status + '\n\n' + pretty;
+    } catch (err) {
+        out.textContent = '请求失败: ' + err.message;
+    }
+}
+
+function copyDevToken() {
+    const el = document.getElementById('dev-token');
+    if (!el) return;
+    navigator.clipboard.writeText(el.value).then(function() { toast(t('dev.copied')); });
+}
+
+// ═════════════════════ 调试页 ═════════════════════
+function renderDebugViewInto(container) {
+    container.innerHTML = '<div class="debug-banner">' + esc(t('debug.banner')) + '</div>'
+        + '<div class="debug-toolbar"><strong>' + esc(t('debug.title')) + '</strong>'
+        + '<span class="settings-hint">' + esc(t('debug.probe')) + ': </span>'
+        + '<button class="btn btn-xs" onclick="debugProbe(\'/api/status\')">/api/status</button>'
+        + '<button class="btn btn-xs" onclick="debugProbe(\'/api/agentbase/workspaces\')">/workspaces</button>'
+        + '<button class="btn btn-xs" onclick="clearDebug()">' + esc(t('debug.clear')) + '</button></div>'
+        + '<div id="debug-messages" class="debug-messages"><p class="settings-hint">' + esc(t('debug.empty')) + '</p></div>'
+        + '<div class="debug-input-row"><textarea id="debug-input" rows="3" placeholder="' + esc(t('debug.placeholder')) + '"></textarea>'
+        + '<button class="btn btn-primary" id="debug-send" onclick="sendDebugMsg()">' + esc(t('debug.send')) + '</button>'
+        + '<button class="btn" id="debug-stop" onclick="stopDebugStream()" disabled>' + esc(t('debug.stop')) + '</button></div>'
+        + '<div class="debug-raw"><details><summary>' + esc(t('debug.raw')) + '</summary><pre id="debug-raw-log"></pre></details></div>';
+}
+
+function _debugMessages() { return document.getElementById('debug-messages'); }
+
+function clearDebug() {
+    const box = _debugMessages();
+    if (box) box.innerHTML = '<p class="settings-hint">' + esc(t('debug.empty')) + '</p>';
+    const raw = document.getElementById('debug-raw-log');
+    if (raw) raw.textContent = '';
+}
+
+function _appendDebug(role, text) {
+    const box = _debugMessages();
+    if (!box) return;
+    if (box.querySelector('.settings-hint')) box.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'debug-msg debug-' + role;
+    div.textContent = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function _appendDebugRaw(type, data) {
+    const raw = document.getElementById('debug-raw-log');
+    if (!raw) return;
+    raw.textContent += 'event: ' + type + '\n' + JSON.stringify(data) + '\n\n';
+    raw.scrollTop = raw.scrollHeight;
+}
+
+async function debugProbe(path) {
+    try {
+        const resp = await fetch(path, { headers: { 'X-Hermes-Session-Token': TOKEN } });
+        const text = await resp.text();
+        _appendDebug('probe', 'GET ' + path + ' → HTTP ' + resp.status + '\n' + text.slice(0, 2000));
+    } catch (err) {
+        _appendDebug('error', 'GET ' + path + ' → ' + err.message);
+    }
+}
+
+function stopDebugStream() {
+    _abortChatStream();
+}
+
+async function sendDebugMsg() {
+    const input = document.getElementById('debug-input');
+    const sendBtn = document.getElementById('debug-send');
+    const stopBtn = document.getElementById('debug-stop');
+    const query = ((input && input.value) || '').trim();
+    if (!query) return;
+    if (!currentCompanyId) { toast(t('toast.no_workspace')); return; }
+    input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = false;
+    _appendDebug('user', query);
+
+    const cid = currentCompanyId;
+    const ctl = _beginChatStream(cid);
+    let sawResponse = false;
+    let sawDone = false;
+    let assistantText = '';
+    let assistantEl = null;
+
+    try {
+        const resp = await fetch('/api/agentbase/chat/stream', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Hermes-Session-Token': TOKEN,
+                'X-Workspace-ID': String(cid),
+            },
+            body: JSON.stringify({ query: query, language: currentLang }),
+            signal: ctl.signal,
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(function() { return ''; });
+            _appendDebug('error', 'HTTP ' + resp.status + ' ' + text.slice(0, 500));
+            return;
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventType = null;
+        while (true) {
+            const read = await reader.read();
+            if (read.done) break;
+            buffer += decoder.decode(read.value, { stream: true });
+            const frames = buffer.split('\n\n');
+            buffer = frames.pop();
+            for (const frame of frames) {
+                if (!frame.trim() || frame.startsWith(':')) continue;
+                let dataLine = null;
+                frame.split('\n').forEach(function(line) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    else if (line.startsWith('data: ')) dataLine = line.slice(6);
+                });
+                if (!eventType || dataLine === null) continue;
+                let data = {};
+                try { data = JSON.parse(dataLine); } catch (_) { data = { raw: dataLine }; }
+                _appendDebugRaw(eventType, data);
+                if (!_chatStreamBelongsTo(cid)) return;
+                if (eventType === 'response') {
+                    sawResponse = true;
+                    assistantText = data.text || '';
+                    if (!assistantEl) assistantEl = _appendDebug('assistant', '');
+                    const last = _debugMessages().lastElementChild;
+                    if (last) last.textContent = assistantText;
+                } else if (eventType === 'tool_start') {
+                    _appendDebug('tool', '▶ ' + (data.name || 'tool'));
+                } else if (eventType === 'tool_complete') {
+                    _appendDebug('tool', '✓ ' + (data.name || 'tool'));
+                } else if (eventType === 'thinking') {
+                    _appendDebug('thinking', data.message || 'thinking…');
+                } else if (eventType === 'error') {
+                    _appendDebug('error', data.message || 'error');
+                } else if (eventType === 'done') {
+                    sawDone = true;
+                }
+            }
+            if (sawDone) break;
+        }
+        const outcome = _sseStreamOutcome(sawResponse, sawDone);
+        if (outcome.kind !== 'response') _appendDebug('error', outcome.message);
+    } catch (err) {
+        if (err.name === 'AbortError') _appendDebug('error', t('debug.stop'));
+        else _appendDebug('error', err.message || String(err));
+    } finally {
+        _endChatStream(ctl);
+        if (sendBtn) sendBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+    }
+}
+
+// ═════════════════════ 许可证 / 更新 / 重启 ═════════════════════
+async function loadLicenseStatus() {
+    try {
+        const r = await fetch('/api/agentbase/license/status');
+        const data = await r.json();
+        const bar = document.getElementById('license-bar');
+        if (!bar) return;
+        if (data.status === 'expired' || data.status === 'tampered') {
+            bar.style.display = 'block';
+            bar.innerHTML = '⚠️ ' + esc(t('license.expired')) + ' · <a href="#" onclick="activateLicense();return false;">' + esc(t('license.activate')) + '</a>';
+        } else if (data.status === 'trial') {
+            bar.style.display = 'block';
+            bar.textContent = '⏳ ' + t('license.trial') + ' · ' + data.days_remaining + 'd';
+        } else {
+            bar.style.display = 'none';
+        }
+    } catch (_) {}
+}
+
+async function activateLicense() {
+    const code = prompt(t('license.enter_code'));
+    if (!code) return;
+    const resp = await api('POST', '/api/agentbase/license/activate', { code: code });
+    if (resp && resp.ok) { toast(resp.message || t('license.activated')); loadLicenseStatus(); }
+    else toast((resp && resp.error) || t('license.activate_fail'));
+}
+
+function showLicenseExpired(msg) {
+    toast(msg || t('license.expired'));
+}
+
+async function _confirmUpdate() {
+    let latest = '';
+    try {
+        const st = await (await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' })).json();
+        latest = st.latest_version || '';
+    } catch (_) {}
+    let notes = '修复与稳定性改进';
+    try {
+        const c = await api('GET', '/api/agentbase/system/changelog?latest=' + encodeURIComponent(latest));
+        if (c && c.notes) notes = c.notes;
+    } catch (_) {}
+    return confirm(t('update.confirm') + '\n\n' + notes + '\n\n' + t('update.backup_note'));
+}
+
+async function _waitForRestartAndReload(prevStartedAt) {
+    toast(t('update.restarting'));
+    for (let i = 0; i < 120; i++) {
+        await new Promise(function(res) { setTimeout(res, 1000); });
+        try {
+            const data = await (await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' })).json();
+            if (data && data.status === 'ok' && data.started_at !== prevStartedAt) {
+                location.reload();
+                return;
+            }
+        } catch (_) {}
+    }
+    location.reload();
+}
+
+async function _currentStartedAt() {
+    try {
+        const data = await (await fetch('/api/status?_=' + Date.now(), { cache: 'no-store' })).json();
+        return data.started_at;
+    } catch (_) { return null; }
+}
+
+async function doSystemUpdate(event) {
+    if (!(await _confirmUpdate())) return;
+    const btn = event && (event.currentTarget || event.target);
+    if (btn) btn.disabled = true;
+    const prev = await _currentStartedAt();
+    const resp = await api('POST', '/api/agentbase/system/update', {});
+    if (!resp || !resp.ok) {
+        toast((resp && resp.error) || t('update.failed'));
+        if (btn) btn.disabled = false;
+        return;
+    }
+    await _waitForRestartAndReload(prev);
+}
+
+async function doSystemRestart(event) {
+    if (!confirm(t('system.restart') + '?')) return;
+    const btn = event && (event.currentTarget || event.target);
+    if (btn) btn.disabled = true;
+    const prev = await _currentStartedAt();
+    const resp = await api('POST', '/api/agentbase/system/restart', {});
+    if (!resp) { if (btn) btn.disabled = false; return; }
+    await _waitForRestartAndReload(prev);
+}
+
+// ═════════════════════ 设置页渲染器表 ═════════════════════
+const SETTINGS_RENDERERS = {
+    home: renderSettingsHome,
+    models: renderSettingsModels,
+    'agent-behavior': renderSettingsAgentBehavior,
+    workspaces: renderSettingsWorkspaces,
+    agent: renderSettingsAgent,
+    business: renderSettingsBusiness,
+    skills: renderSettingsSkills,
+    files: renderSettingsFiles,
+    system: renderSettingsSystem,
+    developer: renderSettingsDeveloper,
+};
+
+// ═════════════════════ 初始化 ═════════════════════
+async function init() {
     initLang();
     await loadBranding();
-
-    // 检测是否刚完成系统升级（页面 reload 后显示 toast）
-    try {
-        if (sessionStorage.getItem('_agentbase_upgrade_done')) {
-            sessionStorage.removeItem('_agentbase_upgrade_done');
-            setTimeout(() => toast('✅ 系统更新完成！'), 500);
-        }
-    } catch(_) {}
-
-    // 许可证状态检查
+    applyStaticCopy();
     loadLicenseStatus();
 
-    try {
-        await loadCompanies();
-    } catch(e) {
-        console.error('Init loadCompanies failed:', e);
-    }
-    const savedCid = loadSavedCid();
-    if (savedCid && workspaces.find(c => c.id === savedCid)) {
-        currentCompanyId = savedCid;
+    try { await loadWorkspaces(); } catch (_) {}
+
+    const saved = loadSavedCid();
+    if (saved && workspaces.find(function(w) { return w.id === saved; })) {
+        currentCompanyId = saved;
     } else if (workspaces.length === 1) {
         currentCompanyId = workspaces[0].id;
     }
+    saveState();
 
-    // 检测重启前保存的浏览状态（避免 hard reload 丢失阅读位置）
-    const reloadState = _restoreReloadState();
+    window.addEventListener('hashchange', function() {
+        showRoute(parseHashRoute(location.hash));
+    });
 
-    if (currentCompanyId) {
-        saveState();
-        const sel = $('workspace-select');
-        if (sel) sel.value = currentCompanyId;
-        // 首个公司 + 引导未完成 → 显示新手引导
-        if (workspaces.length === 1 && !isOnboardingCompleted()) {
-            showOnboardingGuide();
-            startCronPolling();
-            startVersionCheck();
-            return;
-        }
-        // 恢复之前的视图或默认打开今日简报
-        const restoreView = reloadState?.view || 'chat';
-        const restoreCtx = reloadState?.chatCtx || 'general';
-        const restoreName = reloadState?.chatName || '对话';
-        navToView(restoreView, restoreCtx, restoreName);
-        // 恢复滚动位置（等 DOM 渲染完成后）
-        if (reloadState?.scrollY > 0) {
-            setTimeout(() => { window.scrollTo({ top: reloadState.scrollY, behavior: 'instant' }); }, 200);
-        }
-        startCronPolling();
-        startVersionCheck();
-    } else {
-        renderNoCompanyPage();
-    }
-});
-
-// 页面关闭时清理轮询
-window.addEventListener('beforeunload', () => { stopCronPolling(); stopVersionCheck(); });
-
-function renderNoCompanyPage() {
-    // 清除视图缓存
-    for (const key in viewCache) {
-        viewCache[key].element.remove();
-        delete viewCache[key];
-    }
-    $('main-content').innerHTML = `<div class="empty-state"><div class="empty-icon">🏢</div><h2>正在准备工作区</h2><p>首次启动会自动创建默认工作区；若长时间没有出现，可手动创建。</p><button onclick="showAddCompanyModal()">创建工作区</button></div>`;
+    const route = parseHashRoute(location.hash || '#/settings');
+    if (!location.hash) location.hash = '#/settings';
+    showRoute(route);
 }
+
+document.addEventListener('DOMContentLoaded', init);
