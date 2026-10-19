@@ -1,4 +1,4 @@
-name: Release Build (Mac)
+name: Release Build
 
 on:
   push:
@@ -11,101 +11,112 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── macOS (pywebview → .app.zip) ──
-          - os: macos-latest
-            setup-cmd: |
-              pip install -e ".[desktop]"
-              pip install pyinstaller>=6.0
-            spec-path: desktop-mac.spec
-            artifact-glob: dist/TradeWin-*.zip
-            asset-suffix: "-macOS.zip"
-            post-build: |
-              cd dist
-              zip -r "TradeWin-${VER}-macOS.zip" "TradeWin.app"
-              rm -rf "TradeWin.app"
-
+          - name: macOS
+            os: macos-latest
+            spec: desktop-mac.spec
+            package: macos
+          - name: Windows
+            os: windows-latest
+            spec: desktop-windows.spec
+            package: windows
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
-      - run: python -m pip install --upgrade pip
+      - name: Upgrade pip
+        shell: bash
+        run: python -m pip install --upgrade pip
 
-      # 安装依赖
       - name: Install dependencies
         shell: bash
-        run: ${{ matrix.setup-cmd }}
+        run: |
+          # 与 install.sh 一致：Hermes 以 vendor/ 源码分发，不 pip 安装 hermes-agent
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-hermes.txt
+          python -m pip install "pyinstaller>=6.0"
+          python -m pip install -e . --no-deps
 
-      # Hermes（失败不阻断）
-      - name: Install Hermes Agent
-        run: pip install hermes-agent
-        continue-on-error: true
-
-      # 清理旧构建
       - name: Clean old builds
         shell: bash
         run: rm -rf build dist
 
-      # PyInstaller
       - name: Build with PyInstaller
-        run: pyinstaller --clean --noconfirm ${{ matrix.spec-path }}
+        shell: bash
+        run: python -m PyInstaller --clean --noconfirm ${{ matrix.spec }}
 
-      # 提取版本号
-      - name: Get version
+      - name: Resolve version
         id: version
         shell: bash
         run: |
-          TAG="${{ github.ref_name }}"
-          VER="${TAG#v}"
-          echo "ver=$VER" >> $GITHUB_OUTPUT
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == v* ]]; then
+            VER="${TAG#v}"
+          else
+            VER="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          fi
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          echo "version=$VER"
 
-      # 后处理（macOS 打包 .zip）
-      - name: Post-build
-        if: matrix.post-build != ''
+      - name: Package macOS
+        if: matrix.package == 'macos'
         shell: bash
         env:
           VER: ${{ steps.version.outputs.ver }}
-        run: ${{ matrix.post-build }}
+        run: |
+          cd dist
+          ARCH="$(uname -m)"   # arm64 / x86_64 —— 产物按架构区分
+          zip -r "AgentBase-${VER}-macOS-${ARCH}.zip" "AgentBase.app"
+          rm -rf "AgentBase.app"
 
-      # Artifact
+      - name: Package Windows
+        if: matrix.package == 'windows'
+        shell: bash
+        env:
+          VER: ${{ steps.version.outputs.ver }}
+        run: |
+          cd dist
+          mv "AgentBase.exe" "AgentBase-${VER}-windows-x64.exe"
+
+      - name: Verify artifact
+        shell: bash
+        env:
+          VER: ${{ steps.version.outputs.ver }}
+        run: |
+          if [ "${{ matrix.package }}" = "macos" ]; then
+            f="$(ls dist/AgentBase-${VER}-macOS-*.zip)"
+          else
+            f="dist/AgentBase-${VER}-windows-x64.exe"
+          fi
+          [ -s "$f" ] || { echo "::error::产物缺失或为空：$f"; exit 1; }
+          du -h "$f"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: TradeWin-${{ matrix.os }}
-          path: ${{ matrix.artifact-glob }}
+          name: AgentBase-${{ matrix.package }}
+          path: |
+            dist/AgentBase-*.zip
+            dist/AgentBase-*.exe
           retention-days: 30
 
-      # 验证
-      - name: Verify artifact
-        shell: bash
-        run: |
-          for f in ${{ matrix.artifact-glob }}; do
-            if [ -f "$f" ]; then
-              SIZE=$(du -h "$f" | cut -f1)
-              echo "✓ $f ($SIZE)"
-            elif [ -d "$f" ]; then
-              echo "✓ $f (directory)"
-            else
-              echo "::warning::Expected artifact not found: $f"
-            fi
-          done
-
-      # 附加到 Release
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact-glob }}
+          files: |
+            dist/AgentBase-*.zip
+            dist/AgentBase-*.exe
           generate_release_notes: true
           draft: false
           prerelease: false
