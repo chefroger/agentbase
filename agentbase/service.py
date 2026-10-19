@@ -50,11 +50,9 @@ def read_pid() -> int | None:
 
 
 def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+    from agentbase.process import pid_alive
+
+    return pid_alive(pid)
 
 
 # ── 停止 / 退出 ──────────────────────────────────────────────────────────────

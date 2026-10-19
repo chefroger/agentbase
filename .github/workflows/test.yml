@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: pip install ruff
       - name: Python syntax check
         run: |
@@ -29,7 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        # 产品只支持 Python 3.14（install.sh 精确校验；Hermes 只发 3.14 依赖集）
+        python-version: ["3.14"]
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -43,11 +44,10 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
+          # 与用户安装路径一致：用仓库的 requirements 文件，避免 CI 依赖清单漂移
+          pip install -r requirements.txt
+          pip install -r requirements-hermes.txt
           pip install pytest pytest-asyncio httpx
-          pip install fastapi "uvicorn[standard]" pydantic pyyaml packaging python-multipart
-          pip install pymupdf openpyxl python-docx python-pptx xlrd beautifulsoup4
-          pip install cryptography psutil dnspython
-          pip install openai==2.24.0 anthropic==0.87.0
           pip install -e . --no-deps
 
       - name: Run tests

@@ -277,11 +277,9 @@ def _service_pid() -> int | None:
 
 
 def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+    from agentbase.process import pid_alive
+
+    return pid_alive(pid)
 
 
 def _start_service(source: UpdateSource, cmd: list[str] | None = None) -> bool:

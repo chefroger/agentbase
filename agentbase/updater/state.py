@@ -122,10 +122,6 @@ def lock_holder_alive() -> bool:
         pid = int(lock_path().read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return False
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+    from agentbase.process import pid_alive
+
+    return pid_alive(pid)
