@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "vendor" / "hermes"))
 
@@ -86,12 +88,23 @@ def main() -> int:
     # ── 3. MCP ──────────────────────────────────────────────────────────
     server_py = home / "demo_mcp.py"
     server_py.write_text(MCP_SERVER, encoding="utf-8")
+    # 用 yaml.safe_dump 而不是手拼：Windows 路径里的反斜杠在双引号
+    # scalar 里会被当成转义序列（\U 等），手拼必炸。
     (home / "config.yaml").write_text(
-        "plugins:\n  enabled:\n    - demo-plugin\n"
-        "mcp_servers:\n  demo:\n"
-        f"    command: {sys.executable}\n"
-        f"    args: [\"{server_py}\"]\n"
-        "    enabled: true\n",
+        yaml.safe_dump(
+            {
+                "plugins": {"enabled": ["demo-plugin"]},
+                "mcp_servers": {
+                    "demo": {
+                        "command": sys.executable,
+                        "args": [str(server_py)],
+                        "enabled": True,
+                    }
+                },
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
         encoding="utf-8",
     )
 
