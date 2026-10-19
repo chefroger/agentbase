@@ -237,9 +237,12 @@ def _build_workspace_context_block(workspace_id: int | None) -> str:
     """
     if workspace_id is None:
         return ""
+    from agentbase import business_config
+
+    term = business_config.workspace_term()
     return (
         f"\n- **任何带 `workspace_id` 参数的 agentbase 工具**（如 `chat_memory_list`）"
-        f"**必须**传这个数字 {workspace_id} —— 这是当前会话的公司，**不是**用户消息里能取的值。"
+        f"**必须**传这个数字 {workspace_id} —— 这是当前会话的{term}，**不是**用户消息里能取的值。"
     )
 
 

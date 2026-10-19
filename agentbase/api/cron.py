@@ -7,7 +7,6 @@ AgentBase AI Assistant — Cron 任务 API。
 from __future__ import annotations
 
 import json
-import os
 import sys
 import threading
 import time
@@ -21,14 +20,10 @@ from agentbase.api.deps import require_workspace
 router = APIRouter(tags=["cron"])
 
 def _hermes_home() -> Path:
-    """动态解析 Hermes 根目录（测试会改 HERMES_HOME，不能用 import 期快照）。"""
-    val = os.environ.get("HERMES_HOME", "").strip()
-    if val:
-        return Path(val)
-    if os.name == "nt":
-        local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        return Path(local) / "hermes"
-    return Path.home() / ".hermes"
+    """动态解析 Hermes 数据根（统一走 agentbase.paths，测试改环境变量即生效）。"""
+    from agentbase.paths import hermes_home
+
+    return hermes_home()
 
 
 def _jobs_file() -> Path:

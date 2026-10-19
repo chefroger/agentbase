@@ -21,19 +21,10 @@ from pathlib import Path
 
 
 def _get_hermes_home() -> Path:
-    """解析 Hermes 安装根目录（HERMES_HOME 环境变量 → 平台默认路径）。
+    """解析随附 Hermes 的数据根（统一走 agentbase.paths，永不回退 ~/.hermes）。"""
+    from agentbase.paths import hermes_home
 
-    镜像 hermes_constants.get_hermes_home() 实现，避免 import 循环依赖。
-    """
-    val = os.environ.get("HERMES_HOME", "").strip()
-    if val:
-        return Path(val)  # 显式设置了 HERMES_HOME，直接使用
-    if os.name == "nt":
-        _local = os.environ.get(
-            "LOCALAPPDATA", str(Path.home() / "AppData" / "Local")
-        )
-        return Path(_local) / "hermes"
-    return Path.home() / ".hermes"
+    return hermes_home()
 
 
 def get_agent_home() -> Path:
@@ -184,8 +175,8 @@ def install_skills(progress_callback=None) -> None:
 
     处理流程：
       1. 查找包的 skills 源目录（含 PyInstaller _MEIPASS 支持）
-      2. 复制所有 skill 到 ~/.hermes/skills/
-      3. 复制 .agentbase-template/ 到 ~/.agentbase/
+      2. 复制所有 skill 到 $HERMES_HOME/skills/（默认即 $AGENT_HOME/skills/）
+      3. 复制 .agentbase-template/ 到 $AGENT_HOME/
 
     Raises:
         SystemExit(1): 找不到 skills 目录或安装失败时

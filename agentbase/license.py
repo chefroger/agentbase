@@ -31,14 +31,10 @@ _PUBLIC_KEY_BYTES = bytes.fromhex(
 
 
 def _resolve_hermes_home() -> Path:
-    """解析 Hermes 根目录（跨平台）。"""
-    val = os.environ.get("HERMES_HOME", "").strip()
-    if val:
-        return Path(val)
-    if os.name == "nt":
-        local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-        return Path(local) / "hermes"
-    return Path.home() / ".hermes"
+    """解析 Hermes 数据根（统一走 agentbase.paths，永不回退 ~/.hermes）。"""
+    from agentbase.paths import hermes_home
+
+    return hermes_home()
 
 
 def _load_private_key():
@@ -514,7 +510,7 @@ def _encode_activation_code(request_code: str, expires_at: str) -> str:
     private_key = _load_private_key()
     if private_key is None:
         raise ValueError(
-            "私钥未找到。请将私钥保存为 ~/.hermes/license_private_key.pem "
+            "私钥未找到。请将私钥保存为 $AGENT_HOME/license_private_key.pem "
             "或设置 AGENTBASE_LICENSE_PRIVATE_KEY 环境变量。"
         )
 

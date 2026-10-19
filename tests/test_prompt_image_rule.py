@@ -174,5 +174,5 @@ class TestImageRuleReachesModel:
         prompt, _ = self._build(workspace_env, "你好")
 
         assert "# Disclaimer" in prompt, "前置条件：基础块确实在"
-        assert "当前工作公司" in prompt, "前置条件：身份文本确实在"
+        assert "当前工作区" in prompt, "前置条件：身份文本确实在"
         assert IMAGE_BLOCK_HEADER in prompt, "身份文本不得顶替图片铁律"

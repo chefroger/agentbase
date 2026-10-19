@@ -559,12 +559,15 @@ def build_query(
                 return s[:max_len]
             name = _sanitize_identity(co['name'])
             slug = _sanitize_identity(co.get('slug', ''))
+            from agentbase import business_config as _business_config
+
+            _term = _business_config.workspace_term()
             system_prompt += (
-                f"\n\n## 当前工作公司\n"
-                f"- 公司名称：「{name}」\n"
-                f"- 公司 ID：{co['id']}\n"
+                f"\n\n## 当前{_term}\n"
+                f"- {_term}名称：「{name}」\n"
+                f"- {_term} ID：{co['id']}\n"
                 f"- Slug：「{slug}」\n\n"
-                "**所有数据操作（记忆读取、客户查询、文档搜索）必须限定在上述公司范围内。**"
+                f"**所有数据操作（记忆读取、文件搜索）必须限定在上述{_term}范围内。**"
                 # 紧跟其后**强绑定**"带 workspace_id 参数的 agentbase 工具必须传这个数字"——
                 # 不然 LLM 看到 ID 也未必会联想到工具调用。文案来源：
                 # agentbase/prompts._build_workspace_context_block，**共用同一段文案**避免漂移。

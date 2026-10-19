@@ -310,7 +310,7 @@ class TestPromptRulesReachModel:
 
         assert "# Disclaimer" in prompt
         assert "# Language Policy" in prompt
-        assert "当前工作公司" in prompt, "公司身份/公司信息必须一起注入"
+        assert "当前工作区" in prompt, "工作区身份/信息必须一起注入"
 
     def test_document_task_gets_full_guide(self, env, demo_pack):
         """文档类任务才注入 FULL（含文档生成指南）。"""

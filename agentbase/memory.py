@@ -11,6 +11,7 @@ AgentBase — 记忆桥接层（Hindsight 集成）。
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -37,15 +38,8 @@ def is_available() -> bool:
         )
         # 如果环境变量中没有 API 密钥，则尝试从配置文件中读取
         if not has_key:
-            from pathlib import Path
-            _hermes_env = os.environ.get("HERMES_HOME", "")
-            if _hermes_env:
-                _hermes_root = Path(_hermes_env)
-            elif os.name == "nt":
-                _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-                _hermes_root = Path(_local) / "hermes"
-            else:
-                _hermes_root = Path.home() / ".hermes"
+            from agentbase.paths import hermes_home
+            _hermes_root = hermes_home()
             config_paths = [
                 _hermes_root / "hindsight" / "config.json",
                 Path.home() / ".hindsight" / "config.json",
@@ -277,22 +271,16 @@ def retain_to_hermes_memory(
     customer_name: str = "",
     limit: int = 200,
 ) -> bool:
-    """将对话摘要追加到 ~/.hermes/memories/MEMORY.md。
+    """将对话摘要追加到 $HERMES_HOME/memories/MEMORY.md（默认即 $AGENT_HOME）。
 
     这样可以让 Hermes Agent 的原生记忆系统学习到业务对话，
     而无需任何 API 密钥。
     """
     import datetime as _dt
-    from pathlib import Path as _Path
 
-    _hermes_root = _Path(os.environ.get("HERMES_HOME", ""))
-    if not _hermes_root.is_absolute() or not str(_hermes_root).strip():
-        # 跨平台解析 Hermes 根目录
-        if os.name == "nt":
-            _local = os.environ.get("LOCALAPPDATA", str(_Path.home() / "AppData" / "Local"))
-            _hermes_root = _Path(_local) / "hermes"
-        else:
-            _hermes_root = _Path.home() / ".hermes"
+    from agentbase.paths import hermes_home
+
+    _hermes_root = hermes_home()
     MEMORY_FILE = _hermes_root / "memories" / "MEMORY.md"
     LOCK_FILE = _hermes_root / "memories" / "MEMORY.md.lock"
 
@@ -305,9 +293,11 @@ def retain_to_hermes_memory(
     r_preview = (response or "").strip()[:limit]
 
     context_parts = []
-    # 如果提供了公司名称，添加到上下文片段中
+    # 工作区称呼由 business.yaml 决定（公司/项目/客户/门店…），代码层不写死
     if workspace_name:
-        context_parts.append("公司: " + workspace_name)
+        from agentbase import business_config
+
+        context_parts.append(business_config.workspace_term() + ": " + workspace_name)
     # 如果提供了资料库名称，添加到上下文片段中
     if library_name:
         context_parts.append("资料库: " + library_name)
@@ -338,14 +328,6 @@ def retain_to_hermes_memory(
         if os.name != "nt":
             import fcntl as _fcntl_module
 
-        _hermes_env = os.environ.get("HERMES_HOME", "")
-        if _hermes_env:
-            _hermes_root = _Path(_hermes_env)
-        elif os.name == "nt":
-            _local = os.environ.get("LOCALAPPDATA", str(_Path.home() / "AppData" / "Local"))
-            _hermes_root = _Path(_local) / "hermes"
-        else:
-            _hermes_root = _Path.home() / ".hermes"
         lock_dir = _hermes_root / "memories"
         lock_dir.mkdir(parents=True, exist_ok=True)
         # 防御符号链接攻击：如果锁文件已是 symlink，拒绝跟随
