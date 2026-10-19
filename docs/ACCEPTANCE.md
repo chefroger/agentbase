@@ -56,6 +56,13 @@
 - `--stop` 正常停止；无 `ModuleNotFoundError`
 - 未签名（PyInstaller 提示需手动签名）
 
+**2026-10-19 重建（纯底座打包链路）**
+
+- `release.yml` 从 Trade 时代（Python 3.12 / 只打 macOS / `pip install hermes-agent` / TradeWin 命名）改为：Python 3.14、macOS + Windows 矩阵、只用仓库 `requirements*.txt` + vendored Hermes、产物按版本与架构命名。
+- 本机 x86_64 重建：`AgentBase.app` **112MB**；`/api/status` 200（`hermes_usable: true`）、`/agentbase` 200、`--stop` 正常退出；zip **110MB**。
+- CI 手动触发（run 39220677177）：macOS arm64 与 Windows x64 两个构建 job 均通过，产物 `AgentBase-0.6.8-macOS-<arch>.zip` / `AgentBase-0.6.8-windows-x64.exe`。
+- 三份 spec 的 hiddenimports 补入 `agentbase.paths` / `agentbase.process` / `agentbase.updater.*`。
+
 **打包要点（踩坑记录）**
 
 - `vendor/hermes` 以 **datas 源码目录**分发；`bootstrap._adjust_sys_path()` 在 frozen 下把 `_MEIPASS/vendor/hermes` 加入 `sys.path`。只靠 PyInstaller 静态分析会漏 Hermes 的惰性导入。
@@ -132,8 +139,8 @@
 
 1. 真·全新机器安装复跑（Windows + macOS）；`install.ps1` 语法验证。
 2. 文件上传 → 解析 → Agent 读取全链路真机验证（需要模型 Key）。
-3. **Windows 单文件产物未构建**：`desktop-windows.spec` 已就绪，需在 Windows 机器上跑 `scripts/build.ps1` 实测。
-4. **macOS 产物仅 x86_64**：本机 Python 为 x86_64；Apple Silicon 需在 arm64 解释器下另构建（任务书允许分别构建）。
+3. **Windows 产物已由 CI 产出，待真机冒烟**：run 39220677177 产出 `AgentBase-0.6.8-windows-x64.exe`；需在 Win10/11 上验证双击 → 服务启动 → UI → 聊天/自启。
+4. **macOS 双架构**：本机 Intel（x86_64）已实测；arm64 由 release CI 产出，未在真机冒烟。
 5. **代码签名未做**：未签名的常驻/自启程序会触发杀软与 Gatekeeper 提示（任务书已列为产品决策）。
 6. **.app 分发包的自启未接线**：当前自启由 install.sh/install.ps1（源码安装）注册；若只分发 .app，需要首次启动时征得用户同意后注册 launchd。
 7. `COMPATIBILITY.md` 保留为 Hermes 兼容历史记录（含旧项目名称，属溯源材料）。

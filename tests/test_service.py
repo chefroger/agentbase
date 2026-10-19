@@ -258,3 +258,18 @@ class TestSpecHygiene:
                           "webview.platforms", "ai.smarttrade.desktop"):
                 assert stale not in text, f"{name} 仍引用已删除/已改名的 {stale}"
             assert "vendor/hermes" in text, f"{name} 未把 vendor/hermes 打进产物"
+
+    def test_specs_include_lazily_imported_modules(self):
+        """这些模块只在函数内导入，PyInstaller 可能漏掉，必须显式写进 hiddenimports。"""
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        required = (
+            "agentbase.paths", "agentbase.process",
+            "agentbase.updater", "agentbase.updater.state",
+            "agentbase.updater.engine", "agentbase.updater.sources",
+        )
+        for name in ("desktop-mac.spec", "desktop-windows.spec", "desktop-linux.spec"):
+            text = (root / name).read_text(encoding="utf-8")
+            missing = [m for m in required if f"'{m}'" not in text]
+            assert not missing, f"{name} hiddenimports 缺少：{missing}"
