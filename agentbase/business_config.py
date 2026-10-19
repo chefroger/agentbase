@@ -45,9 +45,23 @@ DEFAULT_WORK_DIRS: list[dict] = [
     {"name": "documents", "description": "业务文档"},
 ]
 
+# workspace 的**语义**（机制仍在数据层）：称呼、单/多、是否默认创建、自定义字段。
+# 默认值 = AgentBase 之前的单业务行为，保证向后兼容。
+DEFAULT_WORKSPACES: dict[str, Any] = {
+    "term": "工作区",
+    "term_en": "Workspace",
+    "mode": "single",          # single | multi
+    "create_default": True,
+    "fields": [],              # [{key, label, type: "text"}]
+}
+
+# 业务前端模块挂载（本次只预留 schema，加载器后续实现）。
+DEFAULT_UI: dict[str, Any] = {"modules": []}
+
 DEFAULTS: dict[str, Any] = {
     "business_name": "AgentBase",
     "tagline": "",
+    "usage_direction": "general",
     "skill_pack": "",
     "onboarding_fields": DEFAULT_ONBOARDING_FIELDS,
     "branding": {
@@ -57,6 +71,8 @@ DEFAULTS: dict[str, Any] = {
     },
     "work_dirs": DEFAULT_WORK_DIRS,
     "prompt_overrides": {"system": ""},
+    "workspaces": DEFAULT_WORKSPACES,
+    "ui": DEFAULT_UI,
 }
 
 
@@ -101,6 +117,19 @@ def load() -> dict:
         # 嵌套字段单独合并，避免文件里只写 branding.title 就丢掉其它默认值
         branding = {**DEFAULTS["branding"], **(merged.get("branding") or {})}
         merged["branding"] = branding
+
+        workspaces = {**DEFAULT_WORKSPACES, **(merged.get("workspaces") or {})}
+        if workspaces.get("mode") not in ("single", "multi"):
+            workspaces["mode"] = DEFAULT_WORKSPACES["mode"]
+        if not isinstance(workspaces.get("fields"), list):
+            workspaces["fields"] = []
+        merged["workspaces"] = workspaces
+
+        ui = {**DEFAULT_UI, **(merged.get("ui") or {})}
+        if not isinstance(ui.get("modules"), list):
+            ui["modules"] = []
+        merged["ui"] = ui
+
         for name in ("onboarding_fields", "work_dirs"):
             value = merged.get(name)
             if not isinstance(value, list) or not value:
@@ -154,6 +183,80 @@ def prompt_override_system() -> str:
     overrides = load().get("prompt_overrides") or {}
     value = overrides.get("system", "")
     return str(value or "").strip()
+
+
+def usage_direction() -> str:
+    """当前使用方向 id（默认 general）。"""
+    return str(load().get("usage_direction") or "general").strip() or "general"
+
+
+def workspaces_config() -> dict:
+    """workspace 语义配置（term / mode / create_default / fields）。"""
+    return dict(load()["workspaces"])
+
+
+def ui_config() -> dict:
+    """业务前端模块配置（本次只预留，加载器后续实现）。"""
+    return dict(load()["ui"])
+
+
+def workspace_term(lang: str = "zh") -> str:
+    """用户可见的 workspace 称呼（公司/项目/客户/门店…）。"""
+    cfg = load()["workspaces"]
+    if lang == "en":
+        return str(cfg.get("term_en") or cfg.get("term") or "Workspace")
+    return str(cfg.get("term") or "工作区")
+
+
+# ── 写入 ─────────────────────────────────────────────────────────────────────
+# 独立的写锁：与读缓存锁分开，避免 write_updates → reload() 的锁重入。
+
+_WRITE_LOCK = threading.Lock()
+
+
+def _deep_merge(base: dict, updates: dict) -> dict:
+    result = dict(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def write_updates(updates: dict[str, Any]) -> dict:
+    """原子更新 business.yaml 中的指定字段，保留未知顶层键。
+
+    - 嵌套 dict 合并，list 整体替换
+    - 临时文件 + os.replace 原子写
+    - 写后 reload()（刷新工作目录分类等）
+    - 已知限制：YAML 重写会丢失文件里的手写注释
+    """
+    if not isinstance(updates, dict):
+        raise TypeError("updates must be a dict")
+    import yaml
+
+    path = config_path()
+    with _WRITE_LOCK:
+        raw: dict = {}
+        if path.is_file():
+            try:
+                loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+                raw = loaded if isinstance(loaded, dict) else {}
+            except Exception as exc:
+                # 解析失败时拒绝覆盖，避免把用户手写文件冲掉
+                raise ValueError(f"business.yaml 解析失败，拒绝覆盖：{exc}") from exc
+
+        merged = _deep_merge(raw, updates)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(
+            yaml.safe_dump(merged, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+
+    return reload()
 
 
 def ensure_business_config(repo_root: Path | None = None) -> Path:

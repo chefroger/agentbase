@@ -47,11 +47,22 @@ def _db_get_one(sql: str, args: tuple = ()) -> tuple | None:
         conn.close()
 
 
+def _custom_fields_from_extra(extra1) -> dict:
+    try:
+        data = _json.loads(extra1 or "{}")
+    except (TypeError, ValueError):
+        return {}
+    fields = data.get("custom_fields") if isinstance(data, dict) else None
+    return dict(fields) if isinstance(fields, dict) else {}
+
+
 def _row_to_workspace(row) -> dict:
     """将 workspaces 表的数据库行转换为业务字典。
 
-    所有字段一一映射，is_active 转为 Python bool 类型。
+    所有字段一一映射，is_active 转为 Python bool 类型；
+    extra1 里的自定义字段以 custom_fields 返回。
     """
+    keys = row.keys()
     return {
         "id": row["id"],
         "name": row["name"],
@@ -62,6 +73,7 @@ def _row_to_workspace(row) -> dict:
         "contact_email": row["contact_email"],
         "address": row["address"],
         "is_active": bool(row["is_active"]),
+        "custom_fields": _custom_fields_from_extra(row["extra1"]) if "extra1" in keys else {},
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -96,12 +108,12 @@ def list_all(include_inactive: bool = False) -> list[dict]:
     try:
         if include_inactive:
             # 包含所有公司（管理员视图）
-            sql = "SELECT id, name, slug, is_active FROM workspaces ORDER BY name"
+            sql = "SELECT id, name, slug, is_active, extra1 FROM workspaces ORDER BY name"
             rows = conn.execute(sql).fetchall()
         else:
             # 默认仅返回活跃公司（用户视图），软删除的公司不出现
             sql = (
-                "SELECT id, name, slug, is_active FROM workspaces "
+                "SELECT id, name, slug, is_active, extra1 FROM workspaces "
                 "WHERE is_active = 1 ORDER BY name"
             )
             rows = conn.execute(sql).fetchall()
@@ -111,6 +123,7 @@ def list_all(include_inactive: bool = False) -> list[dict]:
                 "name": r["name"],
                 "slug": r["slug"],
                 "is_active": bool(r["is_active"]),
+                "custom_fields": _custom_fields_from_extra(r["extra1"]),
             }
             for r in rows
         ]
@@ -158,6 +171,7 @@ def create(
     address: str = "",
     *,
     work_dir_name: str = "",
+    custom_fields: dict | None = None,
 ) -> dict:
     """创建新公司，同时创建 agentbase_workspaces 记录 + 桌面工作目录 + 文档库。
 
@@ -215,12 +229,14 @@ def create(
             name, slug, suggested_name=work_dir_name
         )
 
-        # 3) 写入 workspaces 表
+        # 3) 写入 workspaces 表（自定义字段存 extra1）
+        _custom = custom_fields if isinstance(custom_fields, dict) else {}
+        _extra_ws = _json.dumps({"custom_fields": _custom}, ensure_ascii=False)
         cursor = conn.execute(
             "INSERT INTO workspaces (name, slug, logo_url, website, "
-            "contact_name, contact_email, address) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (name, slug, logo_url, website, contact_name, contact_email, address),
+            "contact_name, contact_email, address, extra1) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, slug, logo_url, website, contact_name, contact_email, address, _extra_ws),
         )
         workspace_id = cursor.lastrowid
 
@@ -246,10 +262,18 @@ def create(
         # 不可见，会触发外键失败），所以 rollback 覆盖不到这一段，必须显式删掉，
         # 否则用户重试会立刻撞 `UNIQUE constraint failed: workspaces.slug`。
         if workspace_id is not None:
+            # 逐条兜住：业务表（如旧 libraries）可能已随剥离删除，
+            # 第一条失败不能挡住后面真正需要的补偿删除。
+            for _sql in (
+                "DELETE FROM libraries WHERE workspace_id = ?",
+                "DELETE FROM agentbase_workspaces WHERE workspace_id = ?",
+                "DELETE FROM workspaces WHERE id = ?",
+            ):
+                try:
+                    conn.execute(_sql, (workspace_id,))
+                except Exception:
+                    pass
             try:
-                conn.execute("DELETE FROM libraries WHERE workspace_id = ?", (workspace_id,))
-                conn.execute("DELETE FROM agentbase_workspaces WHERE workspace_id = ?", (workspace_id,))
-                conn.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
                 conn.commit()
             except Exception:
                 pass  # 补偿失败不掩盖原始异常
@@ -282,9 +306,11 @@ def update(
     contact_email: str | None = None,
     address: str | None = None,
     is_active: bool | None = None,
+    custom_fields: dict | None = None,
 ) -> dict | None:
     """更新公司字段。仅更新传入的非 None 字段（部分更新）。
 
+    `custom_fields` 传入时整体替换 workspaces.extra1 里的自定义字段。
     返回更新后的公司字典，公司不存在时返回 None。
     """
     conn = get_connection()
@@ -311,6 +337,20 @@ def update(
         if is_active is not None:
             fields.append("is_active = ?")
             vals.append(1 if is_active else 0)
+
+        if custom_fields is not None:
+            row = conn.execute(
+                "SELECT extra1 FROM workspaces WHERE id = ?", (workspace_id,)
+            ).fetchone()
+            try:
+                extra = _json.loads(row["extra1"] or "{}") if row else {}
+            except (TypeError, ValueError):
+                extra = {}
+            if not isinstance(extra, dict):
+                extra = {}
+            extra["custom_fields"] = dict(custom_fields)
+            fields.append("extra1 = ?")
+            vals.append(_json.dumps(extra, ensure_ascii=False))
 
         if fields:
             # 仅当有字段需要更新时才执行 SQL

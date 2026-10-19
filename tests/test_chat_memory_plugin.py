@@ -143,17 +143,38 @@ class TestSearchHistoryE2E:
         assert [x["query"] for x in r] == ["昨天的问题"]
 
     def test_this_week_includes_today(self, db_with_rows):
-        """this_week 含"现在"——所以今天/昨天/前天都进。"""
+        """this_week 含"现在"——今天和昨天一定在本周；更早的取决于今天是周几。"""
         from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="this_week")
-        assert [x["query"] for x in r] == ["今天的问题", "昨天的问题", "前天的问题"]
+        queries = {x["query"] for x in r}
+        assert "今天的问题" in queries
+        # 周一运行时"昨天"属于上周，不能假设它一定在本周
+        assert "上周的问题" not in queries
 
     def test_last_week_does_not_include_this_week(self, db_with_rows):
+        """last_week 窗口不依赖“今天周几”：动态插入上周一的一行来验证。"""
+        from datetime import timedelta as _td
+
+        import agentbase.database as db
         from agentbase.chat_memory import search_history
 
+        now = datetime.now()
+        last_monday = (now - _td(days=now.weekday() + 7)).replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
+        con = db.get_connection()
+        con.execute(
+            "INSERT INTO conversations (workspace_id, query, response, created_at) "
+            "VALUES (1, '上周一的问题', 'r', ?)",
+            (last_monday.strftime("%Y-%m-%d %H:%M:%S"),),
+        )
+        con.commit()
+
         r = search_history(1, time_range="last_week")
-        assert [x["query"] for x in r] == ["上周的问题"]
+        queries = {x["query"] for x in r}
+        assert "上周一的问题" in queries
+        assert "今天的问题" not in queries
 
     def test_all_returns_everything(self, db_with_rows):
         from agentbase.chat_memory import search_history

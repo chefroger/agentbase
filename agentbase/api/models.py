@@ -20,6 +20,9 @@ class WorkspaceCreate(BaseModel):
     contact_email: str = Field("", description="联系人邮箱")
     address: str = Field("", description="地址")
     work_dir_name: str = Field("", description="工作目录名称（目录存在时可用此改名）")
+    custom_fields: dict[str, str] = Field(
+        default_factory=dict, description="business.yaml workspaces.fields 定义的自定义字段值"
+    )
 
 
 class WorkspaceUpdate(BaseModel):
@@ -30,6 +33,9 @@ class WorkspaceUpdate(BaseModel):
     contact_email: str | None = Field(None, description="联系人邮箱")
     address: str | None = Field(None, description="地址")
     is_active: bool | None = Field(None, description="是否激活")
+    custom_fields: dict[str, str] | None = Field(
+        None, description="整体替换自定义字段值"
+    )
 
 
 class AgentIdentityUpdate(BaseModel):

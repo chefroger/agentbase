@@ -20,16 +20,29 @@ from agentbase.api.deps import require_workspace
 
 router = APIRouter(tags=["cron"])
 
-_hermes_val = os.environ.get("HERMES_HOME", "").strip()
-if _hermes_val:
-    _HERMES_HOME = Path(_hermes_val)
-elif os.name == "nt":
-    _local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
-    _HERMES_HOME = Path(_local) / "hermes"
-else:
-    _HERMES_HOME = Path.home() / ".hermes"
-_CRON_OUTPUT = _HERMES_HOME / "cron" / "output"
-_JOBS_FILE = _HERMES_HOME / "cron" / "jobs.json"
+def _hermes_home() -> Path:
+    """动态解析 Hermes 根目录（测试会改 HERMES_HOME，不能用 import 期快照）。"""
+    val = os.environ.get("HERMES_HOME", "").strip()
+    if val:
+        return Path(val)
+    if os.name == "nt":
+        local = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        return Path(local) / "hermes"
+    return Path.home() / ".hermes"
+
+
+def _jobs_file() -> Path:
+    return _hermes_home() / "cron" / "jobs.json"
+
+
+def _cron_output() -> Path:
+    return _hermes_home() / "cron" / "output"
+
+
+# 兼容旧引用（模块级快照仅用于展示；所有读写都走上面的动态函数）
+_HERMES_HOME = _hermes_home()
+_CRON_OUTPUT = _cron_output()
+_JOBS_FILE = _jobs_file()
 
 
 @router.get("/cron/today")
@@ -96,10 +109,10 @@ def get_today_cron(_cid: int = Depends(require_workspace)):
 
 def _load_active_jobs():
     """从 jobs.json 读取已激活的定时任务，提取 name 和 time。"""
-    if not _JOBS_FILE.is_file():
+    if not _jobs_file().is_file():
         return []
     try:
-        with open(_JOBS_FILE, encoding="utf-8") as f:
+        with open(_jobs_file(), encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
         return []
@@ -181,11 +194,11 @@ def get_active_jobs(_cid: int = Depends(require_workspace)):
     **机器级资源（无公司维度）**：与 get_today_cron 同理，jobs.json 里没有公司标识，
     因此**故意不使用 cid**，仅保留公司上下文校验与其它业务端点保持一致。
     """
-    if not _JOBS_FILE.is_file():
+    if not _jobs_file().is_file():
         return []
 
     try:
-        with open(_JOBS_FILE, encoding="utf-8") as f:
+        with open(_jobs_file(), encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
         return []
@@ -293,9 +306,9 @@ def api_update_skills(request: Request):
 
 
 def _find_cron_output(task_name: str, today: str) -> str | None:
-    if not _CRON_OUTPUT.is_dir():
+    if not _cron_output().is_dir():
         return None
-    for job_dir in sorted(_CRON_OUTPUT.iterdir(), reverse=True):
+    for job_dir in sorted(_cron_output().iterdir(), reverse=True):
         if not job_dir.is_dir():
             continue
         for output_file in sorted(job_dir.glob("*.md"), reverse=True):

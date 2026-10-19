@@ -44,18 +44,17 @@ def create_workspace(payload: WorkspaceCreate):
             contact_name=payload.contact_name, contact_email=payload.contact_email,
             address=payload.address,
             work_dir_name=payload.work_dir_name,
+            custom_fields=payload.custom_fields,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
-    # 自动写入默认 Agent 身份（如果尚未设置）
+    # 自动写入默认 Agent 身份（如果尚未设置）。
+    # 不写死行业字段：字段来自 business.yaml，未填写的如实标「未填写」。
     from agentbase.onboarding import _build_agent_identity
     existing = workspace_module.get_agent_identity(workspace["id"])
     if not existing:
-        default_identity = _build_agent_identity(
-            workspace["name"],
-            {"products": "各类工业产品", "differentiation": "源头工厂，性价比高", "target_region": "全球市场"},
-        )
+        default_identity = _build_agent_identity(workspace["name"], {})
         workspace_module.update_workspace_record(
             workspace_id=workspace["id"],
             agent_identity_md=default_identity,
@@ -92,6 +91,7 @@ def update_workspace(
         name=payload.name, logo_url=payload.logo_url, website=payload.website,
         contact_name=payload.contact_name, contact_email=payload.contact_email,
         address=payload.address, is_active=payload.is_active,
+        custom_fields=payload.custom_fields,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Workspace not found")
@@ -188,7 +188,11 @@ def update_workspace_agent_identity(
     payload: AgentIdentityUpdate,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """更新公司的 Agent 身份（写入 DB 缓存）。"""
+    """更新公司的 Agent 身份。
+
+    同时写 DB 与标准 identity 文件 —— 提示词解析是**文件优先**，
+    只写 DB 会导致 UI 改了身份但提示词仍是旧内容。
+    """
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="Cannot update another workspace's identity.")
     result = workspace_module.update_workspace_record(
@@ -196,4 +200,14 @@ def update_workspace_agent_identity(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    slug = workspace_module.slug_from_id(workspace_id)
+    if slug:
+        from agentbase.prompts import write_agent_identity
+
+        try:
+            write_agent_identity(slug, payload.agent_identity_md)
+        except OSError:
+            # 文件写失败不回滚 DB：至少 DB 里是新内容，下次启动会用它
+            pass
     return result

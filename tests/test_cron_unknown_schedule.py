@@ -34,6 +34,8 @@ def cron_env(monkeypatch, tmp_path):
 
     hermes = tmp_path / "hermes"
     (hermes / "cron" / "output").mkdir(parents=True)
+    # 读写现在走动态 _hermes_home()，必须用环境变量重定向
+    monkeypatch.setenv("HERMES_HOME", str(hermes))
     monkeypatch.setattr(cron, "_HERMES_HOME", hermes)
     monkeypatch.setattr(cron, "_CRON_OUTPUT", hermes / "cron" / "output")
     monkeypatch.setattr(cron, "_JOBS_FILE", hermes / "cron" / "jobs.json")
@@ -41,8 +43,9 @@ def cron_env(monkeypatch, tmp_path):
 
 
 def _write_jobs(cron, jobs):
-    cron._JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    cron._JOBS_FILE.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+    path = cron._jobs_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
 
 
 class TestUnknownScheduleFlagged:

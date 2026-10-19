@@ -26,6 +26,13 @@ def get_branding() -> dict:
         "logo": branding.get("logo") or "",
         "business_name": config.get("business_name") or "AgentBase",
         "tagline": config.get("tagline") or "",
+        "usage_direction": business_config.usage_direction(),
+        # workspace 的用户可见称呼（公司/项目/客户/门店…），由 business.yaml 定义
+        "workspaces": {
+            "term": business_config.workspace_term("zh"),
+            "term_en": business_config.workspace_term("en"),
+            "mode": business_config.workspaces_config().get("mode", "single"),
+        },
         # 前端上传弹窗要用的目录清单
         "work_dirs": business_config.work_dir_names(),
         # 通用 onboarding 表单字段（框架不含业务字段）

@@ -57,22 +57,8 @@ def _pack_name_from_manifest(src: Path) -> str:
 
 
 def _write_active_pack(value: str) -> None:
-    """更新 business.yaml 的 skill_pack（保留其它字段）。"""
-    import yaml
-
-    path = business_config.config_path()
-    data: dict = {}
-    if path.is_file():
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            data = {}
-    if not isinstance(data, dict):
-        data = {}
-    data["skill_pack"] = value
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    business_config.reload()
+    """更新 business.yaml 的 skill_pack（保留其它字段，统一走原子写入）。"""
+    business_config.write_updates({"skill_pack": value})
 
 
 def _reload_registry() -> int:

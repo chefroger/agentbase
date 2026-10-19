@@ -6,8 +6,24 @@
 business_name: "示例业务"
 tagline: "一句话介绍你的业务"
 
+# 使用方向（general / document-analysis / customer-research / custom）
+# 仅作为设置页的推荐依据，不会自动覆盖下面的配置。
+usage_direction: "general"
+
 # 业务 skill 包路径（相对仓库根，或绝对路径）。留空 = 不加载业务技能。
 skill_pack: ""
+
+# 工作区语义（机制在数据层，这里只定义"叫什么、单/多、是否默认创建"）
+workspaces:
+  term: "工作区"          # 用户可见称呼：工作区/公司/项目/客户/门店…
+  term_en: "Workspace"
+  mode: "single"          # single | multi
+  create_default: true    # single 时启动自动创建
+  fields: []              # 自定义字段：[{key: project_code, label: 项目编号, type: text}]
+
+# 业务前端模块（预留；底座本次不加载，后续由业务前端实现）
+ui:
+  modules: []
 
 # onboarding 表单字段（通用 onboarding 按此动态生成）
 onboarding_fields:

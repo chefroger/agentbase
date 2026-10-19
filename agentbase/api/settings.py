@@ -113,6 +113,56 @@ def get_settings() -> dict:
             "active_preset": moa_cfg.get("active_preset") or moa_cfg.get("default_preset") or "",
         },
         "work_dirs": business_config.work_dir_names(),
+        "agent_behavior": _agent_behavior(),
+        "extensions": _extensions(),
+    }
+
+
+def _agent_behavior() -> dict:
+    """Agent 行为状态（只读）：YOLO 与 approvals.deny 规则。"""
+    yolo = str(os.environ.get("HERMES_YOLO_MODE", "")).strip().lower() == "true"
+    deny: list = []
+    try:
+        from hermes_cli.config import load_config
+
+        cfg = load_config()
+        approvals = cfg.get("approvals") or {}
+        if isinstance(approvals, dict):
+            deny = list(approvals.get("deny") or [])
+    except Exception:
+        pass
+    return {"yolo": yolo, "approvals_deny": deny}
+
+
+def _extensions() -> dict:
+    """扩展状态（只读）：MCP servers、plugins、启用的 toolsets。"""
+    cfg: dict = {}
+    try:
+        from hermes_cli.config import load_config
+
+        cfg = load_config()
+    except Exception:
+        cfg = {}
+
+    mcp = cfg.get("mcp_servers") or {}
+    plugins = cfg.get("plugins") or {}
+    try:
+        from agentbase.helpers import resolve_enabled_toolsets
+
+        toolsets = list(resolve_enabled_toolsets())
+    except Exception:
+        toolsets = []
+
+    return {
+        "mcp_servers": [
+            {"name": name, "enabled": bool((value or {}).get("enabled", True))}
+            for name, value in (mcp.items() if isinstance(mcp, dict) else [])
+        ],
+        "plugins": {
+            "enabled": list(plugins.get("enabled") or []) if isinstance(plugins, dict) else [],
+            "disabled": list(plugins.get("disabled") or []) if isinstance(plugins, dict) else [],
+        },
+        "toolsets": toolsets,
     }
 
 

@@ -22,6 +22,7 @@ a = Analysis(
         (str(_PROJECT_ROOT / 'agentbase'), 'agentbase'),
         (str(_PROJECT_ROOT / 'static'), 'static'),
         (str(_PROJECT_ROOT / 'pyproject.toml'), '.'),
+        (str(_PROJECT_ROOT / 'docs'), 'docs'),
         (str(_PROJECT_ROOT / 'CHANGELOG.md'), '.'),
         # Vendored Hermes: 源码随包分发（MIT，见 vendor/hermes/LICENSE）
         (str(_PROJECT_ROOT / 'vendor' / 'hermes'), 'vendor/hermes'),
@@ -33,6 +34,7 @@ a = Analysis(
         'agentbase.api.onboarding', 'agentbase.api.license', 'agentbase.api.deps',
         'agentbase.api.settings', 'agentbase.api.packs', 'agentbase.api.files',
         'agentbase.api.branding',
+        'agentbase.api.business_config', 'agentbase.api.meta',
         'agentbase.database', 'agentbase.workspace', 'agentbase.workspace.crud',
         'agentbase.workspace.workdir',
         'agentbase.helpers', 'agentbase.prompts', 'agentbase.prompt',
@@ -40,6 +42,7 @@ a = Analysis(
         'agentbase.chat_memory', 'agentbase.memory', 'agentbase.license',
         'agentbase.onboarding', 'agentbase.bootstrap', 'agentbase.cli',
         'agentbase.service', 'agentbase.opener', 'agentbase.pdf_vision',
+        'agentbase.usage_directions',
         'agentbase.post_install', 'agentbase.post_install.skills',
         'agentbase.post_install.win_setup',
         'openai', 'anthropic',  # LLM Provider SDKs — required, not optional

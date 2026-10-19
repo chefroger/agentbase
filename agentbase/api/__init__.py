@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
+from agentbase.api.business_config import router as business_config_router
 from agentbase.api.chat import router as chat_router
 from agentbase.api.conversations import router as conversations_router
 from agentbase.api.cron import router as cron_router
 from agentbase.api.deps import opt_workspace, require_session, require_workspace
 from agentbase.api.files import router as files_router
 from agentbase.api.memory import router as memory_router
+from agentbase.api.meta import router as meta_router
 from agentbase.api.onboarding import router as onboarding_router
 from agentbase.api.packs import router as packs_router
 from agentbase.api.settings import router as settings_router
@@ -78,6 +80,8 @@ router.include_router(cron_router)
 router.include_router(files_router)
 router.include_router(settings_router)
 router.include_router(packs_router)
+router.include_router(business_config_router)
+router.include_router(meta_router)
 
 # 便捷导出
 __all__ = [

@@ -37,15 +37,23 @@ from agentbase.workspace.workdir import (
     _validate_slug,
 )
 
-def ensure_default_workspace() -> dict | None:
-    """首次启动自动创建唯一工作区（框架默认单业务，不向用户暴露「公司」概念）。
 
+def ensure_default_workspace() -> dict | None:
+    """按 business.yaml 的 workspace 语义决定是否自动创建默认工作区。
+
+    - `workspaces.mode=single` 且 `create_default=true` 才创建
+    - `mode=multi` 或 `create_default=false` → 不创建，交给使用方管理
     - 已有活跃工作区 → 什么都不做（幂等）
-    - 没有 → 用 `business.yaml` 的 `business_name` 创建
-    - 创建失败（如桌面不可写）→ 返回 None，不阻断服务启动；前端仍提供兜底入口
+    - 创建失败（如桌面不可写）→ 返回 None，不阻断服务启动
     """
     from agentbase import business_config
     from agentbase.database import get_connection
+
+    # workspace 语义由 business.yaml 决定（Muse 纠偏：底座不假设单业务）：
+    # 只有 single + create_default 才自动创建；multi 交给使用方自行管理。
+    semantic = business_config.workspaces_config()
+    if semantic.get("mode") != "single" or not semantic.get("create_default", True):
+        return None
 
     conn = get_connection()
     try:

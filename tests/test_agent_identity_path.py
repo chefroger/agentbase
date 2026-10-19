@@ -24,8 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 @pytest.fixture
 def agentbase_home(tmp_path, monkeypatch):
-    """把 prompts 的数据目录指向临时目录。"""
-    monkeypatch.setattr("agentbase.prompts.get_agent_home", lambda: tmp_path)
+    """把数据目录指向临时目录。
+
+    用环境变量而不是 patch 函数：get_agent_home() 每次动态读取；
+    module-scope 的 sys.modules mock 可能让 patch 命中旧模块实例。
+    """
+    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
     return tmp_path
 
 

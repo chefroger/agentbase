@@ -732,6 +732,44 @@ def _create_system_router() -> APIRouter:
             return {"ok": False, "error": message}
         return {"ok": True, "message": message, "autostart": enabled}
 
+    @router.get("/system/logs")
+    def api_logs(name: str = "", lines: int = 200):
+        """列出 / 读取 AgentBase 日志（只读，白名单 + 尾部截断）。"""
+        import re
+
+        from fastapi import HTTPException
+
+        log_dir = _get_agent_home_path() / "logs"
+        if not name:
+            files = sorted(p.name for p in log_dir.glob("*.log")) if log_dir.is_dir() else []
+            return {"ok": True, "files": files}
+
+        if not re.fullmatch(r"[A-Za-z0-9._-]+\.log", name):
+            raise HTTPException(status_code=400, detail="非法日志名")
+        path = (log_dir / name).resolve()
+        try:
+            path.relative_to(log_dir.resolve())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法日志名")
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="日志不存在")
+
+        line_count = max(1, min(int(lines), 500))
+        max_bytes = 256 * 1024
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            data = fh.read(max_bytes)
+        text = data.decode("utf-8", errors="replace")
+        return {
+            "ok": True,
+            "name": name,
+            "lines": text.splitlines()[-line_count:],
+            "truncated": size > max_bytes,
+            "size": size,
+        }
+
     @router.post("/system/quit")
     def api_quit_service(request: Request):
         """退出常驻服务（不是卸载）。
@@ -885,18 +923,29 @@ def create_app() -> FastAPI:
     return app
 
 
+def _resolve_static_dir() -> Path:
+    """解析前端静态目录。
+
+    优先级：AGENTBASE_STATIC_DIR（开发/覆盖）> PyInstaller _MEIPASS >
+    运行时目录（~/.agentbase/agentbase/static）> 仓库 static/。
+
+    运行时目录优先是为了升级后的安装副本；但开发机上它会遮蔽仓库里的新前端，
+    所以提供 AGENTBASE_STATIC_DIR 显式覆盖。
+    """
+    override = os.environ.get("AGENTBASE_STATIC_DIR", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "static"
+    runtime = _get_agent_home_path() / "agentbase" / "static"
+    if runtime.is_dir():
+        return runtime
+    return Path(__file__).resolve().parent.parent / "static"
+
+
 def serve_app(app: FastAPI) -> None:
     """注册 /agentbase SPA 路由（需要 app 实例和 _SESSION_TOKEN）。"""
-    # 静态文件查找优先级：PyInstaller _MEIPASS > 运行时目录 > 开发目录
-    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        _STATIC_DIR = Path(sys._MEIPASS) / "static"
-    else:
-        # 运行时目录（~/.agentbase/agentbase/static/）
-        _runtime_static = _get_agent_home_path() / "agentbase" / "static"
-        if _runtime_static.is_dir():
-            _STATIC_DIR = _runtime_static
-        else:
-            _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+    _STATIC_DIR = _resolve_static_dir()
     _APP_HTML = _STATIC_DIR / "app.html"
 
     # 托管 static/ 目录下的 CSS/JS 等静态资源

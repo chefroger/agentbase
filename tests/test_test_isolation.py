@@ -34,7 +34,8 @@ class TestHermesHomeIsolation:
         """cron 端点在 import 期算出的目录必须是隔离目录。"""
         from agentbase.api import cron
 
-        assert str(cron._HERMES_HOME) == os.environ["HERMES_HOME"]
+        # 必须动态解析：模块快照在其它测试 mock HERMES_HOME 时会被污染
+        assert str(cron._hermes_home()) == os.environ["HERMES_HOME"]
 
     def test_skill_router_uses_isolated_home(self):
         """skill_router 解析的 skills 目录必须在隔离目录下。"""
