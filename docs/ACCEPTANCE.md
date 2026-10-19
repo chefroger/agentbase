@@ -85,6 +85,49 @@
 - `PackageSource` 真机替换（需要 Windows/macOS 分发包 + manifest）。
 - 真实 SIGKILL 超时（单测用假时钟覆盖，未做真机卡死注入）。
 
+## 纯底座化（2026-10-19）
+
+**前端**
+- 默认前端改为底座壳：`#/settings` 设置门户（9 组钻取：模型与 API Key / Agent 行为 /
+  工作区 / 智能体与提示词 / 业务与方向 / Skill 包与扩展 / 文件与目录 / 系统 / 开发者）
+  + `#/settings/developer` API 调试控制台 + `#/dev` 调试聊天（明确标注开发调试用）。
+- 移除 Trade 业务前端：聊天历史/评分、`library_id/customer_id` 透传、cron 注入、
+  daily 等 context、onboarding 聊天向导、目录树、customers/tasks/history 独立视图。
+- hash 路由：设置子页不缓存；调试页缓存 DOM（切换不丢消息）。
+
+**配置与 workspace 语义**
+- `business.yaml` 新增 `usage_direction`、`workspaces`（term/term_en/mode/create_default/fields）、
+  `ui.modules`（预留，不加载）。
+- `ensure_default_workspace()` 改为读配置：`single + create_default` 才自动创建；
+  `multi` 或 `create_default=false` 不创建（返工此前的硬编码单业务逻辑）。
+- 自定义字段存 `workspaces.extra1.custom_fields`，workspaces API 透传。
+- 新增 `GET/PUT /api/agentbase/business/config`：原子写入、保留未知顶层键、空列表拒绝、
+  写后热加载；`skill_pack` 仍只走 `/skill-packs/*`。
+- 方向预设 `agentbase/usage_directions.py`（general/document-analysis/customer-research/custom），
+  只提供推荐（名称/字段/workspace 语义/pack），不自动覆盖用户配置。
+
+**API 交付**
+- `docs/API.md`：全部端点、鉴权、SSE 事件、curl/Python/JS 示例。
+- `GET /api/agentbase/meta/api-docs`、`GET /api/agentbase/meta/endpoints`（实测 52 条）。
+- `examples/api/`：health / chat_stream / business_config / packs / upload 可运行脚本。
+- `GET /system/logs`；`/settings` 增加 `agent_behavior`、`extensions`（只读）。
+- `PUT /workspaces/{id}/agent-identity` 同时写 DB 与 identity 文件（此前只写 DB，
+  文件优先导致提示词不生效）。
+- `AGENTBASE_STATIC_DIR` 可覆盖静态目录（开发机不再被运行时副本遮蔽）。
+
+**验收**
+- 781 passed / 1 skipped；JS 41 passed；`ruff check agentbase/ server.py` 干净。
+- 实测：`/meta/endpoints` 52 条；business config 返回 4 个方向；API 文档 10KB。
+- 底座挂载验收：install → activate `trade-business-pack` → 返回 39 skills（38 业务 +
+  chat-memory）→ list 显示 active → remove 后恢复底座（packs 空、`skill_pack: ''`）。
+- 未验证：浏览器逐项点击（人工查看中）；Windows 打包未重建。
+
+**测试基础设施修复（顺带）**
+- `test_chat_smoke` 直接赋值 `_get_db_path` 改为 `monkeypatch`（此前污染后续所有测试的数据库路径）。
+- cron 的 jobs/output 路径改为动态解析（测试 mock `HERMES_HOME` 不再污染模块快照）。
+- 日期敏感的 chat-memory 测试改为与星期无关（周一运行不再误报）。
+- `test_agent_identity_path` 用环境变量隔离，避免 module-scope sys.modules mock 影响。
+
 ## 未完成 / 后续
 
 1. 真·全新机器安装复跑（Windows + macOS）；`install.ps1` 语法验证。

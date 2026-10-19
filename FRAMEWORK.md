@@ -26,7 +26,9 @@ bash scripts/install.sh        # macOS / Linux
 4. 初始化数据库、注册启动器
 5. 启动服务（默认 `http://127.0.0.1:9120/agentbase`）
 
-第一次打开会引导填写 `business.yaml` 里定义的业务字段。
+默认前端是**底座壳**：设置门户（`#/settings`）+ 开发者 API 控制台（`#/settings/developer`）
++ 明确标注“开发调试用”的聊天页（`#/dev`）。业务页面（含聊天主界面）不随底座提供，
+由业务前端按 [docs/API.md](docs/API.md) 另行定制。
 
 > `hermes-agent` **不需要也不应该**单独安装 —— 源码已随仓库分发。
 
@@ -39,7 +41,17 @@ bash scripts/install.sh        # macOS / Linux
 ```yaml
 business_name: "示例业务"
 tagline: "一句话介绍"
+usage_direction: "general"              # general / document-analysis / customer-research / custom
+
 skill_pack: "skill-packs/demo-pack"     # 业务 skill 包（相对仓库根或绝对路径）
+
+# 工作区语义（机制在数据层；这里只定义「叫什么、单/多、是否默认创建」）
+workspaces:
+  term: "工作区"                        # 用户可见称呼：工作区/公司/项目/客户/门店…
+  term_en: "Workspace"
+  mode: "single"                        # single | multi
+  create_default: true                  # single 时启动自动创建
+  fields: []                            # 自定义字段 [{key, label, type: text}]
 
 onboarding_fields:                      # 首次引导表单
   - key: role
@@ -57,7 +69,13 @@ work_dirs:                              # 工作目录分类
 
 prompt_overrides:                       # 可选：覆盖全局 system prompt
   system: ""
+
+ui:                                     # 业务前端模块（预留；底座暂不加载）
+  modules: []
 ```
+
+设置页「业务与方向」会按 `usage_direction` 给出推荐（名称、onboarding 字段、workspace 语义、
+推荐 skill pack），**不会自动覆盖**；用户点击「应用推荐」后再保存。
 
 ### 第 2 步：放 skill 包
 
@@ -246,12 +264,15 @@ Hermes 的扩展面远超"skills / plugins / MCP"三项。以下是 vendored v0.
 
 | 接口 | 说明 |
 |---|---|
-| `business.yaml` | 业务名/品牌/onboarding/工作目录/prompt 覆盖 |
+| `business.yaml` | 业务名/方向/品牌/workspace 语义/onboarding/工作目录/prompt 覆盖/前端模块预留 |
 | `skill-packs/<pack>/` | 业务 skill 包（registry + SKILL.md） |
-| `GET/POST /api/skill-packs` | 本地安装/启用/卸载 pack |
-| `GET /api/branding` | 前端品牌 |
-| `GET/POST /api/settings` | provider Key / 默认模型 / MoA |
-| `static/` | 前端（可替换） |
+| `GET /api/agentbase/skill-packs` | 列出 / 安装 / 启用 / 卸载 pack |
+| `GET /api/agentbase/branding` | 品牌、方向、workspace 称呼与模式 |
+| `GET /api/agentbase/settings` | providers、默认模型、MoA、agent_behavior、extensions |
+| `GET/PUT /api/agentbase/business/config` | 业务配置读写（原子更新，保留未知键） |
+| `GET /api/agentbase/meta/endpoints` | 结构化端点清单（开发者 API 控制台使用） |
+| `GET /api/agentbase/meta/api-docs` | API 参考 markdown（`docs/API.md`） |
+| `static/` | 底座前端壳（设置门户 + `/dev` 调试页；业务前端按 API 定制） |
 
 ---
 
