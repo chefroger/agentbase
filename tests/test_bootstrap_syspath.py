@@ -101,6 +101,10 @@ class TestHermesCheckoutResolution:
             "继承来的 HERMES_HOME 必须被覆盖为 AGENT_HOME，否则会串到用户自己的 Hermes 数据"
         )
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="Windows 默认目录是 %LOCALAPPDATA%\\agentbase，不是 ~/.agentbase",
+    )
     def test_agent_home_defaults_to_dot_agentbase(self, isolated, tmp_path):
         """未设 AGENT_HOME 时默认 ~/.agentbase（测试里伪造 home）。"""
         isolated.delenv("AGENT_HOME", raising=False)

@@ -278,8 +278,9 @@ class TestEngineRecovery:
         monkeypatch.setattr(engine.os, "kill", lambda pid, sig: signals.append(sig))
 
         engine.wait_for_service_exit(timeout=1.0, grace=1.0)
+        force = getattr(engine.signal, "SIGKILL", engine.signal.SIGTERM)
         assert engine.signal.SIGTERM in signals
-        assert engine.signal.SIGKILL in signals
+        assert force in signals
 
 
 @pytest.fixture

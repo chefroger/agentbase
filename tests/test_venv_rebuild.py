@@ -202,6 +202,10 @@ class TestRebuildEndpointGuard:
         assert not scheduled, "明明不需要重建，却派发了子进程"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows 走 install.ps1 分支，本组断言的是 POSIX shell 重建脚本",
+)
 class TestPosixRebuildScriptPaths:
     """审计 #1（P0 砖机 bug）：重建脚本里的路径必须用 shell 引号，不能是 `Path.__repr__`。
 

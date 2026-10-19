@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -31,7 +32,8 @@ def test_save_keys_writes_env_0600(_isolated):
     text = env.read_text(encoding="utf-8")
     assert "DEEPSEEK_API_KEY=sk-test" in text
     assert "OTHER_KEY=v" in text
-    assert oct(env.stat().st_mode & 0o777) == "0o600"
+    if os.name != "nt":  # Windows 不保留 POSIX 权限位
+        assert oct(env.stat().st_mode & 0o777) == "0o600"
 
 
 def test_save_keys_preserves_other_lines(_isolated):

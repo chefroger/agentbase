@@ -256,9 +256,11 @@ def wait_for_service_exit(
             return
         time.sleep(0.2)
 
+    # Windows 没有 SIGKILL；os.kill(pid, SIGTERM) 在那里就是强制 TerminateProcess。
+    _force_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
     _log("SIGTERM 后仍未退出，发送 SIGKILL")
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, _force_signal)
     except OSError:
         pass
     for _ in range(10):
