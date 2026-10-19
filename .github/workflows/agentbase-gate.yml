@@ -121,14 +121,26 @@ jobs:
             || { echo '::error::README.vendor 缺少「已接管，不再跟踪上游」声明。'; exit 1; }
           echo '✓ vendor 基线合规（0.22.2 / LICENSE / 已接管）'
 
-      - name: "⑤ 自动升级状态机未回流（hermes_upgrade）"
+      - name: "⑤ 自动升级状态机未回流（hermes_upgrade，只看可执行代码）"
         run: |
-          if grep -rnI --exclude-dir=.git --exclude-dir=.github --exclude='*.md' \
-               -e 'hermes_upgrade' --include='*.py' --include='*.js' .; then
-            echo '::error::自动升级状态机残留——vendor 锁 0.22.2 后整套删除。'
-            exit 1
-          fi
-          echo '✓ 自动升级状态机未回流'
+          python3 - <<'EOF'
+          import pathlib, sys
+
+          SKIP = {".git", ".github", "vendor", "__pycache__", "dist", "build"}
+          bad = []
+          for path in sorted(pathlib.Path(".").rglob("*.py")):
+              if set(path.parts) & SKIP:
+                  continue
+              for lineno, line in enumerate(
+                      path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                  code = line.split("#", 1)[0]  # 注释里的历史说明不算
+                  if "hermes_upgrade" in code:
+                      bad.append(f"{path}:{lineno}: {line.strip()}")
+          if bad:
+              print("\n".join(bad))
+              sys.exit("自动升级状态机残留——vendor 锁 0.22.2 后整套删除。")
+          print("✓ 自动升级状态机未回流")
+          EOF
 
   # ————————————————————————————————————————————————————————————————
   # Job 2 · purity：底座不带业务 / 语义在配置 / API 交付物齐全

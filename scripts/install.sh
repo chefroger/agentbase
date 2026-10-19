@@ -427,9 +427,9 @@ fi
 #      sys.path 就直接 import doctor 会报 `No module named 'run_agent'`（干净机器实测）。
 #   2. doctor 自己会 import Hermes，会触发 pm 激活剥离 venv 的 site-packages；
 #      那一步的恢复也在这个函数里，漏了会让后面 holehe/sqlite-vec 误报「未安装」。
-# 「Hermes 版本」这一项刻意不计入致命项：版本过旧不需要在这里解决 —— AgentBase 启动后
-# 会在界面里自动升级 Hermes（见 agentbase/hermes_upgrade.py）。若这里判失败并 exit 1，
-# 用户就永远看不到那个升级界面了。
+# 「Hermes 版本」这一项刻意不计入致命项：内置 Hermes 版本随 AgentBase 锁定，用户不需要
+# 也不能单独升级（自动升级状态机已删除）。若这里判失败并 exit 1，用户会卡在安装阶段，
+# 而不是拿到可操作的提示。
 if ! "$PY" -c "import sys; from agentbase.bootstrap import prepare_hermes_import_paths; prepare_hermes_import_paths(); from agentbase.doctor import run_doctor, format_report, has_fatal_failure; r = run_doctor(deep=False); print(format_report(r)); sys.exit(1 if has_fatal_failure(r, ignore_names=('Hermes 版本',)) else 0)"; then
     log_err "自检发现致命问题，安装不完整。请把上面的输出发给技术支持。"
     exit 1
