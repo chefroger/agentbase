@@ -1,5 +1,8 @@
 """
-AgentBase — 公司数据层。
+AgentBase — 工作区数据层。
+
+「工作区」是底座的数据隔离单元；它在用户界面里叫什么（公司/项目/客户/门店）
+由 business.yaml 的 workspaces.term 决定，代码层不写死业务称呼。
 
 三模块结构：
   - crud: workspaces + agentbase_workspaces 表的增删改查 + 审计日志

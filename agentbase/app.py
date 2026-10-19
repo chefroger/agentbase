@@ -810,7 +810,8 @@ def create_app() -> FastAPI:
     _db_path = _init_db()
     print(f"  Database: {_db_path}")
 
-    # 默认单业务：首次启动自动创建唯一工作区，用户无需理解/创建「公司」。
+    # 按 business.yaml 的 workspace 语义决定是否自动创建默认工作区
+    # （single + create_default 才创建；multi 交给使用方管理）。
     # 失败不阻断启动（前端仍保留兜底入口）。
     try:
         from agentbase.workspace import ensure_default_workspace
