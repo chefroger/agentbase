@@ -114,6 +114,34 @@ class TestEndpointCatalog:
         assert "/api/agentbase/system/logs" in paths
 
 
+class TestEndpointMethodFilter:
+    def test_path_level_parameters_are_not_endpoints(self):
+        """OpenAPI path item 的公共 parameters 键不能被当成 HTTP 方法。"""
+        from types import SimpleNamespace
+
+        from agentbase.api import meta
+
+        spec = {
+            "paths": {
+                "/api/agentbase/demo": {
+                    "parameters": [{"name": "shared", "in": "query"}],
+                    "get": {
+                        "summary": "demo",
+                        "parameters": [{"name": "id", "in": "path"}],
+                    },
+                    "options": {"summary": "options"},
+                    "head": {"summary": "head"},
+                }
+            }
+        }
+        request = SimpleNamespace(app=SimpleNamespace(openapi=lambda: spec))
+        endpoints = meta.list_endpoints(request)["endpoints"]
+
+        demo = [(e["method"], e["path"]) for e in endpoints if "demo" in e["path"]]
+        assert demo == [("GET", "/api/agentbase/demo")]
+        assert all(e["method"] != "PARAMETERS" for e in endpoints)
+
+
 class TestStaticDirOverride:
     def test_override_wins(self, tmp_path, monkeypatch):
         from agentbase.app import _resolve_static_dir

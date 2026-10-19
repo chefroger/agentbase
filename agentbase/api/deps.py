@@ -19,7 +19,7 @@ from agentbase import workspace as workspace_module
 # 由 server.py 在启动时设置
 _SESSION_TOKEN: str = ""
 
-# session → 绑定的活跃公司 ID（单用户场景下防止修改 header 跨公司越权）
+# session → 绑定的活跃工作区 ID（单用户场景下防止修改 header 跨工作区越权）
 _ACTIVE_WORKSPACE: dict[str, int] = {}
 _workspace_bind_lock = threading.Lock()
 
@@ -60,7 +60,7 @@ def require_workspace(
 ) -> int:
     """解析并验证 X-Workspace-ID header，返回 workspace_id。
 
-    session 级别的活跃公司绑定在路由层通过 _check_workspace_binding() 完成。
+    session 级别的活跃工作区绑定在路由层通过 _check_workspace_binding() 完成。
 
     Raises:
         HTTPException(401): header 缺失、无效、或公司不存在/未激活

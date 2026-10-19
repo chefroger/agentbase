@@ -24,6 +24,20 @@ def client(tmp_path, monkeypatch):
 
 
 class TestBusinessConfigApi:
+    def test_malformed_yaml_logs_warning_and_falls_back(self, client, caplog):
+        """读路径兜底默认值，但不能静默——坏 YAML 必须留下 warning。"""
+        _, home = client
+        (home / "business.yaml").write_text(
+            'workspaces:\n  term: "公司"\n   mode: [\n', encoding="utf-8"
+        )
+        from agentbase import business_config
+
+        with caplog.at_level("WARNING", logger="agentbase.business_config"):
+            cfg = business_config.reload()
+
+        assert cfg["workspaces"]["term"] == "工作区"
+        assert any("语法错误" in record.message for record in caplog.records)
+
     def test_defaults(self, client):
         api, _ = client
         data = api.get("/api/agentbase/business/config").json()

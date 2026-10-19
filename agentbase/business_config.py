@@ -26,10 +26,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
 _CACHE: dict[str, Any] | None = None
@@ -86,11 +89,22 @@ def config_path() -> Path:
 
 
 def _read_yaml(path: Path) -> dict:
-    try:
-        import yaml
+    """读取 business.yaml；失败时回退默认值，但**必须留一声吆喝**。
 
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, Exception):
+    读路径不能阻断启动（没有业务配置也能跑），但静默吞掉语法错误会让用户
+    改坏缩进后仍看到默认称呼，难以排查。
+    """
+    import yaml
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("读取业务配置失败，使用默认值：%s（%s）", path, exc)
+        return {}
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        logger.warning("业务配置 YAML 语法错误，使用默认值：%s（%s）", path, exc)
         return {}
     return data if isinstance(data, dict) else {}
 

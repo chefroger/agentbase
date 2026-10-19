@@ -41,6 +41,7 @@ jobs:
             if grep -rni --exclude='CHANGELOG*' \
                  -e '外贸' -e 'trade' -e '领英' -e 'linkedin' \
                  -e 'b2b' -e '询盘' -e '报关' -e '报价单' \
+                 -e '跨公司' -e '公司绑定' -e '公司数据层' \
                  --include='*.py' --include='*.js' --include='*.html' \
                  --include='*.css' --include='*.md' --include='*.sh' \
                  --include='*.ps1' --include='*.yaml' --include='*.yml' \
@@ -153,7 +154,8 @@ jobs:
 
       - name: "① 无默认业务聊天页（trade_chat）"
         run: |
-          if grep -rnI --exclude-dir=.git --exclude-dir=.github \
+          # docs/ 里的迁移历史允许提到 trade_chat；代码与静态资源不允许
+          if grep -rnI --exclude-dir=.git --exclude-dir=.github --exclude-dir=docs \
                --exclude='CHANGELOG*' -e 'trade_chat' .; then
             echo '::error::发现 trade_chat 残留。底座不带默认聊天页，聊天页由业务包/定制前端提供。'
             exit 1
@@ -189,7 +191,9 @@ jobs:
             [ -f "examples/api/${f}.py" ] \
               || { echo "::error::缺少 examples/api/${f}.py"; exit 1; }
           done
-          echo "✓ API 文档与 $n 个示例脚本齐全"
+          python3 -m py_compile examples/api/*.py \
+            || { echo '::error::examples/api 下存在无法编译的示例脚本。'; exit 1; }
+          echo "✓ API 文档与 $n 个示例脚本齐全且可编译"
 
       - name: "④ hermes_compat 保留（版本桥，不是升级状态机）"
         run: |

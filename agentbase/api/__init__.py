@@ -28,10 +28,10 @@ def _enforce_workspace_binding(
     request: Request,
     x_workspace_id: str | None = Header(None, alias="X-Workspace-ID"),
 ) -> None:
-    """session 级活跃公司绑定：防止修改 header 跨公司越权。
+    """session 级活跃工作区绑定：防止修改 header 跨工作区越权。
 
     作为全局 agentbase router 的依赖，在每个业务请求前自动执行。
-    首次携带 workspace_id 的请求自动绑定 session 到该公司；
+    首次携带 workspace_id 的请求自动绑定 session 到该工作区；
     后续请求必须携带匹配的 workspace_id。
     """
     from agentbase.api.deps import _ACTIVE_WORKSPACE, _workspace_bind_lock
@@ -64,7 +64,7 @@ def _enforce_workspace_binding(
             _ACTIVE_WORKSPACE[token] = cid
 
 
-# 所有 /api/agentbase/* 路由默认要求 session token + 公司绑定
+# 所有 /api/agentbase/* 路由默认要求 session token + 工作区绑定
 router = APIRouter(
     tags=["agentbase"],
     dependencies=[Depends(require_session), Depends(_enforce_workspace_binding)],

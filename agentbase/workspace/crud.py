@@ -1,5 +1,5 @@
 """
-AgentBase — 公司数据层 CRUD。
+AgentBase — 工作区数据层 CRUD。
 
 管理两张表：
   - workspaces: 公司基本信息（名称、slug、联系方式、激活状态）

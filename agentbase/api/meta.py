@@ -56,7 +56,9 @@ def list_endpoints(request: Request) -> dict:
             continue
         for method, operation in operations.items():
             method = str(method).upper()
-            if method in ("HEAD", "OPTIONS"):
+            # OpenAPI 的 path item 允许携带 path-level `parameters`；
+            # 只认 HTTP 方法白名单，避免把它当成假端点。
+            if method not in ("GET", "POST", "PUT", "DELETE", "PATCH"):
                 continue
             params = [
                 p.get("name")
