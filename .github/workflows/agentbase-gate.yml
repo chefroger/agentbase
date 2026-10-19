@@ -1,0 +1,287 @@
+# ============================================================================
+# agentbase-gate.yml — 「纯底座」验收门禁（按仓库实际适配，2026-10-19）
+# ----------------------------------------------------------------------------
+# 来源：任务书 §9 验收条款 + 2026-10-19《纠偏分析》六条改动清单。
+# 目的：把验收标准变成自动门禁——外贸残留回流、默认业务聊天页复活、
+#       随附 Hermes 读写用户 ~/.hermes、vendor 被动过，PR 直接合不进去。
+# 成本：仓库 private，Actions 计费按分钟；residue/purity 为秒级，
+#       real-machine 仅在 PR / 手动触发跑三系统矩阵。
+# ============================================================================
+
+name: agentbase-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ————————————————————————————————————————————————————————————————
+  # Job 1 · residue：零外贸残留 / 旧数据根 / vendor 基线 / 自动升级残留
+  # ————————————————————————————————————————————————————————————————
+  residue:
+    name: "门禁1 · 零残留 / 隔离 / vendor 基线"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "① 零外贸残留"
+        run: |
+          found=0
+          for d in agentbase static skills scripts .agentbase-template; do
+            [ -e "$d" ] || continue
+            if grep -rni --exclude='CHANGELOG*' \
+                 -e '外贸' -e 'trade' -e '领英' -e 'linkedin' \
+                 -e 'b2b' -e '询盘' -e '报关' -e '报价单' \
+                 --include='*.py' --include='*.js' --include='*.html' \
+                 --include='*.css' --include='*.md' --include='*.sh' \
+                 --include='*.ps1' --include='*.yaml' --include='*.yml' \
+                 --include='*.toml' "$d"; then
+              found=1
+            fi
+          done
+          [ -f server.py ] && grep -rni -e '外贸' -e 'trade' -e 'b2b' server.py && found=1 || true
+          if [ "$found" -eq 1 ]; then
+            echo '::error::外贸残留未清零。纯底座不允许出现上述词（CHANGELOG 记录来源除外）。'
+            exit 1
+          fi
+          echo '✓ 零外贸残留'
+
+      - name: "② 无旧数据根硬编码（~/.trade / TRADE_HOME）"
+        run: |
+          if grep -rnI --exclude-dir=.git --exclude-dir=.github \
+               --exclude-dir=dist --exclude-dir=build --exclude-dir=__pycache__ \
+               -e '~/.trade' -e 'TRADE_HOME' .; then
+            echo '::error::发现硬编码旧数据根，应为 $AGENT_HOME / ~/.agentbase。'
+            exit 1
+          fi
+          echo '✓ 无旧数据根硬编码'
+
+      - name: "③ 随附 Hermes 不得读写用户 ~/.hermes（AST 检查可执行字符串）"
+        run: |
+          python3 - <<'EOF'
+          import ast, pathlib, sys
+
+          # 备份包内的归档成员名（不是文件系统访问）——唯一豁免
+          ALLOW = {
+              ("agentbase/post_install/backup.py", ".hermes/memories/"),
+              ("agentbase/post_install/backup.py", ".hermes/skills/"),
+          }
+          bad = []
+          for path in sorted(pathlib.Path("agentbase").rglob("*.py")):
+              if "__pycache__" in path.parts:
+                  continue
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              docstrings = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.Module, ast.FunctionDef,
+                                       ast.AsyncFunctionDef, ast.ClassDef)):
+                      body = getattr(node, "body", [])
+                      if (body and isinstance(body[0], ast.Expr)
+                              and isinstance(body[0].value, ast.Constant)
+                              and isinstance(body[0].value.value, str)):
+                          docstrings.add(id(body[0].value))
+              for node in ast.walk(tree):
+                  if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                      continue
+                  if id(node) in docstrings:
+                      continue
+                  value = node.value
+                  if ".hermes" in value or ".trade" in value or "TRADE_HOME" in value:
+                      if (str(path), value) in ALLOW:
+                          continue
+                      bad.append(f"{path}:{node.lineno}: {value[:100]!r}")
+          if bad:
+              print("以下可执行字符串仍指向用户 ~/.hermes / ~/.trade：")
+              print("\n".join(bad))
+              sys.exit(
+                  "随附 Hermes 与用户独立安装必须物理隔离：统一走 agentbase.paths。"
+              )
+          print("✓ 随附 Hermes 与用户 ~/.hermes 隔离")
+          EOF
+
+      - name: "④ vendor 基线：LICENSE + README.vendor + 版本 pin 0.22.2"
+        run: |
+          [ -f vendor/hermes/LICENSE ] \
+            || { echo '::error::vendor/hermes/LICENSE 缺失——MIT vendoring 必须保留 LICENSE。'; exit 1; }
+          rv='vendor/hermes/README.vendor'
+          [ -f "$rv" ] \
+            || { echo '::error::vendor/hermes/README.vendor 缺失（来源版本/快照日期/来源 commit/已接管声明）。'; exit 1; }
+          grep -q '0\.22\.2' "$rv" \
+            || { echo '::error::README.vendor 未 pin 住基线版本 0.22.2。'; exit 1; }
+          grep -q '已接管' "$rv" \
+            || { echo '::error::README.vendor 缺少「已接管，不再跟踪上游」声明。'; exit 1; }
+          echo '✓ vendor 基线合规（0.22.2 / LICENSE / 已接管）'
+
+      - name: "⑤ 自动升级状态机未回流（hermes_upgrade）"
+        run: |
+          if grep -rnI --exclude-dir=.git --exclude-dir=.github --exclude='*.md' \
+               -e 'hermes_upgrade' --include='*.py' --include='*.js' .; then
+            echo '::error::自动升级状态机残留——vendor 锁 0.22.2 后整套删除。'
+            exit 1
+          fi
+          echo '✓ 自动升级状态机未回流'
+
+  # ————————————————————————————————————————————————————————————————
+  # Job 2 · purity：底座不带业务 / 语义在配置 / API 交付物齐全
+  # ————————————————————————————————————————————————————————————————
+  purity:
+    name: "门禁2 · 纯底座约束"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "① 无默认业务聊天页（trade_chat）"
+        run: |
+          if grep -rnI --exclude-dir=.git --exclude-dir=.github \
+               --exclude='CHANGELOG*' -e 'trade_chat' .; then
+            echo '::error::发现 trade_chat 残留。底座不带默认聊天页，聊天页由业务包/定制前端提供。'
+            exit 1
+          fi
+          echo '✓ 底座无默认业务聊天页'
+
+      - name: "② business.yaml 语义下沉（workspaces / usage_direction / ui）"
+        run: |
+          by='.agentbase-template/business.yaml'
+          [ -f "$by" ] \
+            || { echo "::error::找不到 $by——它是把底座变成产品的唯一配置点。"; exit 1; }
+          for key in workspaces usage_direction ui; do
+            grep -qE "^[[:space:]]*${key}:" "$by" \
+              || { echo "::error::$by 缺少 ${key}: 段。"; exit 1; }
+          done
+          grep -qE '^[[:space:]]*term:' "$by" \
+            || { echo "::error::$by 缺少 workspaces.term——用户可见称呼必须可配置。"; exit 1; }
+          grep -qE '^[[:space:]]*mode:[[:space:]]*"?((single)|(multi))"?' "$by" \
+            || { echo "::error::$by 缺少 workspaces.mode（single|multi）。"; exit 1; }
+          grep -qE '^[[:space:]]*create_default:' "$by" \
+            || { echo "::error::$by 缺少 workspaces.create_default。"; exit 1; }
+          echo "✓ business.yaml 含 workspaces / usage_direction / ui 语义段"
+
+      - name: "③ API 交付物齐全（docs/API.md + examples/api）"
+        run: |
+          [ -f docs/API.md ] || { echo '::error::docs/API.md 缺失。'; exit 1; }
+          grep -q 'AgentBase API' docs/API.md \
+            || { echo '::error::docs/API.md 缺少标题/内容。'; exit 1; }
+          n=$(find examples/api -maxdepth 1 -name '*.py' | wc -l | tr -d ' ')
+          [ "$n" -ge 5 ] \
+            || { echo "::error::examples/api 只有 $n 个可运行脚本（至少 5 个）。"; exit 1; }
+          for f in health chat_stream business_config packs upload; do
+            [ -f "examples/api/${f}.py" ] \
+              || { echo "::error::缺少 examples/api/${f}.py"; exit 1; }
+          done
+          echo "✓ API 文档与 $n 个示例脚本齐全"
+
+      - name: "④ hermes_compat 保留（版本桥，不是升级状态机）"
+        run: |
+          [ -f agentbase/hermes_compat.py ] \
+            || { echo '::error::agentbase/hermes_compat.py 被误删——版本/Python/provider 兼容桥依赖它。'; exit 1; }
+          echo '✓ hermes_compat 保留'
+
+  # ————————————————————————————————————————————————————————————————
+  # Job 3 · real-machine：Python 3.14 三系统回归（§9 真机证据的 CI 代理）
+  # 只在 PR / 手动触发跑；push 到 main 只跑上面的快门禁。
+  # ————————————————————————————————————————————————————————————————
+  real-machine:
+    name: "门禁3 · 三系统 3.14 回归"
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.14（install.sh 要求精确版本）
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: 安装依赖
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-hermes.txt
+          pip install pytest pytest-asyncio httpx
+          pip install -e . --no-deps
+
+      - name: Python 语法检查
+        shell: bash
+        run: python -m compileall -q agentbase/ server.py
+
+      - name: 安装脚本语法检查
+        shell: bash
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/ci_sim.sh
+          if [ -f scripts/install.ps1 ] && command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -Command '
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                "scripts/install.ps1", [ref]$null, [ref]$errors) | Out-Null
+              if ($errors.Count -gt 0) {
+                $errors | ForEach-Object { Write-Error $_.Message }
+                exit 1
+              }
+              Write-Host "✓ install.ps1 语法通过"
+            '
+          fi
+          echo '✓ 安装脚本语法通过'
+
+      - name: ci_sim.sh（屏蔽本机 Hermes，跑全量测试）
+        shell: bash
+        run: bash scripts/ci_sim.sh
+
+      - name: verify_extensions.py（plugin / tools registry / MCP）
+        shell: bash
+        run: PYTHONPATH=vendor/hermes python scripts/verify_extensions.py
+
+      - name: 前端工具测试（node:test，零依赖）
+        shell: bash
+        run: node --test "tests_js/**/*.test.js"
+
+  # ————————————————————————————————————————————————————————————————
+  # Job 4 · pack-mount：底座级验收（脚手架，暂不启用）
+  # "trade-business-pack 能完整挂载并跑通" = 底座合格。
+  # 两个仓库都是 private；跨仓 checkout 需要 PAT（GITHUB_TOKEN 只能读当前仓），
+  # 建仓并配置 secrets.PACK_REPO_TOKEN 后，删掉 if:false 即启用。
+  # ————————————————————————————————————————————————————————————————
+  pack-mount:
+    name: "验收 · trade-business-pack 挂载跑通（待启用）"
+    if: false   # TODO: pack 仓库 + PACK_REPO_TOKEN 就绪后删除本行
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: agentbase
+      - uses: actions/checkout@v4
+        with:
+          repository: chefroger/trade-business-pack
+          token: ${{ secrets.PACK_REPO_TOKEN }}
+          path: trade-business-pack
+      - name: 底座安装 + 经 business.yaml(trade版) 挂载 pack
+        run: |
+          bash agentbase/scripts/install.sh
+      - name: "断言① pack 的聊天页可访问（业务页由 pack 提供）"
+        run: |
+          curl -sf http://127.0.0.1:9120/chat
+      - name: "断言② 底座自身不提供默认聊天页（底座≠去外贸的 trade）"
+        run: |
+          body=$(curl -s http://127.0.0.1:9120/)
+          if echo "$body" | grep -qi 'trade_chat'; then
+            echo '::error::底座自带默认聊天页，跑偏回潮'
+            exit 1
+          fi
+          echo '✓ 底座无默认聊天页'
+      - name: "断言③ pack 自带冒烟测试全绿"
+        run: |
+          bash trade-business-pack/scripts/smoke.sh
