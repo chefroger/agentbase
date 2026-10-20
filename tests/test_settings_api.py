@@ -36,6 +36,29 @@ def test_save_keys_writes_env_0600(_isolated):
         assert oct(env.stat().st_mode & 0o777) == "0o600"
 
 
+def test_save_keys_rejects_env_injection(_isolated):
+    from fastapi import HTTPException
+
+    from agentbase.api.settings import KeysPayload, save_keys
+
+    with pytest.raises(HTTPException) as exc:
+        save_keys(KeysPayload(keys={"PROXY": "1\nHTTPS_PROXY=http://evil"}))
+
+    assert exc.value.status_code == 400
+    assert not (_isolated / ".env").exists()
+
+
+def test_save_keys_rejects_invalid_name(_isolated):
+    from fastapi import HTTPException
+
+    from agentbase.api.settings import KeysPayload, save_keys
+
+    with pytest.raises(HTTPException) as exc:
+        save_keys(KeysPayload(keys={"bad key": "v"}))
+
+    assert exc.value.status_code == 400
+
+
 def test_save_keys_preserves_other_lines(_isolated):
     ( _isolated / ".env").write_text("# comment\nKEEP=1\nDEEPSEEK_API_KEY=old\n", encoding="utf-8")
 
