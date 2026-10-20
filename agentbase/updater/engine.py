@@ -53,10 +53,21 @@ def request_update() -> dict:
     # 记录"旧服务怎么启动的"：回滚后用它把原来的服务拉起来。
     # 更新失败时 source.service_command() 可能指向一个已被删除的新目录，
     # 没有这条记录就只能让用户手动重启。
-    argv0 = sys.argv[0] if sys.argv else ""
-    if argv0 and not os.path.isabs(argv0):
-        argv0 = os.path.abspath(argv0)
-    service_cmd = [sys.executable, argv0, *sys.argv[1:]] if argv0 else []
+    if getattr(sys, "frozen", False):
+        # PyInstaller 下 sys.argv[0] 就是 sys.executable，不能再拼一次
+        # （否则回滚重启会变成 [exe, exe, ...]，走错入口）。
+        extra = [arg for arg in sys.argv[1:] if arg != "--service"]
+        service_cmd = [sys.executable, "--service", *extra]
+        if "--no-browser" not in service_cmd:
+            service_cmd.append("--no-browser")
+    else:
+        argv0 = sys.argv[0] if sys.argv else ""
+        if argv0 and not os.path.isabs(argv0):
+            argv0 = os.path.abspath(argv0)
+        if argv0 and os.path.abspath(argv0) == os.path.abspath(sys.executable):
+            service_cmd = [sys.executable, *sys.argv[1:]]
+        else:
+            service_cmd = [sys.executable, argv0, *sys.argv[1:]] if argv0 else []
 
     update_state.write_state(
         update_state.PHASE_UPDATING,
@@ -322,15 +333,36 @@ def _previous_service_cmd(saved: dict) -> list[str] | None:
 
 
 def _start_and_verify(source: UpdateSource) -> tuple[bool, str]:
+    started_after = time.time()
     if not _start_service(source):
         return False, "新版本启动失败（进程未能派生）"
-    return _wait_ready()
+    return _wait_ready(started_after=started_after)
 
 
-def _wait_ready(timeout: float = SERVICE_READY_TIMEOUT) -> tuple[bool, str]:
+def _wait_ready(
+    timeout: float = SERVICE_READY_TIMEOUT, *, started_after: float | None = None,
+) -> tuple[bool, str]:
     deadline = time.monotonic() + timeout
     last = ""
+    pid_file = _agent_home() / "data" / "agentbase.pid"
     while time.monotonic() < deadline:
+        if started_after is not None:
+            # 必须看到**本次启动写入**的 pidfile：否则 9120 上的旧实例
+            # 会让探测误判“新版本已就绪”，随后删掉旧产物。
+            pid = _service_pid()
+            if not pid or not _pid_alive(pid):
+                last = "等待新服务写入 pidfile"
+                time.sleep(0.5)
+                continue
+            try:
+                if pid_file.stat().st_mtime < started_after - 1.0:
+                    last = "pidfile 属于旧服务"
+                    time.sleep(0.5)
+                    continue
+            except OSError:
+                last = "读取 pidfile 失败"
+                time.sleep(0.5)
+                continue
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/api/status", timeout=2) as resp:
                 data = json.loads(resp.read().decode("utf-8"))

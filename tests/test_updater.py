@@ -208,6 +208,29 @@ class TestEngineRequest:
         assert saved["service_cmd"][0] == sys.executable
         assert saved["phase"] == state.PHASE_UPDATING
 
+    def test_request_update_frozen_service_cmd_is_not_duplicated(self, agent_home, monkeypatch):
+        import sys
+
+        from agentbase.updater import engine, state
+
+        class FakeSource:
+            name = "package"
+
+            def snapshot(self):
+                return {}
+
+        monkeypatch.setattr(engine, "detect_source", lambda: FakeSource())
+        monkeypatch.setattr(engine, "spawn_detached_updater", lambda: True)
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(sys, "executable", "/opt/AgentBase")
+        monkeypatch.setattr(sys, "argv", ["/opt/AgentBase", "--no-browser"])
+
+        engine.request_update()
+
+        assert state.read_state()["service_cmd"] == [
+            "/opt/AgentBase", "--service", "--no-browser",
+        ]
+
     def test_request_update_rolls_back_state_when_spawn_fails(self, agent_home, monkeypatch):
         from agentbase.updater import engine, state
 
@@ -374,3 +397,45 @@ class TestSystemEndpoints:
 
         assert r.status_code == 200
         assert r.json()["notes"] == "· 新功能"
+
+
+class TestReadinessProbe:
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"status":"ok"}'
+
+    def _install(self, agent_home, monkeypatch):
+        import time
+
+        from agentbase.updater import engine
+
+        pid_file = agent_home / "data" / "agentbase.pid"
+        pid_file.parent.mkdir(parents=True, exist_ok=True)
+        pid_file.write_text("123", encoding="utf-8")
+        monkeypatch.setattr(engine.urllib.request, "urlopen", lambda *a, **k: self._Resp())
+        monkeypatch.setattr(engine, "_service_pid", lambda: 123)
+        monkeypatch.setattr(engine, "_pid_alive", lambda pid: True)
+        return engine, pid_file, time
+
+    def test_rejects_stale_pidfile(self, agent_home, monkeypatch):
+        engine, pid_file, time = self._install(agent_home, monkeypatch)
+        old = time.time() - 100
+        os.utime(pid_file, (old, old))
+
+        ok, msg = engine._wait_ready(timeout=0.2, started_after=time.time())
+
+        assert not ok
+        assert "旧服务" in msg
+
+    def test_accepts_fresh_pidfile(self, agent_home, monkeypatch):
+        engine, _pid_file, time = self._install(agent_home, monkeypatch)
+
+        ok, msg = engine._wait_ready(timeout=1.0, started_after=time.time() - 1.0)
+
+        assert ok, msg

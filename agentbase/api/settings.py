@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path
 
@@ -244,9 +245,16 @@ def set_moa(payload: MoaPayload) -> dict:
     return {"ok": True, "enabled": payload.enabled}
 
 
+_ENV_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+
+
 @router.post("/settings/keys")
 def save_keys(payload: KeysPayload) -> dict:
-    """保存 provider API Key 到 `$AGENT_HOME/.env`。"""
+    """保存 provider API Key 到 `$AGENT_HOME/.env`。
+
+    只接受标准环境变量名，且拒绝换行/控制字符 —— `.env` 会被 Hermes
+    以 override=True 加载，任意键名或换行都能变成额外环境变量。
+    """
     updates = {
         str(k).strip(): str(v).strip()
         for k, v in payload.keys.items()
@@ -254,6 +262,21 @@ def save_keys(payload: KeysPayload) -> dict:
     }
     if not updates:
         raise HTTPException(status_code=400, detail="没有要保存的 Key")
+
+    invalid_keys = [k for k in updates if not _ENV_KEY_RE.match(k)]
+    if invalid_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"非法的环境变量名：{', '.join(invalid_keys)}"
+                   "（只允许大写字母、数字、下划线，且以字母开头）",
+        )
+    for key, value in updates.items():
+        if any(ch in value for ch in ("\n", "\r", "\x00")):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{key} 的值包含换行或控制字符，无法写入 .env",
+            )
+
     _write_env(updates)
     return {"ok": True, "saved": sorted(updates)}
 
