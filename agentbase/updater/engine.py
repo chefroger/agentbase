@@ -146,7 +146,19 @@ def run_update() -> dict:
 
         _log("备份数据 …")
         update_state.write_state(update_state.PHASE_BACKUP, source=source.name)
-        backup_path = _backup()
+        try:
+            backup_path = _backup()
+        except SystemExit as exc:
+            # backup_agentbase 在“无数据可备份”时 sys.exit(1)；这不是 Exception，
+            # 不接住会让更新器直接死亡、服务停在已退出状态。
+            _log(f"备份失败（exit {exc.code}），代码未改动，拉起旧服务")
+            started = _start_service(source)
+            update_state.write_state(
+                update_state.PHASE_FAILED,
+                error="备份失败：没有可备份的数据",
+                service_started=started,
+            )
+            return {"ok": False, "error": "备份失败：没有可备份的数据"}
         snapshot = source.snapshot()
 
         _log("下载/应用新版本 …")
@@ -190,14 +202,27 @@ def run_recovery() -> dict:
         source = detect_source()
         try:
             source.rollback(saved)
-            _log("已回滚到上一版本")
         except Exception as exc:
             _log(f"回滚失败：{exc}")
+            started = _start_service(source, _previous_service_cmd(saved))
+            update_state.write_state(
+                update_state.PHASE_FAILED, recovered=False,
+                error=f"回滚失败：{exc}", service_started=started,
+            )
+            return {"ok": False, "error": f"回滚失败：{exc}"}
+
+        _log("已回滚到上一版本")
+        started = _start_service(source, _previous_service_cmd(saved))
+        if not started:
+            update_state.write_state(
+                update_state.PHASE_FAILED, recovered=True,
+                error="回滚成功但旧版本启动失败", service_started=False,
+            )
+            return {"ok": False, "error": "回滚成功但旧版本启动失败"}
         update_state.write_state(
             update_state.PHASE_ROLLED_BACK, recovered=True,
-            error=saved.get("error", ""),
+            error=saved.get("error", ""), service_started=True,
         )
-        _start_service(source, _previous_service_cmd(saved))
         return {"ok": True, "message": "已回滚并重新启动"}
     finally:
         update_state.release_lock()
@@ -323,20 +348,34 @@ def _wait_ready(timeout: float = SERVICE_READY_TIMEOUT) -> tuple[bool, str]:
 def _rollback_and_recover(error: str) -> dict:
     saved = update_state.read_state()
     source = detect_source()
+    # 新服务可能已起但自检失败 —— 先停掉再回滚
+    wait_for_service_exit(timeout=5.0, grace=2.0)
     try:
-        # 新服务可能已起但自检失败 —— 先停掉再回滚
-        wait_for_service_exit(timeout=5.0, grace=2.0)
         source.rollback(saved)
         _log("回滚成功")
-        update_state.write_state(update_state.PHASE_ROLLED_BACK, error=error, recovered=True)
-        _start_service(source, _previous_service_cmd(saved))
-        return {"ok": False, "error": error, "rolled_back": True}
     except Exception as exc:
+        _log(f"回滚失败：{exc}")
+        started = _start_service(source, _previous_service_cmd(saved))
         update_state.write_state(
-            update_state.PHASE_ROLLED_BACK, error=f"{error}; 回滚失败: {exc}", recovered=False,
+            update_state.PHASE_FAILED, error=f"{error}; 回滚失败: {exc}",
+            recovered=False, service_started=started,
         )
-        _start_service(source, _previous_service_cmd(saved))
         return {"ok": False, "error": f"{error}; 回滚失败: {exc}", "rolled_back": False}
+
+    started = _start_service(source, _previous_service_cmd(saved))
+    if not started:
+        update_state.write_state(
+            update_state.PHASE_FAILED, error=f"{error}; 旧版本启动失败",
+            recovered=True, service_started=False,
+        )
+        return {
+            "ok": False, "error": f"{error}; 旧版本启动失败",
+            "rolled_back": True, "service_started": False,
+        }
+    update_state.write_state(
+        update_state.PHASE_ROLLED_BACK, error=error, recovered=True, service_started=True,
+    )
+    return {"ok": False, "error": error, "rolled_back": True}
 
 
 # ── 启动时的半升级检测 ────────────────────────────────────────────────────────

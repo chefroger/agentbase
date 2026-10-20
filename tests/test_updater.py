@@ -233,6 +233,48 @@ class TestEngineRecovery:
         state.write_state(state.PHASE_DONE)
         assert engine.recover_if_needed() is False
 
+    def test_rollback_failure_is_terminal_failed(self, agent_home, monkeypatch):
+        from agentbase.updater import engine, state
+
+        state.write_state(state.PHASE_UPDATING)
+
+        class FakeSource:
+            name = "git"
+
+            def rollback(self, saved):
+                raise RuntimeError("rollback boom")
+
+        monkeypatch.setattr(engine, "detect_source", lambda: FakeSource())
+        monkeypatch.setattr(engine, "wait_for_service_exit", lambda *a, **k: None)
+        monkeypatch.setattr(engine, "_start_service", lambda *a, **k: False)
+
+        result = engine.run_recovery()
+
+        assert result["ok"] is False
+        saved = state.read_state()
+        assert saved["phase"] == state.PHASE_FAILED
+        assert saved["recovered"] is False
+
+    def test_rollback_ok_but_start_failure_is_failed(self, agent_home, monkeypatch):
+        from agentbase.updater import engine, state
+
+        state.write_state(state.PHASE_UPDATING)
+
+        class FakeSource:
+            name = "git"
+
+            def rollback(self, saved):
+                return None
+
+        monkeypatch.setattr(engine, "detect_source", lambda: FakeSource())
+        monkeypatch.setattr(engine, "wait_for_service_exit", lambda *a, **k: None)
+        monkeypatch.setattr(engine, "_start_service", lambda *a, **k: False)
+
+        result = engine.run_recovery()
+
+        assert result["ok"] is False
+        assert state.read_state()["phase"] == state.PHASE_FAILED
+
     def test_alive_updater_blocks_service_start(self, agent_home, monkeypatch):
         from agentbase.updater import engine, state
 

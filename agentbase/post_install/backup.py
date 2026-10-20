@@ -64,9 +64,25 @@ def backup_agentbase(output_dir: str | None = None) -> str:
     sources: list[tuple[Path, str]] = []  # (绝对路径, tar 内的 arcname)
 
     # 1) SQLite 数据库：最关键的备份目标
+    #    不能直接 copy 主库：WAL 模式下最近提交的事务可能只在 -wal 里。
+    #    用 VACUUM INTO 生成一致性快照（在线可用），失败才回退直接复制。
     db_path = agentbase_home / "data" / "agentbase.db"
+    snapshot_dir: Path | None = None
     if db_path.is_file():
-        sources.append((db_path, ".agentbase/data/agentbase.db"))
+        try:
+            import sqlite3
+
+            snapshot_dir = Path(tempfile.mkdtemp(prefix="agentbase-db-snapshot-"))
+            snapshot = snapshot_dir / "agentbase.db"
+            src = sqlite3.connect(str(db_path), timeout=30)
+            try:
+                src.execute("VACUUM INTO ?", (str(snapshot),))
+            finally:
+                src.close()
+            sources.append((snapshot, ".agentbase/data/agentbase.db"))
+        except Exception as exc:
+            print(f"[backup] WARNING: SQLite 在线快照失败，回退直接复制主库：{exc}")
+            sources.append((db_path, ".agentbase/data/agentbase.db"))
 
     # 2) 公司数据目录：递归收集所有文件
     companies_dir = agentbase_home / "workspaces"
@@ -111,9 +127,13 @@ def backup_agentbase(output_dir: str | None = None) -> str:
 
     # 打包为 tar.gz
     print(f"[backup] Packaging {len(sources)} files ...")
-    with tarfile.open(out_path, "w:gz") as tar:
-        for abs_path, arcname in sources:
-            tar.add(str(abs_path), arcname=arcname)
+    try:
+        with tarfile.open(out_path, "w:gz") as tar:
+            for abs_path, arcname in sources:
+                tar.add(str(abs_path), arcname=arcname)
+    finally:
+        if snapshot_dir is not None:
+            shutil.rmtree(snapshot_dir, ignore_errors=True)
 
     size_mb = out_path.stat().st_size / (1024 * 1024)
     print(f"[backup] Done: {out_path} ({size_mb:.1f} MB)")

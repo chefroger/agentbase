@@ -231,8 +231,11 @@ def check_license(workspace_id: int | None = None) -> tuple[bool, str]:
         if not _verify_license(data):
             # 签名无效 → 尝试从原始激活码自恢复（升级后签名格式可能不匹配）
             if data.get("code") and _recover_signature_from_code(data):
-                # 自恢复成功，重新加载数据
+                # 自恢复成功，重新加载数据并**再次验签**：
+                # expires_at 可能被篡改，恢复签名只修签名、不修日期。
                 data = _get_license_data(workspace_id)
+                if not _verify_license(data):
+                    return False, "许可证数据异常，请使用激活码重新激活。"
             else:
                 return False, "许可证数据异常，请使用激活码重新激活。"
         expires = datetime.fromisoformat(data["expires_at"]).replace(tzinfo=UTC)
@@ -400,7 +403,9 @@ def _recover_signature_from_code(data: dict) -> bool:
         decoded = _decode_activation_code(code)
     except Exception:
         return False
-    # 重新持久化签名
+    # 以激活码为权威：恢复签名时同时把 expires_at 改回码内的日期，
+    # 否则篡改过的日期会随着“恢复”一起被判定有效。
+    data["expires_at"] = decoded["expires_at"]
     data["signature"] = base64.urlsafe_b64encode(decoded["signature"]).decode()
     try:
         _save_license_data(data)

@@ -335,10 +335,22 @@ async def chat_stream(
         改为 queue.put_nowait 包装在一次非阻塞 try 中，满则静默丢弃（优先保持 SSE 连接稳定）。
         """
         def _safe_put(ev_type, ev_data):
+            item = (ev_type, ev_data)
             try:
-                event_queue.put_nowait((ev_type, ev_data))
+                event_queue.put_nowait(item)
             except asyncio.QueueFull:
-                _log.warning("SSE event queue full, dropping event: %s", ev_type)
+                if ev_type in ("response", "error"):
+                    # 终止事件不能丢：挤掉一条最旧的进度事件再投递
+                    try:
+                        event_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+                    try:
+                        event_queue.put_nowait(item)
+                    except asyncio.QueueFull:
+                        _log.error("SSE queue full; terminal event dropped: %s", ev_type)
+                else:
+                    _log.warning("SSE event queue full, dropping event: %s", ev_type)
 
         loop.call_soon_threadsafe(_safe_put, event_type, data or {})
 
@@ -389,29 +401,39 @@ async def chat_stream(
                         result = agent.chat(full_query)
                     elapsed = time.time() - start
 
+                # 客户端已断连：结果不能落库、也不能再发 response（否则用户从没看到
+                # 的答案会污染后续历史注入）。
+                if cancel_event.is_set():
+                    _log.info("Agent finished after client disconnect; dropping result")
+                    if document_task and request_task_id:
+                        try:
+                            release_read_coverage(request_task_id)
+                        except Exception:
+                            _log.exception("release_read_coverage failed")
+                    return None
+
                 if not result and attempt < _MAX_AGENT_RETRIES:
-                    if cancel_event.is_set():
-                        return None
                     _log.warning("Agent returned empty in stream, retry %d/%d", attempt + 1, _MAX_AGENT_RETRIES)
                     time.sleep(2 ** attempt)
                     continue
 
                 gate_result = None
-                if document_task and request_task_id and result:
+                if document_task and request_task_id:
                     try:
-                        gate_result = _document_gate(document_task, request_task_id, evidence)
-                        if gate_result is not None:
-                            if gate_result.status == "incomplete":
-                                # 不通过时把原因作为回答下发，不报错也不给不完整结论。
-                                result = format_incomplete_report(gate_result)
-                            _emit_threadsafe("analysis_gate", {
-                                "status": gate_result.status,
-                                "files": gate_result.complete,
-                                "missing": gate_result.missing,
-                                "errors": gate_result.errors,
-                                "skipped": gate_result.skipped,
-                                "coverage_note": gate_result.coverage_note,
-                            })
+                        if result:
+                            gate_result = _document_gate(document_task, request_task_id, evidence)
+                            if gate_result is not None:
+                                if gate_result.status == "incomplete":
+                                    # 不通过时把原因作为回答下发，不报错也不给不完整结论。
+                                    result = format_incomplete_report(gate_result)
+                                _emit_threadsafe("analysis_gate", {
+                                    "status": gate_result.status,
+                                    "files": gate_result.complete,
+                                    "missing": gate_result.missing,
+                                    "errors": gate_result.errors,
+                                    "skipped": gate_result.skipped,
+                                    "coverage_note": gate_result.coverage_note,
+                                })
                     finally:
                         # 释放 Hermes 侧该请求的读取记录，避免长驻进程内无限累积。
                         release_read_coverage(request_task_id)

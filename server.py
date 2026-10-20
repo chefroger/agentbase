@@ -8,13 +8,18 @@ Start:
 引导逻辑在 agentbase.bootstrap 中，app factory 在 agentbase.app 中。
 """
 
-from agentbase.app import main
 from agentbase.bootstrap import setup
 
 
 def run() -> None:
-    """完整启动：先跑启动序列，再进入 FastAPI 应用。"""
+    """完整启动：先跑启动序列，再导入并进入 FastAPI 应用。
+
+    app 必须延迟导入：半升级恢复在 setup() 内执行；若新版本 app.py
+    无法 import，提前导入会让进程退出，恢复逻辑永远跑不到。
+    """
     setup()
+    from agentbase.app import main
+
     main()
 
 

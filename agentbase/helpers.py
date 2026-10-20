@@ -489,21 +489,11 @@ def build_query(
     matched_skills = _skill_router.match_skills(query)
     matched_name = matched_skills[0]["skill_name"] if matched_skills else None
 
-    # 连续同 skill 时跳过完整注入，大幅节约 token（injection_prompt 通常 1000-2000 tokens）
-    same_skill_repeat = bool(last_skill_name and matched_name == last_skill_name)
-
-    if same_skill_repeat and matched_name:
-        # 连续同 skill → augmented_query 仅含简短提示，不重复注入完整规则
-        augmented_query = (
-            f"[SKILL AUGMENTATION]\n"
-            f"继续使用 {matched_name} 技能，规则同上一次。\n\n"
-            f"## 用户原始问题\n{query}\n"
-            f"[SKILL AUGMENTATION]"
-        )
-    else:
-        augmented_query = _skill_router.augment_query(
-            query, workspace_id=workspace_id
-        )
+    # 每轮都必须注入技能正文：每次请求都会新建 agent，模型没有“上一次”的规则。
+    # last_skill_name 保留只为调用方兼容，不再用于跳过注入。
+    augmented_query = _skill_router.augment_query(
+        query, workspace_id=workspace_id
+    )
 
     # 1. Workspace identity — 根据场景选择不同深度的 system prompt
     workspace_slug = _workspace.slug_from_id(workspace_id) if workspace_id else None

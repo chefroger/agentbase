@@ -169,3 +169,34 @@ class TestRestartCommandIsRunnable:
                 "`-m agentbase` 需要 agentbase/__main__.py，而它不存在 —— 重启必然秒退，"
                 "但 Popen 成功所以仍会打印「已重新启动」"
             )
+
+
+def test_backup_includes_wal_committed_rows(agentbase_env):
+    """WAL 模式下刚提交的行不能因为只拷贝主库而丢失。"""
+    import sqlite3
+
+    from agentbase.post_install.backup import backup_agentbase
+
+    db = agentbase_env["agentbase_home"] / "data" / "agentbase.db"
+    writer = sqlite3.connect(db)
+    try:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("CREATE TABLE IF NOT EXISTS wal_marker (v TEXT)")
+        writer.execute("INSERT INTO wal_marker VALUES ('committed-in-wal')")
+        writer.commit()
+
+        archive = backup_agentbase(output_dir=str(agentbase_env["tmp"]))
+        with tarfile.open(archive) as tar:
+            member = next(m for m in tar.getmembers() if m.name.endswith("agentbase.db"))
+            extracted = tar.extractfile(member).read()
+    finally:
+        writer.close()
+
+    snapshot = agentbase_env["tmp"] / "extracted.db"
+    snapshot.write_bytes(extracted)
+    check = sqlite3.connect(snapshot)
+    try:
+        rows = check.execute("SELECT v FROM wal_marker").fetchall()
+    finally:
+        check.close()
+    assert rows == [("committed-in-wal",)]

@@ -15,6 +15,8 @@ import pathlib
 import sys
 import tomllib
 
+import pytest
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -81,3 +83,30 @@ class TestRunServerEntryPoint:
         assert calls == ["setup", "app.main"], (
             "必须先跑 bootstrap.setup()（sys.path/版本检查/skills/数据库），再进 app.main()"
         )
+
+    def test_setup_runs_before_app_import(self, monkeypatch):
+        """app 无法 import 时，setup()（含半升级恢复）必须已经执行。"""
+        from agentbase import bootstrap as bs
+        from agentbase import cli
+
+        calls: list[str] = []
+        monkeypatch.setattr(bs, "setup", lambda *a, **k: calls.append("setup"))
+        monkeypatch.setitem(sys.modules, "agentbase.app", None)
+
+        with pytest.raises(ImportError):
+            cli.run_server()
+
+        assert calls == ["setup"]
+
+    def test_server_run_setup_before_app_import(self, monkeypatch):
+        sys.modules.pop("server", None)
+        import server
+
+        calls: list[str] = []
+        monkeypatch.setattr(server, "setup", lambda: calls.append("setup"))
+        monkeypatch.setitem(sys.modules, "agentbase.app", None)
+
+        with pytest.raises(ImportError):
+            server.run()
+
+        assert calls == ["setup"]

@@ -229,6 +229,43 @@ class TestLicenseCheck:
         assert not ok
         assert "到期" in msg
 
+    def test_recovery_restores_expires_at_from_code(self, monkeypatch):
+        """自恢复必须以激活码内的日期为准，不能保留被篡改的 expires_at。"""
+        from agentbase import license as lic
+
+        data = {"expires_at": "2099-12-31", "code": "CODE"}
+        saved = {}
+        monkeypatch.setattr(
+            lic, "_decode_activation_code",
+            lambda code: {"expires_at": "2027-01-01", "signature": b"sig"},
+        )
+        monkeypatch.setattr(
+            lic, "_save_license_data",
+            lambda value, cid=None: saved.update(value),
+        )
+
+        assert lic._recover_signature_from_code(data) is True
+        assert data["expires_at"] == "2027-01-01"
+        assert saved["expires_at"] == "2027-01-01"
+
+    def test_recovery_with_invalid_signature_is_rejected(self, monkeypatch):
+        """恢复后必须二次验签；签名仍不匹配时不能返回有效。"""
+        from agentbase import license as lic
+
+        tampered = {
+            "first_launch_at": "2026-01-01T00:00:00+00:00",
+            "activated": True,
+            "expires_at": "2099-12-31",
+            "code": "CODE",
+            "signature": "bad",
+        }
+        monkeypatch.setattr(lic, "_get_license_data", lambda cid=None: dict(tampered))
+        monkeypatch.setattr(lic, "_verify_license", lambda data: False)
+        monkeypatch.setattr(lic, "_recover_signature_from_code", lambda data: True)
+
+        ok, _ = lic.check_license(workspace_id=1)
+        assert ok is False
+
 
 class TestDaysRemaining:
     """剩余天数计算"""
