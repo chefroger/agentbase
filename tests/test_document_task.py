@@ -194,6 +194,29 @@ def test_callback_evidence_does_not_require_structured_metadata(tmp_path):
     assert result.skipped == []
 
 
+def test_manifest_is_bounded(tmp_path):
+    """超过 200 条时必须截断，而不是先枚举完整棵树再截断。"""
+    for i in range(250):
+        (tmp_path / f"f{i:03d}.txt").write_text("x", encoding="utf-8")
+
+    task = DocumentTask.from_root(tmp_path)
+
+    assert task.truncated is True
+    assert len(task.files) + len(task.skipped) == 200
+
+
+def test_manifest_does_not_count_directories(tmp_path):
+    """目录不应占用 200 条文件配额，否则大量子目录会让任务被误判为空。"""
+    for i in range(250):
+        (tmp_path / f"d{i:03d}").mkdir()
+    (tmp_path / "zzz.txt").write_text("x", encoding="utf-8")
+
+    task = DocumentTask.from_root(tmp_path)
+
+    assert [item.relative_path for item in task.files] == ["zzz.txt"]
+    assert task.truncated is False
+
+
 def test_callback_evidence_still_detects_unparsed_document(tmp_path):
     """回调来源也能识别「文档没走解析器」——例如没解析就直接读成文本的 PDF。"""
     (tmp_path / "合同.pdf").write_bytes(b"%PDF-1.4")

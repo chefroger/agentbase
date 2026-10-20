@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -110,36 +111,47 @@ class DocumentTask:
 
     @classmethod
     def from_root(cls, root: str | Path) -> DocumentTask:
-        """枚举根目录下的文件并按可读性分类；不读取文件内容。"""
+        """有界枚举根目录下的文件并按可读性分类；不读取文件内容。
+
+        **不能先 sorted(rglob(\"*\"))**：那会把整棵目录树消费完，
+        200 条上限形同虚设（Home/Downloads 会阻塞事件循环）。
+        这里用 os.walk 逐目录排序，命中上限立即停止。
+        """
         root_path = Path(root).resolve()
         analyzable: list[DocumentFile] = []
         skipped: list[SkippedFile] = []
         truncated = False
-        for path in sorted(root_path.rglob("*"), key=lambda item: item.relative_to(root_path).as_posix()):
-            if len(analyzable) + len(skipped) >= _MAX_MANIFEST_FILES:
-                truncated = True
+
+        for dirpath, dirnames, filenames in os.walk(root_path, followlinks=False):
+            dirnames.sort()  # 原地排序，os.walk 会按此顺序下探
+            for name in sorted(filenames):
+                if len(analyzable) + len(skipped) >= _MAX_MANIFEST_FILES:
+                    truncated = True
+                    break
+                path = Path(dirpath) / name
+                try:
+                    relative = path.relative_to(root_path).as_posix()
+                except ValueError:
+                    continue
+                reason = cls._skip_reason(path)
+                if reason is not None:
+                    skipped.append(SkippedFile(relative, reason))
+                    continue
+                try:
+                    stat = path.stat()
+                except OSError:
+                    # 枚举与 stat 之间文件被删除/无权限：记为跳过，不让请求失败。
+                    skipped.append(SkippedFile(relative, "stat_failed"))
+                    continue
+                analyzable.append(DocumentFile(
+                    path=path,
+                    relative_path=relative,
+                    size=stat.st_size,
+                    mtime_ns=stat.st_mtime_ns,
+                ))
+            if truncated:
                 break
-            try:
-                relative = path.relative_to(root_path).as_posix()
-            except ValueError:
-                # rglob 理论上不会给出越界路径，出现即跳过，避免相对路径计算崩溃。
-                continue
-            reason = cls._skip_reason(path)
-            if reason is not None:
-                skipped.append(SkippedFile(relative, reason))
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
-                # 枚举与 stat 之间文件被删除/无权限：记为跳过，不让请求失败。
-                skipped.append(SkippedFile(relative, "stat_failed"))
-                continue
-            analyzable.append(DocumentFile(
-                path=path,
-                relative_path=relative,
-                size=stat.st_size,
-                mtime_ns=stat.st_mtime_ns,
-            ))
+
         return cls(root=root_path, files=analyzable, skipped=skipped, truncated=truncated)
 
     @staticmethod

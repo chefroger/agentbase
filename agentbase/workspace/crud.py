@@ -131,15 +131,24 @@ def list_all(include_inactive: bool = False) -> list[dict]:
         conn.close()
 
 
-def get(workspace_id: int) -> dict | None:
-    """返回公司完整字典（含所有字段），未找到时返回 None。"""
-    row = _db_get_one("SELECT * FROM workspaces WHERE id = ?", (workspace_id,))
+def get(workspace_id: int, *, include_inactive: bool = False) -> dict | None:
+    """返回工作区完整字典（含所有字段），未找到时返回 None。
+
+    默认排除软删除（is_active=0）的行；purge 等维护流程显式传
+    ``include_inactive=True``。
+    """
+    sql = "SELECT * FROM workspaces WHERE id = ?"
+    if not include_inactive:
+        sql += " AND is_active = 1"
+    row = _db_get_one(sql, (workspace_id,))
     return _row_to_workspace(row) if row else None
 
 
 def slug_from_id(workspace_id: int) -> str | None:
-    """根据公司 ID 返回 slug（用于 prompt 文件路径解析 / 数据目录查找）。"""
-    row = _db_get_one("SELECT slug FROM workspaces WHERE id = ?", (workspace_id,))
+    """根据工作区 ID 返回 slug（仅活跃工作区）。"""
+    row = _db_get_one(
+        "SELECT slug FROM workspaces WHERE id = ? AND is_active = 1", (workspace_id,)
+    )
     return row[0] if row else None
 
 
@@ -153,7 +162,7 @@ def get_by_slug(slug: str) -> dict | None:
         row = conn.execute(
             "SELECT id, name, slug, logo_url, website, contact_name, "
             "contact_email, address, is_active, created_at, updated_at "
-            "FROM workspaces WHERE slug = ?",
+            "FROM workspaces WHERE slug = ? AND is_active = 1",
             (slug,),
         ).fetchone()
         return _row_to_workspace(row) if row else None
@@ -203,12 +212,16 @@ def create(
     slug = _validate_slug(slug)  # 校验 slug 合法性（防路径穿越、非法字符）
 
     data_dir = None
+    data_dir_is_new = False  # 只有本次新建的数据目录才允许在失败补偿时删除
     work_dir = None
-    workspace_id = None  # 哨兵：失败补偿时据此判断「本次是否真的插入过公司」
+    workspace_id = None  # 哨兵：失败补偿时据此判断「本次是否真的插入过工作区」
     is_new = True  # 标记工作目录是否为新创建（回滚时据此决定是否清理）
     conn = get_connection()
 
     try:
+        # 串行化同名 slug 的“先查后插”：并发创建不能共用同一个数据目录。
+        conn.execute("BEGIN IMMEDIATE")
+
         # slug 唯一性检查：冲突时自动追加 -N 后缀
         base_slug = slug
         counter = 1
@@ -222,6 +235,8 @@ def create(
             slug = f"{base_slug}-{counter}"
 
         # 1) 创建 ~/.agentbase/{slug}/ 数据目录
+        #    先记录“是否本来就不存在”，失败补偿只删除本次新建的目录。
+        data_dir_is_new = not (AGENT_HOME / slug).exists()
         data_dir = str(_ensure_data_dir(slug, AGENT_HOME))
 
         # 2) 创建桌面工作目录（分类来自 business.yaml）
@@ -285,7 +300,7 @@ def create(
                 _shutil.rmtree(str(work_dir))
             except OSError:
                 pass  # 目录清理失败不影响原始异常抛出
-        if data_dir:
+        if data_dir and data_dir_is_new:
             _data_path = Path(data_dir)
             if _data_path.exists():
                 try:
@@ -380,10 +395,17 @@ def delete(workspace_id: int) -> bool:
             "WHERE id = ? AND is_active = 1",
             (workspace_id,),
         ).rowcount
+        if n > 0:
+            # 鉴权查的是 agentbase_workspaces.is_active —— 必须同步停用，
+            # 否则“已删除”的工作区仍能通过 require_workspace。
+            conn.execute(
+                "UPDATE agentbase_workspaces SET is_active = 0 WHERE workspace_id = ?",
+                (workspace_id,),
+            )
         conn.commit()
         if n > 0:
             # 写入审计日志（用于后续 30 天倒计时清理）
-            _write_audit_log(workspace_id, "soft_delete", "公司已软删除，数据保留 30 天")
+            _write_audit_log(workspace_id, "soft_delete", "工作区已软删除，数据保留 30 天")
         return n > 0
     finally:
         conn.close()
@@ -396,7 +418,7 @@ def purge(workspace_id: int) -> bool:
     返回 True 表示删除成功。
     """
     tc = get_workspace_record(workspace_id)
-    workspace = get(workspace_id)
+    workspace = get(workspace_id, include_inactive=True)
     slug = workspace["slug"] if workspace else None
     data_dir_str = tc["data_dir"] if tc else None
 

@@ -262,123 +262,134 @@ def retain_conversation(
     return retain(content, context=context, bank_id=bid)
 
 
+# 每个工作区一份独立记忆；**不再写** Hermes 的全局 MEMORY.md ——
+# Hermes 会把全局文件注入每个 agent 的 system prompt，多工作区下会互相泄漏。
+_MEMORY_MAX_CHARS = 200_000      # 单文件上限（超出丢弃最旧条目）
+_MEMORY_INJECT_CHARS = 4_000     # 注入 prompt 的字符上限
+
+
+def workspace_memory_path(workspace_id: int, workspace_slug: str | None = None) -> Path:
+    """返回工作区独立记忆文件路径。"""
+    from agentbase.paths import hermes_home
+
+    key = (workspace_slug or f"ws-{workspace_id}").strip() or f"ws-{workspace_id}"
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in key)[:80]
+    return hermes_home() / "memories" / "workspaces" / f"{safe}.md"
+
+
+def read_workspace_memory(
+    workspace_id: int,
+    workspace_slug: str | None = None,
+    *,
+    max_chars: int = _MEMORY_INJECT_CHARS,
+) -> str:
+    """读取本工作区记忆（最新在前），按上限截断后返回。"""
+    path = workspace_memory_path(workspace_id, workspace_slug)
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    if not content:
+        return ""
+    if len(content) > max_chars:
+        content = content[:max_chars].rstrip() + "\n…（更早的记忆已省略）"
+    return content
+
+
+def _append_workspace_memory(path: Path, entry: str) -> bool:
+    """带跨进程锁地追加记忆；锁文件保留、不 unlink（避免 inode 竞争）。"""
+    import time as _time
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = path.with_name(path.name + ".lock")
+        if lock_path.is_symlink():
+            return False
+        lock_fd = open(str(lock_path), "a+")
+    except OSError:
+        return False
+
+    try:
+        for _attempt in range(5):
+            try:
+                if os.name == "nt":
+                    import msvcrt as _msvcrt
+                    lock_fd.seek(0)
+                    _msvcrt.locking(lock_fd.fileno(), _msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl as _fcntl
+                    _fcntl.flock(lock_fd.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+                break
+            except (BlockingIOError, OSError):
+                _time.sleep(0.05)
+        else:
+            return False
+
+        try:
+            existing = path.read_text(encoding="utf-8") if path.exists() else ""
+            content = entry + ("\n" + existing if existing else "")
+            if len(content) > _MEMORY_MAX_CHARS:
+                cut = content.rfind("\n", 0, _MEMORY_MAX_CHARS)
+                content = content[: max(cut, 0)]
+            path.write_text(content, encoding="utf-8")
+            return True
+        finally:
+            if os.name == "nt":
+                import msvcrt as _msvcrt
+                lock_fd.seek(0)
+                _msvcrt.locking(lock_fd.fileno(), _msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl as _fcntl
+                _fcntl.flock(lock_fd.fileno(), _fcntl.LOCK_UN)
+    finally:
+        lock_fd.close()
+
+
 def retain_to_hermes_memory(
     query: str,
     response: str,
     *,
+    workspace_id: int | None = None,
+    workspace_slug: str | None = None,
     workspace_name: str = "",
     library_name: str = "",
     customer_name: str = "",
     limit: int = 200,
 ) -> bool:
-    """将对话摘要追加到 $HERMES_HOME/memories/MEMORY.md（默认即 $AGENT_HOME）。
+    """把对话摘要追加到**本工作区**的独立记忆文件。
 
-    这样可以让 Hermes Agent 的原生记忆系统学习到业务对话，
-    而无需任何 API 密钥。
+    历史实现写 $HERMES_HOME/memories/MEMORY.md；Hermes 会把该文件整份注入
+    每个 agent 的 system prompt，多工作区下会互相泄漏。现在按工作区分文件，
+    由 agentbase.helpers.build_query 只注入当前工作区的内容。
     """
-    import datetime as _dt
-
-    from agentbase.paths import hermes_home
-
-    _hermes_root = hermes_home()
-    MEMORY_FILE = _hermes_root / "memories" / "MEMORY.md"
-    LOCK_FILE = _hermes_root / "memories" / "MEMORY.md.lock"
-
-    # 如果查询内容为空或只有空白字符，不执行写入操作
+    if workspace_id is None or int(workspace_id) <= 0:
+        return False
     if not query or not query.strip():
         return False
+
+    import datetime as _dt
 
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     q_preview = query.strip()[:limit]
     r_preview = (response or "").strip()[:limit]
 
     context_parts = []
-    # 工作区称呼由 business.yaml 决定（公司/项目/客户/门店…），代码层不写死
     if workspace_name:
         from agentbase import business_config
 
         context_parts.append(business_config.workspace_term() + ": " + workspace_name)
-    # 如果提供了资料库名称，添加到上下文片段中
     if library_name:
         context_parts.append("资料库: " + library_name)
-    # 如果提供了客户名称，添加到上下文片段中
     if customer_name:
         context_parts.append("客户: " + customer_name)
+    context_str = (" [" + ", ".join(context_parts) + "]") if context_parts else ""
 
-    # 根据是否有上下文片段，构造上下文字符串
-    if context_parts:
-        context_str = " [" + ", ".join(context_parts) + "]"
-    else:
-        context_str = ""
-
-    entry_lines = [
+    entry = "\n".join([
         "[" + now + "]" + context_str,
         "  Q: " + q_preview,
         "  A: " + r_preview,
         "",
-    ]
-    entry = "\n".join(entry_lines)
-
-    try:
-        # 跨平台文件锁：fcntl.flock (Unix) / msvcrt.locking (Windows)
-        # 替代之前的 TOCTOU 竞态（LOCK_FILE.exists() + write_text）
-        import time as _time
-
-        # fcntl 是 Unix 专有模块，必须在 os.name 分支内延迟导入
-        if os.name != "nt":
-            import fcntl as _fcntl_module
-
-        lock_dir = _hermes_root / "memories"
-        lock_dir.mkdir(parents=True, exist_ok=True)
-        # 防御符号链接攻击：如果锁文件已是 symlink，拒绝跟随
-        if LOCK_FILE.is_symlink():
-            return False
-        lock_fd = open(str(LOCK_FILE), "w")
-        # 最多重试 5 次获取文件锁，避免死锁
-        for _attempt in range(5):
-            try:
-                # Windows 平台使用 msvcrt.locking
-                if os.name == "nt":
-                    import msvcrt as _msvcrt
-                    _msvcrt.locking(lock_fd.fileno(), _msvcrt.LK_NBLCK, 1)
-                else:
-                    _fcntl_module.flock(lock_fd.fileno(), _fcntl_module.LOCK_EX | _fcntl_module.LOCK_NB)
-                break
-            except (BlockingIOError, OSError):
-                _time.sleep(0.05)
-        else:
-            # 所有重试均失败，无法获取锁
-            lock_fd.close()
-            return False
-
-        try:
-            existing = ""
-            # 如果记忆文件已存在，读取其现有内容
-            if MEMORY_FILE.exists():
-                existing = MEMORY_FILE.read_text(encoding="utf-8")
-            SECTION = "## AgentBase — Memory\n"
-            # 如果文件中还没有记忆段落，则在文件开头创建
-            if SECTION not in existing:
-                content_str = SECTION + entry + "\n\n" + existing if existing else SECTION + entry
-            else:
-                # 如果已有段落，将新条目插入到段落标题之后（最新在最前）
-                idx_s = existing.find(SECTION) + len(SECTION)
-                content_str = existing[:idx_s] + entry + "\n\n" + existing[idx_s:]
-            MEMORY_FILE.write_text(content_str, encoding="utf-8")
-        finally:
-            # 释放文件锁，确保即使写入失败也会解锁
-            if os.name == "nt":
-                import msvcrt as _msvcrt
-                lock_fd.seek(0)
-                _msvcrt.locking(lock_fd.fileno(), _msvcrt.LK_UNLCK, 1)
-            else:
-                _fcntl_module.flock(lock_fd.fileno(), _fcntl_module.LOCK_UN)
-            lock_fd.close()
-            # 尝试删除锁文件，如果失败则静默忽略
-            try:
-                LOCK_FILE.unlink(missing_ok=True)
-            except OSError:
-                pass
-        return True
-    except Exception:
-        return False
+    ])
+    return _append_workspace_memory(
+        workspace_memory_path(int(workspace_id), workspace_slug), entry
+    )

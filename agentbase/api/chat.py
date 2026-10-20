@@ -314,7 +314,8 @@ async def chat_stream(
         # 没有文档库概念后，只有用户点名了**目录**时才做完整扫描校验。
         _dirs = [p for p in _extract_explicit_paths(query) if Path(p).is_dir()]
         if _dirs:
-            document_task = DocumentTask.from_root(_dirs[0])
+            # 目录枚举是阻塞 I/O：放进线程，避免卡住整个 SSE 事件循环。
+            document_task = await asyncio.to_thread(DocumentTask.from_root, _dirs[0])
             if document_task.truncated or not document_task.files:
                 # 目录过大或没有可分析文件：无法可靠判定完整性，退回普通问答。
                 _log.info("Document gate skipped (truncated=%s, files=%d)",

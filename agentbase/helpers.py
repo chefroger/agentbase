@@ -580,6 +580,14 @@ def build_query(
         if brand_safety:
             system_prompt += f"\n\n{brand_safety}"
 
+    # 1.7 工作区记忆 — 只注入当前工作区自己的文件，绝不读全局 MEMORY.md
+    if workspace_id:
+        from agentbase.memory import read_workspace_memory
+
+        _ws_mem = read_workspace_memory(workspace_id, workspace_slug)
+        if _ws_mem:
+            system_prompt += f"\n\n## 工作区记忆（仅本工作区）\n{_ws_mem}\n"
+
     # 2. 工作目录上下文 —— 告知 Agent 可用目录，由它自行判断是否读取
     #    读取时必须遵守完整扫描规则：逐个文件、不跳过、不截断
     doc_context = ""
