@@ -434,10 +434,13 @@ def _get_history_block(workspace_id: int | None, total_prompt_chars: int) -> tup
 from agentbase.read_evidence import EXPLICIT_PATH_RE as _EXPLICIT_PATH_RE  # noqa: E402
 
 
-def _extract_explicit_paths(query: str) -> list[str]:
+def _extract_explicit_paths(
+    query: str, *, require_exists: bool = True,
+) -> list[str]:
     """从用户问题中提取明确提到的文件路径或目录路径。
 
-    提取后验证路径是否真实存在，只返回磁盘上确实存在的路径。
+    require_exists=True：只返回磁盘上确实存在的路径（用于“要读的文件”）。
+    require_exists=False：保留尚不存在的输出路径（用于判断是否文档生成任务）。
     去重并排序：目录优先、绝对路径优先。
     """
     candidates = _EXPLICIT_PATH_RE.findall(query)
@@ -454,7 +457,7 @@ def _extract_explicit_paths(query: str) -> list[str]:
         cleaned = re.sub(r'^(?:文件|目录|路径|path|file|dir)\s*[：:]\s*', '', raw, flags=re.IGNORECASE)
         try:
             p = Path(cleaned).expanduser().resolve()
-            if p.exists() and str(p) not in seen:
+            if (not require_exists or p.exists()) and str(p) not in seen:
                 verified.append(str(p))
                 seen.add(str(p))
         except (OSError, ValueError):
@@ -502,11 +505,14 @@ def build_query(
     # 检查是否有历史对话记录，用于判断是否首轮
     has_history = bool(workspace_id and _cm.get_recent(workspace_id, limit=1))
 
-    # 问题里点名的文件/目录（文档类任务判定要用，后面 doc_context 复用同一份）
-    explicit_paths = _extract_explicit_paths(query)
+    # 问题里点名的文件/目录：
+    #   mentioned_paths 含“尚不存在的输出路径”（生成任务要注入 FULL 指南）；
+    #   explicit_paths 只保留真实存在的路径（给“强制读取”块用）。
+    mentioned_paths = _extract_explicit_paths(query, require_exists=False)
+    explicit_paths = [p for p in mentioned_paths if Path(p).exists()]
 
     if _prompts.needs_full_prompt(
-        matched_name=matched_name, explicit_paths=explicit_paths
+        matched_name=matched_name, explicit_paths=mentioned_paths
     ):
         # 文档处理类任务：注入完整档（含文档生成指南、文档分析协议等，
         # 约 22674 字符 ≈ 5700 token）—— 只在真正需要时才付这个成本

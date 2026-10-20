@@ -74,11 +74,15 @@ def stop_service(timeout: float = 10.0) -> bool:
             if not _pid_alive(pid):
                 break
             time.sleep(0.2)
-        try:
-            pid_file().unlink(missing_ok=True)
-        except OSError:
-            pass
-        return not _pid_alive(pid)
+        # 只有进程真的退出才删 pidfile。超时后删掉会让仍存活的旧服务
+        # 变成“没有 pidfile 的孤儿”，后续 --stop / 更新都无法再定位它。
+        alive = _pid_alive(pid)
+        if not alive:
+            try:
+                pid_file().unlink(missing_ok=True)
+            except OSError:
+                pass
+        return not alive
     from agentbase.opener import is_server_up
 
     return not is_server_up()
