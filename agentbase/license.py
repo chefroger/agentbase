@@ -171,7 +171,7 @@ def _license_file_path() -> Path:
 
 
 def _get_license_data(workspace_id: int | None = None) -> dict:
-    """读取全局 license 数据（一台电脑一份，所有公司共享）。
+    """读取全局 license 数据（一台电脑一份，所有工作区共享）。
 
     workspace_id 参数保留向后兼容，实际被忽略。
     """
@@ -203,7 +203,7 @@ def check_license(workspace_id: int | None = None) -> tuple[bool, str]:
     """检查许可证状态。
 
     Args:
-        workspace_id: 要检查的公司 ID。None 时检查第一个激活的公司。
+        workspace_id: 要检查的工作区 ID。None 时检查第一个激活的工作区。
 
     Returns:
         (is_valid, message): is_valid=True 表示可以继续使用。
@@ -439,7 +439,7 @@ def activate(code: str, workspace_id: int | None = None) -> tuple[bool, str]:
 
     Args:
         code: 激活码字符串
-        workspace_id: 要激活的公司 ID。None 时激活第一个激活的公司。
+        workspace_id: 要激活的工作区 ID。None 时激活第一个激活的工作区。
 
     Returns:
         (success, message): success=True 表示激活成功。

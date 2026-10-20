@@ -37,10 +37,10 @@ def memory_recall(
     query: str,
     cid: int | None = Depends(opt_workspace),
 ):
-    """搜索当前公司的长期记忆。使用公司专属 bank，确保数据隔离。"""
+    """搜索当前工作区的长期记忆。使用工作区专属 bank，确保数据隔离。"""
     if cid is None:
         return {"results": [], "query": query, "workspace_id": None,
-                "hint": "请提供 X-Workspace-ID header 以按公司搜索记忆"}
+                "hint": "请提供 X-Workspace-ID header 以按工作区搜索记忆"}
     from agentbase.memory import _bank_id
     result = chat_memory.recall_context(query, bank_id=_bank_id(cid))
     if not result:

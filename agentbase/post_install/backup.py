@@ -3,7 +3,7 @@ AgentBase AI Assistant — 系统数据备份与还原。
 
 备份范围：
   - ~/.agentbase/data/agentbase.db（SQLite 数据库）
-  - ~/.agentbase/workspaces/{slug}/（公司数据目录）
+  - ~/.agentbase/workspaces/{slug}/（工作区数据目录）
   - ~/.agentbase/prompts/（系统提示词文件）
   - ~/.hermes/memories/（Hermes 记忆文件）
   - ~/.hermes/skills/*/（skill 定义）
@@ -30,7 +30,7 @@ def backup_agentbase(output_dir: str | None = None) -> str:
 
     备份内容：
       - SQLite 数据库（仅有该文件即是最小可恢复备份）
-      - 公司数据目录（workspaces/）
+      - 工作区数据目录（workspaces/）
       - 系统提示词（prompts/）
       - Hermes 记忆文件（.md / .json / .txt）
       - skill 定义（SKILL.md）
@@ -84,7 +84,7 @@ def backup_agentbase(output_dir: str | None = None) -> str:
             print(f"[backup] WARNING: SQLite 在线快照失败，回退直接复制主库：{exc}")
             sources.append((db_path, ".agentbase/data/agentbase.db"))
 
-    # 2) 公司数据目录：递归收集所有文件
+    # 2) 工作区数据目录：递归收集所有文件
     companies_dir = agentbase_home / "workspaces"
     if companies_dir.is_dir():
         for workspace_dir in companies_dir.iterdir():
@@ -187,7 +187,7 @@ def restore_agentbase(backup_file: str = "") -> str:
     # ".agentbase/data/agentbase.db"、".agentbase/{rel}"）。解压后内容在
     # `tmp_dir/.agentbase/...`，而历史上还原代码找的是 `tmp_dir/workspaces`、
     # `tmp_dir/data/agentbase.db` —— 永远不存在，于是 if exists() 静默跳过、
-    # 不报错，最后照样说"已还原"。公司档案/提示词/记忆全丢，只有 DB 被
+    # 不报错，最后照样说"已还原"。工作区档案/提示词/记忆全丢，只有 DB 被
     # rglob 兜底碰巧救回，让整条路径看起来是对的。
     root = _resolve_backup_root(tmp_dir)
 

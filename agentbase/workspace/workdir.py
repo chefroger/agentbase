@@ -41,7 +41,7 @@ def _slugify(name: str) -> str:
     """将 workspace 名称转换为 URL 安全的 slug 标识（仅小写字母、数字、连字符）。
 
     用于生成文件系统目录名，确保跨平台兼容。
-    当名称无法生成有效 slug 时，使用带随机后缀的唯一后备值，避免多公司冲突。
+    当名称无法生成有效 slug 时，使用带随机后缀的唯一后备值，避免多工作区冲突。
     """
     import uuid
 
@@ -84,7 +84,7 @@ def _validate_slug(slug: str) -> str:
 # ── 模板目录创建 ──────────────────────────────────────────────────────────
 
 def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
-    """创建并返回公司 slug 对应的数据目录（~/.agentbase/{slug}/）。
+    """创建并返回工作区 slug 对应的数据目录（~/.agentbase/{slug}/）。
 
     复制 .agentbase-template 模板骨架，将内部的 'workspace-slug' 占位目录
     重命名为真实的 slug。模板目录结构：
@@ -94,11 +94,11 @@ def _ensure_data_dir(slug: str, agentbase_home: Path) -> Path:
         clients/{slug}/
 
     Args:
-        slug: 公司 slug 标识
+        slug: 工作区 slug 标识
         agentbase_home: AgentBase 数据根目录（~/.agentbase/）
 
     Returns:
-        创建或已存在的公司数据目录路径
+        创建或已存在的工作区数据目录路径
     """
     target = agentbase_home / slug
 
@@ -142,7 +142,7 @@ def _rename_workspace_placeholder(companies_dir: Path, slug: str) -> None:
 def _rename_template_placeholders(base: Path, slug: str) -> None:
     """递归将模板中的 'library-slug' 和 'client-slug' 占位目录重命名为真实 slug。
 
-    模板中预设了这些占位目录，创建公司时需要用公司 slug 替换。
+    模板中预设了这些占位目录，创建工作区时需要用工作区 slug 替换。
     """
     if not base.is_dir():
         return
@@ -197,13 +197,13 @@ def _setup_work_directory(
 ) -> tuple[Path, bool]:
     """在用户桌面创建 workspace 工作目录，分类来自 business.yaml。
 
-    如果目标目录已存在，自动尝试加数字后缀（如 "我的公司-2"）。
+    如果目标目录已存在，自动尝试加数字后缀（如 "我的工作区-2"）。
     在 pytest 测试环境中将目录写到临时位置而非桌面。
 
     Args:
-        workspace_name: 公司名称（用作默认目录名）
-        slug: 公司 slug（用于路径穿越校验）
-        suggested_name: 用户指定的替代目录名（重命名场景），为空则用公司名
+        workspace_name: 工作区名称（用作默认目录名）
+        slug: 工作区 slug（用于路径穿越校验）
+        suggested_name: 用户指定的替代目录名（重命名场景），为空则用工作区名
 
     Returns:
         (work_dir_path, is_new) — 目录绝对路径 + 是否为新创建
@@ -220,7 +220,7 @@ def _setup_work_directory(
     else:
         base = _get_desktop_path()
 
-    # 确定目录名（用户指定优先，否则用公司名）
+    # 确定目录名（用户指定优先，否则用工作区名）
     dir_name = (suggested_name.strip() if suggested_name.strip()
                 else workspace_name.strip())
 

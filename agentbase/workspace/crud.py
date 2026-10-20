@@ -2,7 +2,7 @@
 AgentBase — 工作区数据层 CRUD。
 
 管理两张表：
-  - workspaces: 公司基本信息（名称、slug、联系方式、激活状态）
+  - workspaces: 工作区基本信息（名称、slug、联系方式、激活状态）
   - agentbase_workspaces: AgentBase 业务扩展信息（数据目录、Agent 身份、会话状态）
 """
 
@@ -97,22 +97,22 @@ def _row_to_tc(row) -> dict:
 # ── workspaces 表 CRUD ─────────────────────────────────────────────────────────
 
 def list_all(include_inactive: bool = False) -> list[dict]:
-    """返回未软删除的公司列表（脱敏版），按名称排序。
+    """返回未软删除的工作区列表（脱敏版），按名称排序。
 
     脱敏：仅返回 id/name/slug/is_active，不暴露 contact_email/address 等 PII。
     详情通过 get() 获取完整字段。
 
     Args:
-        include_inactive: True 时包含 is_active=0 的软删除公司
+        include_inactive: True 时包含 is_active=0 的软删除工作区
     """
     conn = get_connection()
     try:
         if include_inactive:
-            # 包含所有公司（管理员视图）
+            # 包含所有工作区（管理员视图）
             sql = "SELECT id, name, slug, is_active, extra1 FROM workspaces ORDER BY name"
             rows = conn.execute(sql).fetchall()
         else:
-            # 默认仅返回活跃公司（用户视图），软删除的公司不出现
+            # 默认仅返回活跃工作区（用户视图），软删除的工作区不出现
             sql = (
                 "SELECT id, name, slug, is_active, extra1 FROM workspaces "
                 "WHERE is_active = 1 ORDER BY name"
@@ -154,9 +154,9 @@ def slug_from_id(workspace_id: int) -> str | None:
 
 
 def get_by_slug(slug: str) -> dict | None:
-    """根据 slug 返回公司字典，未找到时返回 None。
+    """根据 slug 返回工作区字典，未找到时返回 None。
 
-    用于通过 URL 中的 slug 标识查找公司。
+    用于通过 URL 中的 slug 标识查找工作区。
     """
     conn = get_connection()
     try:
@@ -183,17 +183,17 @@ def create(
     work_dir_name: str = "",
     custom_fields: dict | None = None,
 ) -> dict:
-    """创建新公司，同时创建 agentbase_workspaces 记录 + 桌面工作目录 + 文档库。
+    """创建新工作区，同时创建 agentbase_workspaces 记录 + 桌面工作目录 + 文档库。
 
     事务保护：任何步骤失败都会回滚数据库并清理已创建的目录。
 
     Args:
-        name: 公司名称（必填）
+        name: 工作区名称（必填）
         slug: URL 标识（省略时从 name 自动生成）
-        work_dir_name: 桌面工作目录的自定义名称（为空则用公司名）
+        work_dir_name: 桌面工作目录的自定义名称（为空则用工作区名）
 
     Returns:
-        完整公司字典 + work_dir / work_dir_is_new / libraries 扩展字段
+        完整工作区字典 + work_dir / work_dir_is_new / libraries 扩展字段
     """
     from agentbase.workspace.workdir import (
         _ensure_data_dir,
@@ -273,8 +273,8 @@ def create(
 
     except Exception:
         conn.rollback()  # 回滚尚未提交的部分
-        # 补偿删除：公司在「注册文档库」之前就已经 commit（不能把 commit 后移 ——
-        # library.create 走独立连接，而 PRAGMA foreign_keys=ON，未提交的公司行对它
+        # 补偿删除：工作区在「注册文档库」之前就已经 commit（不能把 commit 后移 ——
+        # library.create 走独立连接，而 PRAGMA foreign_keys=ON，未提交的工作区行对它
         # 不可见，会触发外键失败），所以 rollback 覆盖不到这一段，必须显式删掉，
         # 否则用户重试会立刻撞 `UNIQUE constraint failed: workspaces.slug`。
         if workspace_id is not None:
@@ -324,17 +324,17 @@ def update(
     is_active: bool | None = None,
     custom_fields: dict | None = None,
 ) -> dict | None:
-    """更新公司字段。仅更新传入的非 None 字段（部分更新）。
+    """更新工作区字段。仅更新传入的非 None 字段（部分更新）。
 
     `custom_fields` 传入时整体替换 workspaces.extra1 里的自定义字段。
-    返回更新后的公司字典，公司不存在时返回 None。
+    返回更新后的工作区字典，工作区不存在时返回 None。
     """
     conn = get_connection()
     try:
         if not conn.execute(
             "SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)
         ).fetchone():
-            return None  # 公司不存在
+            return None  # 工作区不存在
 
         # 动态构建 SET 子句，只更新传入的非 None 字段
         fields, vals = [], []
@@ -383,10 +383,10 @@ def update(
 
 
 def delete(workspace_id: int) -> bool:
-    """软删除公司：设置 is_active=0 + 记录 deleted_at 时间戳。
+    """软删除工作区：设置 is_active=0 + 记录 deleted_at 时间戳。
 
     数据保留 30 天后由 purge() 执行物理清理。
-    返回 True 表示软删除成功，False 表示公司不存在或已删除。
+    返回 True 表示软删除成功，False 表示工作区不存在或已删除。
     """
     conn = get_connection()
     try:
@@ -413,7 +413,7 @@ def delete(workspace_id: int) -> bool:
 
 
 def purge(workspace_id: int) -> bool:
-    """物理删除公司及其所有关联数据 + 清理文件系统数据目录。
+    """物理删除工作区及其所有关联数据 + 清理文件系统数据目录。
 
     仅管理员调用。不可逆操作。执行前先写入审计日志。
     返回 True 表示删除成功。
@@ -440,7 +440,7 @@ def purge(workspace_id: int) -> bool:
         conn.close()
 
     # 写入审计日志（不可逆操作前的最终记录）
-    _write_audit_log(workspace_id, "purge", "物理删除公司及所有数据")
+    _write_audit_log(workspace_id, "purge", "物理删除工作区及所有数据")
 
     conn = get_connection()
     try:
@@ -494,7 +494,7 @@ def purge(workspace_id: int) -> bool:
 # ── agentbase_workspaces 表 CRUD ────────────────────────────────────────────────────
 
 def get_workspace_record(workspace_id: int) -> dict | None:
-    """返回公司对应的 agentbase_workspaces 记录，未找到时返回 None。
+    """返回工作区对应的 agentbase_workspaces 记录，未找到时返回 None。
 
     agentbase_workspaces 表存储 AgentBase 业务扩展数据：data_dir、agent_identity_md 等。
     """
@@ -609,7 +609,7 @@ def _write_audit_log(workspace_id: int, action: str, detail: str) -> None:
     审计日志记录所有敏感操作（创建、软删除、物理删除），用于追溯。
 
     Args:
-        workspace_id: 操作的数据库公司 ID
+        workspace_id: 操作的数据库工作区 ID
         action: 操作类型（如 "soft_delete"、"purge"）
         detail: 操作详情的自然语言描述
     """

@@ -1,12 +1,12 @@
 """
-AgentBase AI Assistant — 公司管理 API 路由。
+AgentBase AI Assistant — 工作区管理 API 路由。
 
 端点：
-  GET    /workspaces                          — 列出所有公司
-  POST   /workspaces                          — 注册新公司
-  GET    /workspaces/{workspace_id}              — 公司详情
-  PUT    /workspaces/{workspace_id}              — 更新公司信息
-  DELETE /workspaces/{workspace_id}              — 删除公司（级联删除所有数据）
+  GET    /workspaces                          — 列出所有工作区
+  POST   /workspaces                          — 注册新工作区
+  GET    /workspaces/{workspace_id}              — 工作区详情
+  PUT    /workspaces/{workspace_id}              — 更新工作区信息
+  DELETE /workspaces/{workspace_id}              — 删除工作区（级联删除所有数据）
   GET    /workspaces/{workspace_id}/agent-identity   — 获取 Agent 身份
   PUT    /workspaces/{workspace_id}/agent-identity   — 更新 Agent 身份
 """
@@ -26,17 +26,17 @@ from agentbase.api.models import (
 router = APIRouter(tags=["workspaces"])
 
 
-# ── 公司 CRUD ──────────────────────────────────────────────────────────────
+# ── 工作区 CRUD ──────────────────────────────────────────────────────────────
 
 @router.get("/workspaces")
 def list_workspaces():
-    """列出 AgentBase 系统中所有已注册的公司。"""
+    """列出 AgentBase 系统中所有已注册的工作区。"""
     return workspace_module.list_all()
 
 
 @router.post("/workspaces")
 def create_workspace(payload: WorkspaceCreate):
-    """注册新公司。slug 省略时自动从 name 生成。自动写入默认 Agent 身份。"""
+    """注册新工作区。slug 省略时自动从 name 生成。自动写入默认 Agent 身份。"""
     try:
         workspace = workspace_module.create(
             name=payload.name, slug=payload.slug,
@@ -67,9 +67,9 @@ def get_workspace(
     workspace_id: int,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """根据 ID 获取公司详情。仅允许查询自己的公司。"""
+    """根据 ID 获取工作区详情。仅允许查询自己的工作区。"""
     if x_workspace_id != workspace_id:
-        # 不允许查询其他公司——即使本地运行也做数据隔离
+        # 不允许查询其他工作区——即使本地运行也做数据隔离
         raise HTTPException(status_code=404, detail="Workspace not found")
     c = workspace_module.get(workspace_id)
     if not c:
@@ -83,7 +83,7 @@ def update_workspace(
     payload: WorkspaceUpdate,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """更新公司字段。X-Workspace-ID 必须与目标公司匹配。"""
+    """更新工作区字段。X-Workspace-ID 必须与目标工作区匹配。"""
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="Cannot update another workspace's record.")
     result = workspace_module.update(
@@ -104,7 +104,7 @@ def delete_workspace(
     x_workspace_id: int = Depends(require_workspace),
     x_confirm_delete: str | None = Header(None, alias="X-Confirm-Delete"),
 ):
-    """删除公司及级联删除其所有库、客户、对话记录。需要 X-Confirm-Delete header。"""
+    """删除工作区及级联删除其所有库、客户、对话记录。需要 X-Confirm-Delete header。"""
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="Cannot delete another workspace.")
     if x_confirm_delete != "yes":
@@ -117,19 +117,19 @@ def delete_workspace(
     return {"ok": True}
 
 
-# ── 公司切换 ─────────────────────────────────────────────────────────────────
+# ── 工作区切换 ─────────────────────────────────────────────────────────────────
 
 @router.post("/workspaces/{workspace_id}/switch")
 def switch_workspace(
     workspace_id: int,
     request: Request,
 ):
-    """显式切换当前 session 的活跃公司。
+    """显式切换当前 session 的活跃工作区。
 
-    切换后，后续所有请求的 X-Workspace-ID 必须匹配新公司。
+    切换后，后续所有请求的 X-Workspace-ID 必须匹配新工作区。
     写审计日志记录切换操作。
     """
-    # 校验目标公司存在且激活
+    # 校验目标工作区存在且激活
     tc = workspace_module.get_workspace_record(workspace_id)
     if not tc or not tc.get("is_active"):
         raise HTTPException(status_code=404, detail="Workspace not found or inactive")
@@ -139,7 +139,7 @@ def switch_workspace(
         raise HTTPException(status_code=401, detail="Missing session token")
 
     old_cid = None
-    # 从 headers 获取当前活跃公司；切换请求必须显式声明来源公司
+    # 从 headers 获取当前活跃工作区；切换请求必须显式声明来源工作区
     x_cid = request.headers.get("X-Workspace-ID", "")
     if x_cid:
         try:
@@ -147,9 +147,9 @@ def switch_workspace(
         except ValueError:
             raise HTTPException(status_code=401, detail="X-Workspace-ID must be an integer.")
 
-    # 安全校验：切换请求的 X-Workspace-ID 必须等于目标公司
-    # （前端 onCompanyChange 已先将 currentCompanyId 置为目标公司，再发起切换）
-    # 防止未带 header 的请求任意绑定任意公司（首次绑定前的窗口期任选公司）
+    # 安全校验：切换请求的 X-Workspace-ID 必须等于目标工作区
+    # （前端 onCompanyChange 已先将 currentCompanyId 置为目标工作区，再发起切换）
+    # 防止未带 header 的请求任意绑定任意工作区（首次绑定前的窗口期任选工作区）
     if old_cid != workspace_id:
         raise HTTPException(
             status_code=403,
@@ -175,7 +175,7 @@ def get_workspace_agent_identity(
     workspace_id: int,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """获取公司的 Agent 身份文本（优先文件，其次 DB 缓存）。仅允许查自己的。"""
+    """获取工作区的 Agent 身份文本（优先文件，其次 DB 缓存）。仅允许查自己的。"""
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
     identity = workspace_module.get_agent_identity(workspace_id)
@@ -188,7 +188,7 @@ def update_workspace_agent_identity(
     payload: AgentIdentityUpdate,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """更新公司的 Agent 身份。
+    """更新工作区的 Agent 身份。
 
     同时写 DB 与标准 identity 文件 —— 提示词解析是**文件优先**，
     只写 DB 会导致 UI 改了身份但提示词仍是旧内容。

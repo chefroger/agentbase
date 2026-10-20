@@ -39,7 +39,7 @@ _onboarding_done: bool = False
 
 
 def is_onboarding_done() -> bool:
-    """检查系统是否已完成首次引导（至少有一家活跃公司）。
+    """检查系统是否已完成首次引导（至少有一个活跃工作区）。
 
     检测逻辑：
       1. 查 workspaces 表是否有 is_active=1 的记录
@@ -116,7 +116,7 @@ def _build_agent_identity(workspace_name: str, identity_data: dict) -> str:
     return "\n".join(lines)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# One-step onboarding: 创建公司 + 配置 Agent 身份
+# One-step onboarding: 创建工作区 + 配置 Agent 身份
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_first_workspace(
@@ -127,10 +127,10 @@ def create_first_workspace(
     *,
     work_dir_name: str = "",
 ) -> dict:
-    """创建第一个公司并配置其 Agent 身份（原子操作）。
+    """创建第一个工作区并配置其 Agent 身份（原子操作）。
 
     参数：
-        workspace_name: 公司名称（必填）
+        workspace_name: 工作区名称（必填）
         contact_name: 联系人姓名（可选）
         contact_email: 联系人邮箱（可选）
         identity_data: Agent 身份配置字典（可选），
@@ -141,7 +141,7 @@ def create_first_workspace(
         {"workspace": {...}, "agentbase_workspace": {...}}
 
     异常：
-        ValueError: workspace_name 为空，或公司已存在
+        ValueError: workspace_name 为空，或工作区已存在
     """
     if not workspace_name or not workspace_name.strip():
         raise ValueError("workspace_name 不能为空")
@@ -152,7 +152,7 @@ def create_first_workspace(
         identity_data or {},
     )
 
-    # Step 1: 创建公司记录 + 桌面工作目录 + 文档库
+    # Step 1: 创建工作区记录 + 桌面工作目录 + 文档库
     workspace = _workspace_module.create(
         name=workspace_name.strip(),
         contact_name=contact_name.strip(),
@@ -166,7 +166,7 @@ def create_first_workspace(
         agent_identity_md=agent_identity,
     )
 
-    # Step 3: 将 agent_identity 写入公司目录下的标准文件
+    # Step 3: 将 agent_identity 写入工作区目录下的标准文件
     # 路径由 agentbase.prompts.write_agent_identity 统一决定（~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md），
     # 这里不自己拼路径 —— 历史上两边各拼一份、拼出不同结果，导致读取方永远读不到写入的文件
     slug = workspace.get("slug", "")

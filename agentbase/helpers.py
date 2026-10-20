@@ -537,10 +537,10 @@ def build_query(
         from agentbase.prompt import LANGUAGE_POLICY_BLOCK, LANGUAGE_POLICY_BLOCK_EN
         system_prompt = system_prompt.replace(LANGUAGE_POLICY_BLOCK, LANGUAGE_POLICY_BLOCK_EN)
 
-    # 1.5 注入当前公司信息 — Agent 需要明确知道自己为哪家公司工作。
-    # 公司 ID 这条**特别重要**：chat_memory_list 等公司隔离工具要带 workspace_id 参数
+    # 1.5 注入当前工作区信息 — Agent 需要明确知道自己为哪个工作区服务。
+    # 工作区 ID 这条**特别重要**：chat_memory_list 等工作区隔离工具要带 workspace_id 参数
     # （conversations 表按 workspace_id 严格隔离，搜错会读到别人的数据），
-    # 而 LLM 自身没有"当前是哪个公司"的可靠来源 —— 没有这一行就只能瞎填。
+    # 而 LLM 自身没有"当前是哪个工作区"的可靠来源 —— 没有这一行就只能瞎填。
     if workspace_id:
         co = _workspace.get(workspace_id)
         if co:
@@ -625,7 +625,7 @@ def build_query(
             # 整块覆盖掉 —— 用户点名文件时那条最强指令会被静默丢弃
             doc_context += (
                 f"\n## 可用文档目录\n"
-                f"当前公司有以下数据目录，你**可以根据用户问题自行判断**是否需要读取：\n"
+                f"当前工作区有以下数据目录，你**可以根据用户问题自行判断**是否需要读取：\n"
                 f"{dir_lines}\n\n"
                 f"**如果决定读取文件，必须遵守以下规则：**\n"
                 f"1. 使用 list_files 列出目录中的所有文件，**不跳过任何文件**\n"

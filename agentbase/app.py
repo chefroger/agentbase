@@ -642,7 +642,7 @@ def _create_system_router() -> APIRouter:
         return {"ok": True, "message": "重启指令已发送"}
 
     # ── Hermes 共存 / 升级端点 ──────────────────────────────────────────────
-    # 为什么放在系统路由：这些是「修好软件本身」的动作，不属于任何公司的业务数据，
+    # 为什么放在系统路由：这些是「修好软件本身」的动作，不属于任何工作区的业务数据，
     # 因此不需要 X-Workspace-ID，只需要 session token（与 update/restart 同级）。
 
     @router.get("/system/hermes-compat")

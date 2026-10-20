@@ -646,7 +646,7 @@ def augment_query(
     参数：
         query:      用户原始输入
         skill_name: 可选的显式 skill 名称（传入时覆盖自动匹配）
-        workspace_id: 可选的公司 ID（保留参数以兼容旧调用）
+        workspace_id: 可选的工作区 ID（保留参数以兼容旧调用）
 
     返回：
         注入后的完整 query（含 [SKILL AUGMENTATION] 标记块）。

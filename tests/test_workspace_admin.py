@@ -385,7 +385,7 @@ class TestPurgeFindsUnrecordedWorkDir:
         text, _ = workspace_admin.purge_workspace("wrong-co")
 
         assert "桌面目录" in text, "没把桌面文件夹列进计划 —— 用户以为删干净了"
-        assert "按公司名找到" in text, "要说明这个路径是回找来的，不是记录里的"
+        assert "按工作区名找到" in text, "要说明这个路径是回找来的，不是记录里的"
 
     def test_purge_actually_deletes_name_matched_dir(self, env):
         from agentbase.workspace import crud

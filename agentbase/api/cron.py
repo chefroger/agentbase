@@ -47,10 +47,10 @@ def get_today_cron(_cid: int = Depends(require_workspace)):
     任务来源: jobs.json 中已激活的定时任务。如果 jobs.json 不存在或为空，
     回退到内置标准任务列表。
 
-    **机器级资源（无公司维度）**：数据来自 Hermes 的 ~/.hermes/cron/，
-    任务名与输出文件都不带公司标识，因此无法按公司过滤 ——
-    这里保留公司上下文校验与其它业务端点保持一致，但**故意不使用 cid**。
-    若将来要按公司隔离，需先在 Hermes 侧给 cron job 打公司标签。
+    **机器级资源（无工作区维度）**：数据来自 Hermes 的 ~/.hermes/cron/，
+    任务名与输出文件都不带工作区标识，因此无法按工作区过滤 ——
+    这里保留工作区上下文校验与其它业务端点保持一致，但**故意不使用 cid**。
+    若将来要按工作区隔离，需先在 Hermes 侧给 cron job 打工作区标签。
     """
     today = date.today().isoformat()
     now = datetime.now()
@@ -186,8 +186,8 @@ def get_active_jobs(_cid: int = Depends(require_workspace)):
 
     从 ~/.hermes/cron/jobs.json 读取，返回任务名称、调度时间、下次执行时间。
 
-    **机器级资源（无公司维度）**：与 get_today_cron 同理，jobs.json 里没有公司标识，
-    因此**故意不使用 cid**，仅保留公司上下文校验与其它业务端点保持一致。
+    **机器级资源（无工作区维度）**：与 get_today_cron 同理，jobs.json 里没有工作区标识，
+    因此**故意不使用 cid**，仅保留工作区上下文校验与其它业务端点保持一致。
     """
     if not _jobs_file().is_file():
         return []

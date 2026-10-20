@@ -40,8 +40,8 @@ router = APIRouter(tags=["chat"])
 # 提为模块常量是为了可测 —— 超时路径以前没有测试覆盖（它的 error 事件曾被丢弃）。
 _STREAM_DEADLINE_SECONDS = 1800.0
 
-# ── 简单内存限流（per-process，按公司隔离）──────────────────────────────────
-# 每个公司 60 秒窗口内最多 20 次 chat 请求（含 sync + SSE）
+# ── 简单内存限流（per-process，按工作区隔离）──────────────────────────────────
+# 每个工作区 60 秒窗口内最多 20 次 chat 请求（含 sync + SSE）
 _MAX_CHAT_PER_MINUTE = 20
 _WINDOW_SECONDS = 60.0
 _chat_timestamps: dict[int, list[float]] = {}  # workspace_id → [timestamps]
@@ -49,7 +49,7 @@ _rate_limit_lock = threading.Lock()
 
 # 定期清理：每小时扫描一次，删除超过 1 小时无活跃时间戳的 workspace entry，
 # 防止 _chat_timestamps 和 _last_skill_per_workspace 无界增长导致内存泄漏。
-# 阈值 3600s 远大于限流窗口 60s，不会误清活跃公司。
+# 阈值 3600s 远大于限流窗口 60s，不会误清活跃工作区。
 _STALE_THRESHOLD = 3600.0
 
 def _cleanup_rate_limit_dicts():
@@ -66,7 +66,7 @@ def _cleanup_rate_limit_dicts():
         # 同时清理 skill 缓存中超过阈值的 workspace entry
         with _skill_cache_lock:
             # 只能清理在 _chat_timestamps 中也被清理的条目，
-            # 确保活跃公司的 skill 缓存不会被误删
+            # 确保活跃工作区的 skill 缓存不会被误删
             for cid in stale:
                 _last_skill_per_workspace.pop(cid, None)
 
@@ -80,7 +80,7 @@ _cleanup_thread.start()
 
 
 def _check_chat_rate_limit(workspace_id: int) -> bool:
-    """检查指定公司是否超过 chat 限流阈值。返回 True 表示允许继续。"""
+    """检查指定工作区是否超过 chat 限流阈值。返回 True 表示允许继续。"""
     global _chat_timestamps
     now = time.time()
     with _rate_limit_lock:

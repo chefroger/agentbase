@@ -3,10 +3,10 @@ AgentBase — Prompt File Loader.
 
 Unified loader for all user-editable prompt files:
   - ~/.agentbase/prompts/system.md          (全局自定义 system prompt)
-  - ~/.agentbase/workspaces/{slug}/agent_identity.md  (公司级 identity)
+  - ~/.agentbase/workspaces/{slug}/agent_identity.md  (工作区级 identity)
 
 读取优先级（纵向覆盖）：
-  1. ~/.agentbase/workspaces/{slug}/agent_identity.md   ← 公司级（最高）
+  1. ~/.agentbase/workspaces/{slug}/agent_identity.md   ← 工作区级（最高）
   2. ~/.agentbase/prompts/system.md                   ← 全局用户自定义
   3. 代码 fallback (agentbase/prompt.py)              ← 最低
 
@@ -90,7 +90,7 @@ def _load_file(path: Path, fallback: str = "") -> str:
 
 
 def _workspace_identity_path(slug: str) -> Path:
-    """返回公司级 identity 文件的绝对路径。
+    """返回工作区级 identity 文件的绝对路径。
 
     必须与工作目录布局一致 —— _ensure_data_dir 把 .agentbase-template 复制到
     {data_dir}/workspaces/{slug}/（data_dir 即 ~/.agentbase/{slug}/），文件名是模板里的
@@ -116,21 +116,21 @@ def get_system_prompt(workspace_slug: str | None = None) -> str:
     """返回 system prompt（纵向覆盖，取最高优先级）。
 
     优先级：
-      1. ~/.agentbase/workspaces/{slug}/agent_identity.md   ← 公司级
+      1. ~/.agentbase/workspaces/{slug}/agent_identity.md   ← 工作区级
       2. ~/.agentbase/prompts/system.md                    ← 全局
       3. 代码 fallback (AGENTBASE_SYSTEM_PROMPT)           ← 默认
 
     用户 vim 直接改文件 → mtime 变化 → 下次请求自动读到新内容。
     """
-    # 最高优先：公司级 identity — 如果传入了 workspace_slug，先尝试读取公司级文件
+    # 最高优先：工作区级 identity — 如果传入了 workspace_slug，先尝试读取工作区级文件
     if workspace_slug:
         workspace_path = _workspace_identity_path(workspace_slug)
         content = _load_file(workspace_path)
-        # 公司级文件存在且非空，以公司级 identity 为准
+        # 工作区级文件存在且非空，以工作区级 identity 为准
         if content:
             return content
 
-    # 全局自定义 — 公司级没有命中，尝试读取全局 system.md
+    # 全局自定义 — 工作区级没有命中，尝试读取全局 system.md
     global_path = _system_prompt_path()
     content = _load_file(global_path)
     # 全局文件存在且非空，以全局 prompt 为准
@@ -165,7 +165,7 @@ def _legacy_identity_path(slug: str) -> Path:
 
 
 def write_agent_identity(workspace_slug: str, content: str) -> None:
-    """写入公司 identity 文件（供 onboarding 或手动编辑调用）。
+    """写入工作区 identity 文件（供 onboarding 或手动编辑调用）。
 
     文件路径：~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md
     写入后自动失效 mtime 缓存。
@@ -194,7 +194,7 @@ def write_system_prompt(content: str) -> None:
 
 
 def _brand_safety_path(slug: str) -> Path:
-    """返回公司级品牌安全护栏文件路径。
+    """返回工作区级品牌安全护栏文件路径。
 
     与身份文件同约定（工作目录/模板布局）：
         ~/.agentbase/{slug}/workspaces/{slug}/brand_safety.md
@@ -206,7 +206,7 @@ def get_brand_safety(workspace_slug: str | None = None) -> str:
     """加载品牌安全护栏文本。
 
     优先级：
-      1. ~/.agentbase/workspaces/{slug}/brand_safety.md（公司级自定义）
+      1. ~/.agentbase/workspaces/{slug}/brand_safety.md（工作区级自定义）
       2. 代码内置 BRAND_SAFETY_BLOCK（全局默认）
 
     利用现有 mtime 缓存机制，文件修改后下次请求自动生效。
@@ -225,12 +225,12 @@ def _build_workspace_context_block(workspace_id: int | None) -> str:
     """生成"当前 agentbase 会话上下文"段；workspace_id 为 None 时返回空串。
 
     这段**目前不直接被 resolve_system_prompt 使用** —— 实际注入点放在 agentbase.helpers.build_query
-    里，紧跟在它已有的"## 当前工作公司"段后面（"ID 是 X / 数据操作必须限定在该公司" 后面），
+    里，紧跟在它已有的"## 当前工作区"段后面（"ID 是 X / 数据操作必须限定在该工作区" 后面），
     让 LLM 在看到 ID 数字**紧接着**看到"带 workspace_id 参数的工具必须用这个数字"，**强绑定**。
 
-    为什么必须显式写出 workspace_id 数字：chat_memory_list 等公司隔离工具要 workspace_id
+    为什么必须显式写出 workspace_id 数字：chat_memory_list 等工作区隔离工具要 workspace_id
     参数（chat_memory 的 conversations 表按 workspace_id 严格隔离，搜错会读到别人的数据），
-    而 LLM 自身没有"当前会话是哪个公司"的可靠来源 —— 没有这段就只能瞎填。
+    而 LLM 自身没有"当前会话是哪个工作区"的可靠来源 —— 没有这段就只能瞎填。
 
     返回空串时（workspace_id=None），agentbase.helpers 会**不追加**这段；这与它的
     "降级场景（chat_memory_list 不可用）"行为一致（见 agentbase.hermes_compat.hermes_python_compat）。
@@ -255,19 +255,19 @@ def resolve_system_prompt(
     """组合出最终 system prompt：**基础规则块 + 用户自定义文本**。
 
     基础规则块（Disclaimer / Role / Language Policy / Data Isolation / 准确规则，
-    由 code_fallback 指定档位）始终发送，公司身份文本追加在其后。
+    由 code_fallback 指定档位）始终发送，工作区身份文本追加在其后。
     历史上这里是二选一的优先级链（文件 → DB → 全局 → 代码），而 onboarding 必然写入
     身份文本，于是身份把基础规则整体顶替 —— 实测返回长度恰好等于身份文本长度，
     这些规则从未到达过模型。
 
     自定义层优先级（高到低）：
-      1. 公司 identity 文件 ~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md
+      1. 工作区 identity 文件 ~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md
       2. DB agent_identity_md 字段（运行时缓存）
       3. 全局 system.md（~/.agentbase/prompts/system.md）
     三者都没有时只返回基础规则块。
 
     Args:
-        workspace_slug: 公司 slug（用于定位 identity 文件）
+        workspace_slug: 工作区 slug（用于定位 identity 文件）
         db_identity:  DB 中 agent_identity_md 字段值（缓存）
         code_fallback: 基础规则块档位（None 时用默认 AGENTBASE_SYSTEM_PROMPT_FIRST_TURN）。
                        OSINT 类 skill 传 AGENTBASE_SYSTEM_PROMPT_OSINT，
@@ -282,7 +282,7 @@ def resolve_system_prompt(
 
 def _resolve_custom_prompt(workspace_slug: str | None, db_identity: str | None) -> str:
     """按优先级取用户自定义身份文本；都没有时返回空串。"""
-    # 1. 公司 identity 文件优先级最高
+    # 1. 工作区 identity 文件优先级最高
     if workspace_slug:
         file_content = get_agent_identity_by_slug(workspace_slug)
         if file_content:

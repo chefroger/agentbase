@@ -15,15 +15,15 @@ from agentbase.database import get_connection
 
 logger = logging.getLogger(__name__)
 
-# 对话清理节流：每家公司每天最多运行一次，避免每次保存都扫描全表
+# 对话清理节流：每个工作区每天最多运行一次，避免每次保存都扫描全表
 _last_purge_date: dict[int, str] = {}
 
 
 def purge_old_conversations(workspace_id: int, days: int = 365, min_total: int = 30000) -> int:
-    """删除指定公司 N 天前的对话记录，返回删除行数。
+    """删除指定工作区 N 天前的对话记录，返回删除行数。
 
     仅在总对话数超过 min_total 时才执行清理——避免对小数据集的过度裁剪。
-    每家公司独立清理，不影响其他公司的数据保留策略。
+    每个工作区独立清理，不影响其他工作区的数据保留策略。
     """
     conn = get_connection()
     try:
@@ -58,7 +58,7 @@ def save(
     context: str = "",
     skill: str = "",
 ) -> dict:
-    """保存一条对话记录，作用域限定到指定公司。返回新插入的行，以字典形式呈现。
+    """保存一条对话记录，作用域限定到指定工作区。返回新插入的行，以字典形式呈现。
 
     skill 参数记录本次查询匹配到的技能名（存入 extra3），供质量统计按技能聚合评分。
     """
@@ -101,7 +101,7 @@ def save(
 def list_by_context(
     workspace_id: int, context: str, limit: int = 50
 ) -> list[dict]:
-    """返回指定公司内某个上下文（如 daily/lead/platform）最近的对话记录。
+    """返回指定工作区内某个上下文（如 daily/lead/platform）最近的对话记录。
 
     同时包含 context 为空字符串的旧记录，兼容升级前的历史数据。
     """
@@ -119,7 +119,7 @@ def list_by_context(
 
 
 def list_by_workspace(workspace_id: int, limit: int = 50) -> list[dict]:
-    """返回指定公司最近的对话记录，按最新在前排序。"""
+    """返回指定工作区最近的对话记录，按最新在前排序。"""
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -132,7 +132,7 @@ def list_by_workspace(workspace_id: int, limit: int = 50) -> list[dict]:
 
 
 def get(workspace_id: int, conversation_id: int) -> dict | None:
-    """根据 ID 获取单条对话记录，作用域限定到公司。"""
+    """根据 ID 获取单条对话记录，作用域限定到工作区。"""
     conn = get_connection()
     try:
         row = conn.execute(
@@ -154,7 +154,7 @@ def update_response(workspace_id: int, conversation_id: int, response: str) -> d
         ).rowcount
         conn.commit()
         if n == 0:
-            # 没有行被更新，说明指定 ID 的记录不存在或不属于该公司
+            # 没有行被更新，说明指定 ID 的记录不存在或不属于该工作区
             return None
         return get(workspace_id, conversation_id)
     finally:
@@ -162,7 +162,7 @@ def update_response(workspace_id: int, conversation_id: int, response: str) -> d
 
 
 def delete(workspace_id: int, conversation_id: int) -> bool:
-    """删除一条对话记录，作用域限定到公司。"""
+    """删除一条对话记录，作用域限定到工作区。"""
     conn = get_connection()
     try:
         cur = conn.execute(
@@ -211,7 +211,7 @@ _LOW_RATING_THRESHOLD = 2
 
 
 def get_quality_stats(workspace_id: int, days: int = 30) -> dict:
-    """聚合指定公司近 N 天的对话评分，用于发现需要优化的技能/场景。
+    """聚合指定工作区近 N 天的对话评分，用于发现需要优化的技能/场景。
 
     只统计窗口期内已评分的记录（extra2.rating 非空）。分组维度：
       - by_skill:   按对话匹配到的技能（extra3.skill）聚合
@@ -351,7 +351,7 @@ def save_with_context(
         except Exception as exc:
             logger.debug("Memory retain skipped: %s", exc)
 
-    # 每天运行一次对话清理（每家公司独立节流），删除 365 天前的旧记录（仅当总量超过 30000 条时触发）
+    # 每天运行一次对话清理（每个工作区独立节流），删除 365 天前的旧记录（仅当总量超过 30000 条时触发）
     if workspace_id:
         global _last_purge_date
         from datetime import date as _date
@@ -369,7 +369,7 @@ def save_with_context(
 def recall_context(query: str, *, bank_id: str = "agentbase") -> str:
     """搜索 Hindsight 长期记忆以获取相关的历史对话记录。
 
-    可按公司隔离（传入 bank_id="agentbase-workspace-{id}"）。
+    可按工作区隔离（传入 bank_id="agentbase-workspace-{id}"）。
 
     如果 Hindsight 不可用或未找到匹配结果，则返回空字符串。
     """
@@ -509,7 +509,7 @@ def search_history(
     """按时间范围查询历史对话记录（供 LLM 工具调用使用）。
 
     Args:
-        workspace_id: 作用域，限定到公司
+        workspace_id: 作用域，限定到工作区
         time_range: "today" | "yesterday" | "this_week" | "last_week"
                   | "this_month" | "last_month" | "this_year" | "last_year" | "all"
                   （未知值 → 等同 "all"；fail-safe）

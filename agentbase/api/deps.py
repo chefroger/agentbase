@@ -31,7 +31,7 @@ def set_session_token(token: str) -> None:
 
 
 def set_active_workspace(token: str, workspace_id: int) -> None:
-    """绑定 session token 到指定公司（前端切换公司时调用）。"""
+    """绑定 session token 到指定工作区（前端切换工作区时调用）。"""
     with _workspace_bind_lock:
         _ACTIVE_WORKSPACE[token] = workspace_id
 
@@ -63,7 +63,7 @@ def require_workspace(
     session 级别的活跃工作区绑定在路由层通过 _check_workspace_binding() 完成。
 
     Raises:
-        HTTPException(401): header 缺失、无效、或公司不存在/未激活
+        HTTPException(401): header 缺失、无效、或工作区不存在/未激活
     """
     cid_str = x_workspace_id if isinstance(x_workspace_id, str) else ""
     if not cid_str or not cid_str.strip():
@@ -77,7 +77,7 @@ def require_workspace(
     except ValueError as e:
         raise HTTPException(status_code=401, detail="X-Workspace-ID must be an integer.") from e
 
-    # 验证公司存在且激活
+    # 验证工作区存在且激活
     tc = workspace_module.get_workspace_record(cid)
     if not tc:
         raise HTTPException(status_code=401, detail=f"Workspace {cid} not found in AgentBase system.")
@@ -93,7 +93,7 @@ def opt_workspace(
     """解析 X-Workspace-ID header，返回 workspace_id 或 None。
 
     与 require_workspace 的区别：header 缺失时不抛异常。
-    仅用于不涉及公司数据隔离的非敏感端点（如 /memory/status）。
+    仅用于不涉及工作区数据隔离的非敏感端点（如 /memory/status）。
 
     Raises:
         HTTPException(401): header 存在但无法解析为整数

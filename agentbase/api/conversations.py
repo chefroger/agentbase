@@ -2,7 +2,7 @@
 AgentBase — 对话记录 API 路由。
 
 端点：
-  GET    /conversations                   — 列出当前公司的对话
+  GET    /conversations                   — 列出当前工作区的对话
   GET    /conversations/quality-stats     — 评分质量统计（低分技能/场景排行）
   POST   /conversations                   — 保存对话回合
   GET    /conversations/{conversation_id}  — 获取单条对话
@@ -27,7 +27,7 @@ def list_conversations(
     limit: int = 50,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """列出当前公司的最近对话，可按上下文过滤。"""
+    """列出当前工作区的最近对话，可按上下文过滤。"""
     if context:
         return chat_memory.list_by_context(x_workspace_id, context, limit)
     return chat_memory.list_by_workspace(x_workspace_id, limit)
@@ -38,7 +38,7 @@ def get_quality_stats(
     days: int = 30,
     x_workspace_id: int = Depends(require_workspace),
 ):
-    """聚合当前公司近 N 天的对话评分，返回按技能/场景聚合的均分与低分排行。
+    """聚合当前工作区近 N 天的对话评分，返回按技能/场景聚合的均分与低分排行。
 
     用于质量追踪：快速看到哪些技能或入口场景的回复评分偏低，作为优化输入。
     注意：此路由必须声明在 /conversations/{conversation_id} 之前，

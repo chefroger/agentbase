@@ -230,7 +230,7 @@ def reflect(
 
 
 def _bank_id(workspace_id: int | None) -> str:
-    """构造按公司隔离的 bank_id。"""
+    """构造按工作区隔离的 bank_id。"""
     if workspace_id:
         return f"agentbase-workspace-{workspace_id}"
     return "agentbase-default"

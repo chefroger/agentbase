@@ -1,16 +1,16 @@
-"""`agentbase workspace` —— 公司管理命令（作者用的隐藏功能，**不写进用户文档**）。
+"""`agentbase workspace` —— 工作区管理命令（作者用的隐藏功能，**不写进用户文档**）。
 
 ## 为什么需要
 
 界面上的「删除」走 `DELETE /workspaces/{id}` → `crud.delete()`，**只做软删除**
-（`is_active=0`）。删完公司从列表里消失，但：
+（`is_active=0`）。删完工作区从列表里消失，但：
 
-  - 桌面上的公司文件夹（`~/Desktop/{公司名}/`）**还在**
+  - 桌面上的工作区文件夹（`~/Desktop/{工作区名}/`）**还在**
   - `~/.agentbase/{slug}/` **还在**
   - 数据库行**还在**（只是 is_active=0）
 
 `crud.purge()` 能把这些物理删干净，但全项目**没有任何入口调用它** ——
-这就是"错误安装后留下的公司很难清理"的根本原因。
+这就是"错误安装后留下的工作区很难清理"的根本原因。
 
 另外 `crud.delete()` 的注释写着「数据保留 30 天后由 purge() 执行物理清理」，
 而既然没人调用 purge，那句 30 天承诺实际是空的。
@@ -22,7 +22,7 @@
 
 ## 命令
 
-    agentbase workspace list                    列出全部公司（含已软删除的）
+    agentbase workspace list                    列出全部工作区（含已软删除的）
     agentbase workspace purge <slug|id>         先打印"将要删除什么"，不动手
     agentbase workspace purge <slug|id> --yes   真的删
 """
@@ -139,7 +139,7 @@ def _parse_flags(args: list[str]) -> tuple[bool, str | None]:
 # ── 辅助 ──────────────────────────────────────────────────────────────────
 
 def _resolve(target: str) -> dict | None:
-    """按数字 ID 或 slug 找到公司（含已软删除的）。找不到返回 None。"""
+    """按数字 ID 或 slug 找到工作区（含已软删除的）。找不到返回 None。"""
     from agentbase.workspace import crud
 
     target = (target or "").strip()
@@ -156,7 +156,7 @@ def _path_key(path: Path | str) -> str:
     **Windows 的坑**：路径不区分大小写（`C:\\Users\\X` 与 `c:\\users\\x` 是同一个
     目录），而字符串比较区分。直接用 `str(path.resolve())` 做 `in` 判断时，只要
     记录里的大小写与实际解析结果不一致，同一目录就会被判成"不在已知集合里" ——
-    后果是**在用公司的桌面文件夹被当成残留**，被 `purge-dir` 删掉。
+    后果是**在用工作区的桌面文件夹被当成残留**，被 `purge-dir` 删掉。
 
     用 `os.path.normcase` 统一：Windows 上转小写，POSIX 上是恒等（正是要的语义）。
 
@@ -283,10 +283,10 @@ def _related_counts(workspace_id: int) -> dict:
 
 
 def _resolve_work_dir(workspace: dict) -> tuple[Path | None, str]:
-    """找出这家公司的桌面工作目录。返回 (路径, 来源说明)。
+    """找出这个工作区的桌面工作目录。返回 (路径, 来源说明)。
 
-    优先用 `extra1.work_dir` 里记录的路径；**记录为空时按公司名去桌面找** ——
-    早期版本创建的公司没记这个字段（实测本机 workspace_id=4「万花筒」就是
+    优先用 `extra1.work_dir` 里记录的路径；**记录为空时按工作区名去桌面找** ——
+    早期版本创建的工作区没记这个字段（实测本机 workspace_id=4「万花筒」就是
     `extra1={}`），而它的桌面文件夹真实存在。不找回来的话，purge 会把那个
     文件夹留在桌面上 —— 正是用户抱怨的那种残留。
 
@@ -307,14 +307,14 @@ def _resolve_work_dir(workspace: dict) -> tuple[Path | None, str]:
             continue
         candidate = desktop / candidate_name
         if is_agentbase_work_dir(candidate):
-            return candidate, "按公司名找到"
+            return candidate, "按工作区名找到"
     return None, ""
 
 
 # ── 孤儿目录：桌面有 AgentBase 结构、数据库却没记录 ────────────────────────────
 
 def is_agentbase_work_dir(path: Path) -> bool:
-    """判断一个目录是不是 AgentBase 建的公司工作目录（按分类子目录指纹）。"""
+    """判断一个目录是不是 AgentBase 建的工作区工作目录（按分类子目录指纹）。"""
     if not path.is_dir():
         return False
     try:
@@ -326,11 +326,11 @@ def is_agentbase_work_dir(path: Path) -> bool:
 
 
 def _known_workspace_paths_and_names() -> tuple[set[str], set[str]]:
-    """返回 (已知 work_dir 的 resolve 路径集合, 已知公司名/slug 的集合)。
+    """返回 (已知 work_dir 的 resolve 路径集合, 已知工作区名/slug 的集合)。
 
-    **名字这一路是防误报的关键**：早期版本创建的公司 `extra1` 是空的
+    **名字这一路是防误报的关键**：早期版本创建的工作区 `extra1` 是空的
     （没记录 work_dir），但桌面文件夹真实存在且在**使用中**。只按路径判定就会
-    把在用公司的文件夹当成孤儿 —— 而 purge-dir 会把它删掉。实测本机就有这种
+    把在用工作区的文件夹当成孤儿 —— 而 purge-dir 会把它删掉。实测本机就有这种
     （workspace_id=4「万花筒」extra1={}，`~/Desktop/万花筒/` 却在用）。
     """
     import json as _json
@@ -361,13 +361,13 @@ def _known_workspace_paths_and_names() -> tuple[set[str], set[str]]:
 
 
 def find_orphan_work_dirs() -> list[Path]:
-    """桌面上有 AgentBase 目录结构、但**不属于任何已记录公司**的目录。
+    """桌面上有 AgentBase 目录结构、但**不属于任何已记录工作区**的目录。
 
     错误安装的典型残留：文件夹建出来了，数据库却没落记录（或库被清过），
     于是从界面和 `list` 都看不到它，只能扫桌面找出来。
 
-    判定保守：与任一公司的 **work_dir 路径**或**名字/slug** 相符就不算孤儿 ——
-    宁可漏报（用户还能手动 purge-dir），绝不能误报（会删掉在用公司的真实文件）。
+    判定保守：与任一工作区的 **work_dir 路径**或**名字/slug** 相符就不算孤儿 ——
+    宁可漏报（用户还能手动 purge-dir），绝不能误报（会删掉在用工作区的真实文件）。
     """
     from agentbase.workspace.workdir import _get_desktop_path
 
@@ -382,7 +382,7 @@ def find_orphan_work_dirs() -> list[Path]:
         if not child.is_dir() or not is_agentbase_work_dir(child):
             continue
         if child.name.strip().lower() in known_names:
-            continue  # 名字对得上某家公司 → 不是孤儿（老数据没记路径的情况）
+            continue  # 名字对得上某个工作区 → 不是孤儿（老数据没记路径的情况）
         try:
             if _path_key(child) in known_paths:
                 continue
@@ -420,9 +420,9 @@ def list_workspaces() -> str:
     finally:
         conn.close()
 
-    lines = ["", "══ 公司列表 ══"]
+    lines = ["", "══ 工作区列表 ══"]
     if not rows:
-        lines.append("  （数据库里没有任何公司）")
+        lines.append("  （数据库里没有任何工作区）")
     for r in rows:
         cid, name, slug, is_active, created = r[0], r[1], r[2], r[3], r[4]
         data_dir, work_dir = extra.get(cid, ("", ""))
@@ -463,7 +463,7 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
 
     workspace = _resolve(target)
     if not workspace:
-        return f"✗ 找不到公司：{target!r}（用 agentbase workspace list 看有哪些）", 1
+        return f"✗ 找不到工作区：{target!r}（用 agentbase workspace list 看有哪些）", 1
 
     cid = workspace["id"]
     tc = crud.get_workspace_record(cid) or {}
@@ -496,9 +496,9 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
     lines = [
         "",
         "══ 将要删除 ══",
-        f"  公司      [{cid}] {workspace['name']}  (slug: {workspace['slug']})",
+        f"  工作区      [{cid}] {workspace['name']}  (slug: {workspace['slug']})",
         f"  状态      {'启用' if workspace['is_active'] else '已软删除'}",
-        f"  数据库行  1 家公司 + {counts['libraries']} 个文档库 + "
+        f"  数据库行  1 个工作区 + {counts['libraries']} 个文档库 + "
         f"{counts['customers']} 个客户 + {counts['conversations']} 条对话 + "
         f"{counts['orders']} 个订单（级联删除）",
     ]
@@ -536,13 +536,13 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
     ok = crud.purge(cid)
     lines.append("")
     if not ok:
-        lines.append("  ✗ 删除失败（公司可能已不存在）")
+        lines.append("  ✗ 删除失败（工作区可能已不存在）")
         return "\n".join(lines), 1
 
     # crud.purge() 只删它从 extra1 里读到的 work_dir。老数据那里是空的，
     # 所以「按名字回找到」的那个文件夹它不会碰 —— 必须在这里补删，
-    # 否则 purge 完桌面上仍留着公司文件夹（正是用户抱怨的残留）。
-    if work_dir and work_dir_src == "按公司名找到" and _delete_guard_ok(work_dir):
+    # 否则 purge 完桌面上仍留着工作区文件夹（正是用户抱怨的残留）。
+    if work_dir and work_dir_src == "按工作区名找到" and _delete_guard_ok(work_dir):
         try:
             _rmtree(work_dir)
         except OSError as e:
@@ -564,7 +564,7 @@ def purge_workspace(target: str, *, yes: bool = False, password: str | None = No
 
 
 def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) -> tuple[str, int]:
-    """删除一个**孤儿**工作目录（数据库里没有对应公司记录的那种）。
+    """删除一个**孤儿**工作目录（数据库里没有对应工作区记录的那种）。
 
     只接受通过 `is_agentbase_work_dir()` 指纹校验、且在桌面下的目录 ——
     避免这条命令被当成任意删除工具使用。
@@ -576,7 +576,7 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
         return f"✗ 目录不存在：{path}", 1
     if not is_agentbase_work_dir(path):
         return (
-            f"✗ 这个目录不像 AgentBase 建的公司文件夹（缺少分类子目录）：{path}\n"
+            f"✗ 这个目录不像 AgentBase 建的工作区文件夹（缺少分类子目录）：{path}\n"
             "  为防误删，本命令只处理带 AgentBase 目录结构的文件夹。",
             1,
         )
@@ -585,8 +585,8 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
     except (ValueError, OSError):
         return f"✗ 只允许删除桌面下的目录：{path}", 1
 
-    # 属于在用公司的文件夹一律不碰 —— 即便用户手动指定。
-    # 这类文件夹（老数据没记 work_dir）里有该公司的真实业务文件，删了不可恢复。
+    # 属于在用工作区的文件夹一律不碰 —— 即便用户手动指定。
+    # 这类文件夹（老数据没记 work_dir）里有该工作区的真实业务文件，删了不可恢复。
     known_paths, known_names = _known_workspace_paths_and_names()
     looks_live = path.name.strip().lower() in known_names
     if not looks_live:
@@ -596,9 +596,9 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
             looks_live = False
     if looks_live:
         return (
-            f"✗ 这个文件夹属于一个**在用中的公司**，不能按残留目录删除：{path}\n"
-            "  它里面可能有该公司的真实业务文件。\n"
-            f"  若确实要清理，请先删除那家公司（会连文件夹一起清）：\n"
+            f"✗ 这个文件夹属于一个**在用中的工作区**，不能按残留目录删除：{path}\n"
+            "  它里面可能有该工作区的真实业务文件。\n"
+            f"  若确实要清理，请先删除那个工作区（会连文件夹一起清）：\n"
             f"      agentbase workspace purge <slug 或 ID>\n",
             1,
         )
@@ -621,8 +621,8 @@ def purge_dir(path_str: str, *, yes: bool = False, password: str | None = None) 
     if not _password_gate(password, gate_lines):
         return preview + "\n".join(gate_lines), 1
 
-    # 删除前先落审计（`crud.purge` 同样先写审计再动手）。公司场景传 workspace_id=0,
-    # 因为孤儿目录本来就没有对应公司记录。
+    # 删除前先落审计（`crud.purge` 同样先写审计再动手）。工作区场景传 workspace_id=0,
+    # 因为孤儿目录本来就没有对应工作区记录。
     #
     # 注意**不要**往被删的目录里写"凭据"文件 —— 那个文件会随 rmtree 一起消失,
     # 等于什么痕迹都没留（我第一版就是这么写的，纯属自欺）。
