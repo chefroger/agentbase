@@ -21,7 +21,7 @@ from agentbase.api.meta import router as meta_router
 from agentbase.api.onboarding import router as onboarding_router
 from agentbase.api.packs import router as packs_router
 from agentbase.api.settings import router as settings_router
-from agentbase.api.workspaces import router as companies_router
+from agentbase.api.workspaces import router as workspaces_router
 
 
 def _enforce_workspace_binding(
@@ -71,7 +71,7 @@ router = APIRouter(
 )
 
 # 框架域子路由（业务 API 由 skill 包自带，不在此挂载）
-router.include_router(companies_router)
+router.include_router(workspaces_router)
 router.include_router(onboarding_router)
 router.include_router(conversations_router)
 router.include_router(chat_router)

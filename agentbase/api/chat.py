@@ -70,7 +70,8 @@ def _cleanup_rate_limit_dicts():
             for cid in stale:
                 _last_skill_per_workspace.pop(cid, None)
 
-# 进程内 skill 缓存：记录每个 workspace 上次使用的 skill 名称，用于跳过重复注入
+# 进程内 skill 缓存：记录每个 workspace 上次命中的 skill，仅用于归因/温度分流；
+# 不再用于跳过注入（每次请求都会重建 agent，必须每轮注入正文）。
 _last_skill_per_workspace: dict[int, str] = {}
 _skill_cache_lock = threading.Lock()
 
@@ -149,7 +150,7 @@ async def app(
     if not _check_chat_rate_limit(cid):
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后重试。")
 
-    # 读取上次使用的 skill 名称（用于跳过重复注入）
+    # 读取上次命中的 skill（仅作兼容；每轮都会重新注入技能正文）
     with _skill_cache_lock:
         last_skill = _last_skill_per_workspace.get(cid)
 
@@ -298,7 +299,7 @@ async def chat_stream(
     if not _check_chat_rate_limit(cid):
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后重试。")
 
-    # 读取上次使用的 skill 名称（用于跳过重复注入）
+    # 读取上次命中的 skill（仅作兼容；每轮都会重新注入技能正文）
     with _skill_cache_lock:
         last_skill = _last_skill_per_workspace.get(cid)
 

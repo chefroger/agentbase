@@ -60,6 +60,18 @@ def test_workspace_record_exposes_extra1(home):
     assert json.loads(record["extra1"])["work_dir"] == w["work_dir"]
 
 
+def test_agent_identity_file_wins_over_db(home):
+    """get_agent_identity 必须与最终提示词口径一致：磁盘文件优先。"""
+    from agentbase import prompts
+    from agentbase import workspace as ws
+
+    w = ws.create(name="Acme", slug="acme")
+    ws.update_workspace_record(w["id"], agent_identity_md="DB VALUE")
+    prompts.write_agent_identity("acme", "FILE VALUE")
+
+    assert ws.get_agent_identity(w["id"]) == "FILE VALUE"
+
+
 def test_identity_file_failure_returns_500_and_keeps_db(home, monkeypatch):
     """identity 文件写失败必须让调用方知道，且不先改 DB。"""
     from fastapi import HTTPException

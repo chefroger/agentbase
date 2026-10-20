@@ -483,7 +483,7 @@ def build_query(
     agent.run_conversation(system_message=...) 传入。
 
     workspace_id 决定注入哪个 workspace 的身份。
-    last_skill_name 上次使用的 skill 名称，连续同 skill 时跳过重复注入。
+    last_skill_name 仅作调用方兼容保留；**每轮都会重新注入技能正文**（不再跳过）。
 
     业务上下文（客户简报 / 订单 / 文档库）不在这里注入 —— 它们属于 skill 包的能力。
     """

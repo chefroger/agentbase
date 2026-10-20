@@ -557,33 +557,36 @@ def update_workspace_record(
 
 
 def get_agent_identity(workspace_id: int) -> str:
-    """返回公司的 Agent 身份标识文本。
+    """返回工作区的 Agent 身份文本（与最终提示词口径一致：**磁盘文件优先**）。
 
     优先级链（高到低）：
-      1. agentbase_workspaces.agent_identity_md 数据库字段（在线编辑 / 首次引导写入）
-      2. ~/.agentbase/{slug}/workspaces/{slug}/agent-identity.md 磁盘文件（用户手动编辑）
-      3. '' 空字符串 → 回退到通用 AGENTBASE_SYSTEM_PROMPT
+      1. {data_dir}/workspaces/{slug}/agent-identity.md（用户手动编辑 / 身份写接口）
+      2. agentbase_workspaces.agent_identity_md 数据库字段（运行时缓存）
+      3. '' → 回退到通用 AGENTBASE_SYSTEM_PROMPT
 
     注意：磁盘路径必须与工作目录/模板布局（_ensure_data_dir → {data_dir}/workspaces/{slug}/）
-    及 agentbase.prompts._workspace_identity_path 保持一致，否则文件回退永远命中不了。
-
-    Agent 身份文本会被注入到系统提示词中，让 AI 知道自己在为哪家公司服务。
+    及 agentbase.prompts._workspace_identity_path 保持一致，否则文件永远命中不了。
     """
     tc = get_workspace_record(workspace_id)
     if not tc:
         return ""
 
-    # 数据库内联覆盖优先（前端编辑后保存到这里）
-    if tc.get("agent_identity_md"):
-        return tc["agent_identity_md"]
-
-    # 其次检查磁盘文件（用户可能手动编辑了文件）
+    # 1) 磁盘文件优先（与 prompts._resolve_custom_prompt 一致）
     data_dir = Path(tc["data_dir"]) if tc.get("data_dir") else None
     slug = slug_from_id(workspace_id)
     if data_dir and slug:
         identity_file = data_dir / "workspaces" / slug / "agent-identity.md"
-        if identity_file.exists():
-            return identity_file.read_text(encoding="utf-8")
+        if identity_file.is_file():
+            try:
+                content = identity_file.read_text(encoding="utf-8").strip()
+            except OSError:
+                content = ""
+            if content:
+                return content
+
+    # 2) 数据库缓存
+    if tc.get("agent_identity_md"):
+        return tc["agent_identity_md"]
 
     return ""
 
