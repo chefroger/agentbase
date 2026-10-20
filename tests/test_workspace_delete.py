@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -45,6 +47,42 @@ def test_create_failure_keeps_preexisting_data_dir(home, monkeypatch):
     with pytest.raises(OSError):
         ws.create(name="Acme", slug="acme")
     assert sentinel.is_file(), "历史数据目录被失败补偿误删"
+
+
+def test_workspace_record_exposes_extra1(home):
+    """上传接口要读 extra1.work_dir；记录必须返回该字段。"""
+    from agentbase import workspace as ws
+
+    w = ws.create(name="Acme", slug="acme")
+    record = ws.get_workspace_record(w["id"])
+
+    assert record["extra1"]
+    assert json.loads(record["extra1"])["work_dir"] == w["work_dir"]
+
+
+def test_identity_file_failure_returns_500_and_keeps_db(home, monkeypatch):
+    """identity 文件写失败必须让调用方知道，且不先改 DB。"""
+    from fastapi import HTTPException
+
+    from agentbase import prompts
+    from agentbase.api import workspaces as api_ws
+    from agentbase import workspace as ws
+
+    w = ws.create(name="Acme", slug="acme")
+
+    def _boom(*args, **kwargs):
+        raise OSError("readonly")
+
+    monkeypatch.setattr(prompts, "write_agent_identity", _boom)
+
+    class Payload:
+        agent_identity_md = "NEW IDENTITY"
+
+    with pytest.raises(HTTPException) as exc:
+        api_ws.update_workspace_agent_identity(w["id"], Payload(), w["id"])
+
+    assert exc.value.status_code == 500
+    assert ws.get_workspace_record(w["id"])["agent_identity_md"] in (None, "")
 
 
 def test_create_failure_removes_new_data_dir(home, monkeypatch):

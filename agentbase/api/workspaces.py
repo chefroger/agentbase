@@ -195,19 +195,24 @@ def update_workspace_agent_identity(
     """
     if x_workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="Cannot update another workspace's identity.")
-    result = workspace_module.update_workspace_record(
-        workspace_id, agent_identity_md=payload.agent_identity_md,
-    )
-    if not result:
-        raise HTTPException(status_code=404, detail="Workspace not found")
 
+    # 先写文件：提示词解析是文件优先。文件写失败必须让调用方知道，
+    # 否则接口返回 200、DB 已更新，但 Agent 仍在使用旧身份。
     slug = workspace_module.slug_from_id(workspace_id)
     if slug:
         from agentbase.prompts import write_agent_identity
 
         try:
             write_agent_identity(slug, payload.agent_identity_md)
-        except OSError:
-            # 文件写失败不回滚 DB：至少 DB 里是新内容，下次启动会用它
-            pass
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"写入 Agent 身份文件失败：{exc}",
+            ) from exc
+
+    result = workspace_module.update_workspace_record(
+        workspace_id, agent_identity_md=payload.agent_identity_md,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Workspace not found")
     return result

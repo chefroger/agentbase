@@ -557,11 +557,13 @@ def search_history(
         end_computer = _BOUNDARY_END_COMPUTERS.get(time_range)
         end = end_computer(_dt.datetime.now()) if end_computer else None
 
+        # 先取窗口内**最新**的 N 条（DESC），再翻回时间正序返回。
+        # 之前用 ASC LIMIT 拿到的是最旧的 N 条，“今天/全部”会漏掉最近对话。
         if start is None and end is None:
             rows = conn.execute(
                 "SELECT id, workspace_id, query, response, files_read, created_at "
                 "FROM conversations WHERE workspace_id = ? "
-                "ORDER BY id ASC LIMIT ?",
+                "ORDER BY id DESC LIMIT ?",
                 (workspace_id, limit),
             ).fetchall()
         else:
@@ -578,11 +580,11 @@ def search_history(
             rows = conn.execute(
                 f"SELECT id, workspace_id, query, response, files_read, created_at "
                 f"FROM conversations WHERE {' AND '.join(clauses)} "
-                f"ORDER BY id ASC LIMIT ?",
+                f"ORDER BY id DESC LIMIT ?",
                 params,
             ).fetchall()
 
-        return [_row_to_dict(r) for r in rows]
+        return [_row_to_dict(r) for r in reversed(rows)]
     finally:
         conn.close()
 

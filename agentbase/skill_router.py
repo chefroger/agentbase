@@ -29,9 +29,8 @@ from agentbase.skill_registry import (
 )
 
 
-def _resolve_explicit_skill(token: str) -> str | None:
-    """把显式 skill 名或唯一 alias 解析为注册表中的 skill 名。"""
-    normalized = token.strip().lower().replace("_", "-")
+def _exact_skill_lookup(normalized: str) -> str | None:
+    """精确匹配注册名或唯一 alias。"""
     names = {name.lower(): name for name in skill_names()}
     if normalized in names:
         return names[normalized]
@@ -42,6 +41,31 @@ def _resolve_explicit_skill(token: str) -> str | None:
         if any(str(alias).lower() == normalized for alias in skill.get("aliases", []))
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _is_cjk(ch: str) -> bool:
+    return "\u4e00" <= ch <= "\u9fff"
+
+
+def _resolve_explicit_skill(token: str) -> str | None:
+    """把显式 skill 名或唯一 alias 解析为注册表中的 skill 名。
+
+    正则捕获组会吞掉紧跟的中文后缀（“使用 demo-alpha 做分析” →
+    “demo-alpha做分析”）。这里在**后缀是中文**时逐字回退，取最长的
+    已注册前缀；ASCII 后缀不猜，避免把 demo-alphaX 误判成 demo-alpha。
+    """
+    normalized = token.strip().lower().replace("_", "-")
+    resolved = _exact_skill_lookup(normalized)
+    if resolved:
+        return resolved
+
+    for cut in range(len(normalized) - 1, 1, -1):
+        if not _is_cjk(normalized[cut]):
+            continue
+        resolved = _exact_skill_lookup(normalized[:cut])
+        if resolved:
+            return resolved
+    return None
 
 
 _injection_cache_lock = threading.Lock()

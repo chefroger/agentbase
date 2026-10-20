@@ -15,6 +15,9 @@
 from __future__ import annotations
 
 import os
+import plistlib
+import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -172,12 +175,82 @@ def _launchctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["launchctl", *args], capture_output=True, timeout=15)
 
 
+def _service_command() -> list[str]:
+    """自启时执行的服务命令（不经过 shell）。"""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--service", "--no-browser"]
+    candidate = shutil.which("agentbase") or str(
+        Path.home() / ".local" / "bin" / "agentbase"
+    )
+    if Path(candidate).is_file():
+        return [candidate, "--no-browser"]
+    return [
+        sys.executable,
+        "-c",
+        "from agentbase.cli import run_server; run_server()",
+        "--no-browser",
+    ]
+
+
+def _autostart_env() -> dict[str, str]:
+    paths = [str(Path(sys.executable).parent), "/usr/local/bin",
+             "/opt/homebrew/bin", "/usr/bin", "/bin"]
+    paths += [p for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+    seen: list[str] = []
+    for p in paths:
+        if p and p not in seen:
+            seen.append(p)
+    home = str(_agent_home())
+    return {"AGENT_HOME": home, "HERMES_HOME": home, "PATH": os.pathsep.join(seen)}
+
+
+def _write_macos_plist(plist: Path) -> None:
+    """重建设置页关闭后删除的 launchd plist。"""
+    logs = _agent_home() / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    plist.parent.mkdir(parents=True, exist_ok=True)
+    plist.write_bytes(plistlib.dumps({
+        "Label": AUTOSTART_LABEL,
+        "ProgramArguments": _service_command(),
+        "RunAtLoad": True,
+        "KeepAlive": False,
+        "StandardOutPath": str(logs / "launchd-stdout.log"),
+        "StandardErrorPath": str(logs / "launchd-stderr.log"),
+        "EnvironmentVariables": _autostart_env(),
+    }))
+
+
+def _write_linux_unit(unit: Path) -> None:
+    """重建设置页关闭后删除的 systemd user unit。"""
+    unit.parent.mkdir(parents=True, exist_ok=True)
+    exec_start = " ".join(shlex.quote(part) for part in _service_command())
+    home = str(_agent_home())
+    unit.write_text(
+        "[Unit]\n"
+        "Description=AgentBase\n"
+        "After=network.target\n\n"
+        "[Service]\n"
+        "Type=simple\n"
+        f"Environment=AGENT_HOME={home}\n"
+        f"Environment=HERMES_HOME={home}\n"
+        f"ExecStart={exec_start}\n"
+        "Restart=on-failure\n"
+        "RestartSec=10\n\n"
+        "[Install]\n"
+        "WantedBy=default.target\n",
+        encoding="utf-8",
+    )
+
+
 def _set_autostart_macos(enabled: bool) -> tuple[bool, str]:
     plist = _launch_agent_plist()
     domain = f"gui/{os.getuid()}"
     if enabled:
         if not plist.is_file():
-            return False, "开机自启项不存在，请重新运行安装脚本。"
+            try:
+                _write_macos_plist(plist)
+            except OSError as exc:
+                return False, f"重建开机自启项失败：{exc}"
         _launchctl("bootout", domain, str(plist))
         r = _launchctl("bootstrap", domain, str(plist))
         if r.returncode != 0:
@@ -195,18 +268,21 @@ def _set_autostart_macos(enabled: bool) -> tuple[bool, str]:
 
 def _set_autostart_windows(enabled: bool) -> tuple[bool, str]:
     if enabled:
-        # 复用安装期的隐藏式实现（VBS + 计划任务），避免弹终端窗口。
+        # 直接建计划任务，不走 ensure_windows_setup —— 后者会读偏好文件，
+        # 用户先关后开时偏好仍是 false，会被跳过却误报成功。
         try:
             from agentbase.post_install.win_setup import (
                 agentbase_dir_from_module,
-                ensure_windows_setup,
+                ensure_launcher_scripts,
+                ensure_scheduled_task,
             )
 
-            messages = ensure_windows_setup(agentbase_dir_from_module())
+            scripts = ensure_launcher_scripts(agentbase_dir_from_module())
+            message = ensure_scheduled_task(scripts["autostart_vbs"])
         except Exception as exc:
             return False, f"开启开机自启失败：{exc}"
-        if not any("✓" in m for m in messages):
-            return False, "；".join(messages) or "开启开机自启失败"
+        if not message.startswith("✓"):
+            return False, message or "开启开机自启失败"
         return True, "已开启开机自启（登录后隐藏运行）"
 
     r = subprocess.run(
@@ -222,7 +298,10 @@ def _set_autostart_linux(enabled: bool) -> tuple[bool, str]:
     unit = _systemd_unit()
     if enabled:
         if not unit.is_file():
-            return False, "开机自启项不存在，请重新运行安装脚本。"
+            try:
+                _write_linux_unit(unit)
+            except OSError as exc:
+                return False, f"重建开机自启项失败：{exc}"
         r = subprocess.run(
             ["systemctl", "--user", "enable", "--now", unit.name],
             capture_output=True, timeout=15,

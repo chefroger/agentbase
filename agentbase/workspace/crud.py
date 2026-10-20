@@ -89,6 +89,7 @@ def _row_to_tc(row) -> dict:
         "data_dir": row["data_dir"],
         "agent_identity_md": row["agent_identity_md"],
         "is_active": bool(row["is_active"]),
+        "extra1": row["extra1"] if "extra1" in row.keys() else None,
         "created_at": row["created_at"],
     }
 
@@ -500,7 +501,7 @@ def get_workspace_record(workspace_id: int) -> dict | None:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT workspace_id, data_dir, agent_identity_md, is_active, created_at "
+            "SELECT workspace_id, data_dir, agent_identity_md, is_active, extra1, created_at "
             "FROM agentbase_workspaces WHERE workspace_id = ?",
             (workspace_id,),
         ).fetchone()

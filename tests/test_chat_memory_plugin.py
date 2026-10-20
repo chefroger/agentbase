@@ -135,6 +135,28 @@ class TestSearchHistoryE2E:
         r = search_history(1, time_range="today")
         assert [x["query"] for x in r] == ["今天的问题"]
 
+    def test_limit_returns_newest_rows(self, db_with_rows):
+        """limit 生效时返回窗口内最新的 N 条，而不是最旧的 N 条。"""
+        import agentbase.database as db
+        from agentbase.chat_memory import search_history
+
+        con = db.get_connection()
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for i in range(25):
+            con.execute(
+                "INSERT INTO conversations (workspace_id, query, response, created_at) "
+                "VALUES (1, ?, ?, ?)", (f"extra{i}", "r", ts),
+            )
+        con.commit()
+        con.close()
+
+        rows = search_history(1, time_range="today", limit=20)
+
+        assert len(rows) == 20
+        assert rows[0]["id"] == 10   # 最早的那条（id 1 今天 + 2-4 历史之外）已被截掉
+        assert rows[-1]["query"] == "extra24"
+        assert all("今天的问题" != row["query"] for row in rows)
+
     def test_yesterday_excludes_today(self, db_with_rows):
         """**关键测试**：yesterday 不应包含今天 00:00 之后的内容。"""
         from agentbase.chat_memory import search_history
