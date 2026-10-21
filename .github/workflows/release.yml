@@ -18,14 +18,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS
+          - name: macOS arm64
             os: macos-latest
             spec: desktop-mac.spec
             package: macos
-          - name: Windows
+            artifact: macos-arm64
+          # Intel Mac（macos-latest 是 arm64）；该 label 可用到 2027-08
+          - name: macOS Intel
+            os: macos-15-intel
+            spec: desktop-mac.spec
+            package: macos
+            artifact: macos-intel
+          - name: Windows x64
             os: windows-latest
             spec: desktop-windows.spec
             package: windows
+            artifact: windows-x64
 
     steps:
       - uses: actions/checkout@v5
@@ -104,7 +112,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: AgentBase-${{ matrix.package }}
+          name: AgentBase-${{ matrix.artifact }}
           path: |
             dist/AgentBase-*.zip
             dist/AgentBase-*.exe
