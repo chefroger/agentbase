@@ -63,6 +63,13 @@
 - CI 手动触发（run 39220677177）：macOS arm64 与 Windows x64 两个构建 job 均通过，产物 `AgentBase-0.6.8-macOS-<arch>.zip` / `AgentBase-0.6.8-windows-x64.exe`。
 - 三份 spec 的 hiddenimports 补入 `agentbase.paths` / `agentbase.process` / `agentbase.updater.*`。
 
+**2026-10-21 Intel 产线**
+
+- release 矩阵新增 `macos-15-intel`（GitHub 官方 Intel runner，可用到 2027-08）；一次构建产出 macOS Intel / macOS arm64 / Windows x64 三个产物。
+- run 39523932179：macOS Intel 102MB、macOS arm64 120MB、Windows x64 119MB，三个构建 job 全部通过。
+- 下载 Intel 产物在本机（Intel Mac）实测：Mach-O x86_64；`/api/status` 200（`hermes_usable: true`）、`/agentbase` 200、`--stop` 正常退出。
+- 待补：arm64 与 Windows 真机冒烟（当前无对应硬件）。
+
 **打包要点（踩坑记录）**
 
 - `vendor/hermes` 以 **datas 源码目录**分发；`bootstrap._adjust_sys_path()` 在 frozen 下把 `_MEIPASS/vendor/hermes` 加入 `sys.path`。只靠 PyInstaller 静态分析会漏 Hermes 的惰性导入。
