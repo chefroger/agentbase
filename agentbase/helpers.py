@@ -469,6 +469,67 @@ def _extract_explicit_paths(
     return verified
 
 
+# 门禁专用：在通用正则之外，补带空格/英文括号的真实文件名。
+# 通用正则把空白和括号当路径边界（避免把 shell 代码里的 open(' 吞进路径），
+# 因此 "报告 (1).pdf" 这类下载件提取不到。这里只做「存在性」判定：
+# 按空白与中文句读切词，最多拼接 _NAMED_PATH_JOIN_LIMIT 段，命中磁盘才算数。
+_NAMED_PATH_JOIN_LIMIT = 4
+_QUOTED_SPAN_RE = re.compile(r'["\'“”‘’`]([^"\'“”‘’`\n]+)["\'“”‘’`]')
+_NAMED_PATH_SPLIT_RE = re.compile(r"[\s，。；;、]+")
+_WRAP_CHARS = "\"'“”‘’`()[]{}<>《》「」『』"
+_EDGE_PUNCT = "，。；;、：:,."
+# 无分隔符的裸词只在看起来像文件名（带扩展名）时才算，避免把 "tests" 当目录。
+_HAS_EXTENSION_RE = re.compile(r"\.[A-Za-z0-9]{1,8}$")
+
+
+def _looks_like_path(value: str) -> bool:
+    return bool(
+        "/" in value or "\\" in value or value.startswith("~")
+        or _HAS_EXTENSION_RE.search(value)
+    )
+
+
+def _extract_named_paths(query: str) -> list[str]:
+    """提取用户点名的、磁盘上真实存在的文件/目录（含带空格/括号的名字）。
+
+    供文档门禁用；与 _extract_explicit_paths 不同，这里不要求严格的路径语法，
+    只要求用户文本里出现的东西确实存在，避免误触发。
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: str, *, quoted: bool = False) -> None:
+        cleaned = raw.strip().strip(_WRAP_CHARS).strip(_EDGE_PUNCT).strip()
+        if not cleaned or (not quoted and not _looks_like_path(cleaned)):
+            return
+        try:
+            path = Path(cleaned).expanduser().resolve()
+        except (OSError, ValueError):
+            return
+        key = str(path)
+        if path.exists() and key not in seen:
+            seen.add(key)
+            found.append(key)
+
+    # 通用正则命中的候选本身就是路径形态，直接校验存在性
+    for candidate in _extract_explicit_paths(query):
+        _add(candidate, quoted=True)
+    # 引号内的整段内容："报告 (1).pdf" / "/tmp/My Docs"
+    for candidate in _QUOTED_SPAN_RE.findall(query):
+        _add(candidate, quoted=True)
+    # 未加引号但文件名含空格：最多拼接 4 个相邻片段
+    tokens = _NAMED_PATH_SPLIT_RE.split(query)
+    for start in range(len(tokens)):
+        candidate = tokens[start]
+        for end in range(start, min(start + _NAMED_PATH_JOIN_LIMIT, len(tokens))):
+            if end > start:
+                candidate += " " + tokens[end]
+            _add(candidate)
+
+    found.sort(key=lambda x: (not Path(x).is_dir(), x.lower()))
+    return found
+
+
 def build_query(
     workspace_id: int,
     query: str,

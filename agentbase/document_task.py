@@ -584,8 +584,8 @@ def should_enforce_document_gate(query: str) -> bool:
     # 点名单个**真实存在的文件**本身就是明确范围，不依赖“完整读取”意图词。
     # 不认文本关键词：没有真实路径的普通提问（如“逐个介绍产品”）不受影响。
     try:
-        from agentbase.helpers import _extract_explicit_paths
+        from agentbase.helpers import _extract_named_paths
 
-        return any(Path(p).is_file() for p in _extract_explicit_paths(query))
+        return any(Path(p).is_file() for p in _extract_named_paths(query))
     except Exception:
         return False

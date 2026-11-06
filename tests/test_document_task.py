@@ -464,6 +464,26 @@ def test_gate_triggers_for_existing_file_without_intent_words(tmp_path):
     assert should_enforce_document_gate(f"看看 {tmp_path / 'nope.txt'}") is False
 
 
+def test_gate_triggers_for_filename_with_space_and_parens(tmp_path):
+    """带空格/英文括号的真实文件名（下载件常见）也要触发门禁。"""
+    spaced = tmp_path / "合 同 终版.txt"
+    spaced.write_text("x", encoding="utf-8")
+    paren = tmp_path / "report(1).pdf"
+    paren.write_text("x", encoding="utf-8")
+
+    assert should_enforce_document_gate(f'分析 "{spaced}"') is True
+    assert should_enforce_document_gate(f"分析 {spaced}") is True
+    assert should_enforce_document_gate(f"分析 {paren}") is True
+
+
+def test_gate_ignores_bare_directory_token(tmp_path, monkeypatch):
+    """无路径特征的裸目录名不应被当成用户点名的目录。"""
+    bare_dir = tmp_path / "data"
+    bare_dir.mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert should_enforce_document_gate(f"看看 {bare_dir.name}") is False
+
+
 def test_plan_batches_more_than_200_files(tmp_path):
     from agentbase.document_task import DocumentPlan
 
@@ -474,7 +494,10 @@ def test_plan_batches_more_than_200_files(tmp_path):
     assert plan.truncated is False
     assert plan.total_files == 205
     assert [len(b.files) for b in plan.batches] == [200, 5]
-    assert "第 1 批" in plan.todo_text() and "第 2 批" in plan.todo_text()
+    todo = plan.todo_text()
+    assert "第 1 批（200 个）" in todo and "第 2 批（5 个）" in todo
+    # 每批只预览前 5 个文件
+    assert "f004.txt" in todo and "f005.txt" not in todo
 
     evidence = {
         str(f.path): {"complete": True} for b in plan.batches for f in b.files
@@ -487,3 +510,21 @@ def test_plan_batches_more_than_200_files(tmp_path):
     result = plan.evaluate(evidence)
     assert result.status == "incomplete"
     assert any("第 2 批：" in name for name in result.missing)
+
+
+def test_summary_markdown_truncates_long_lists(tmp_path):
+    from agentbase.document_task import DocumentPlan
+
+    for i in range(120):
+        (tmp_path / f"f{i:03d}.txt").write_text("x", encoding="utf-8")
+    plan = DocumentPlan.from_root(tmp_path)
+    evidence = {
+        str(f.path): {"complete": True} for b in plan.batches for f in b.files
+    }
+    result = plan.evaluate(evidence)
+    text = plan.summary_markdown(result)
+
+    assert "### 已读（120）" in text
+    assert "…其余 70 个" in text
+    # 标题 + 50 条明细 + 省略行；不列全量
+    assert text.count("- f") == 50

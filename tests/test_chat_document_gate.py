@@ -414,6 +414,25 @@ async def test_single_file_gate_blocks_when_not_read(env, agent_stub):
 
 
 @pytest.mark.asyncio
+async def test_single_file_with_space_in_name_is_gated(env, agent_stub):
+    """带空格/括号的文件名同样要进入读取清单并被门禁校验。"""
+    saved = []
+    target = env["dir"] / "合 同 (终版).txt"
+    target.write_text("x", encoding="utf-8")
+    other = env["dir"] / "报价.xlsx"
+    evidence = {
+        str(other.resolve()): {
+            "complete": True, "document_metadata": {"kind": "xlsx", "sheets": ["Sheet1"]},
+        },
+    }
+    result = await _call_chat(
+        env, agent_stub, f'分析 "{target}"', evidence, saved, with_dir=False
+    )
+    assert "合 同 (终版).txt" in result["response"]
+    assert "未读完" in result["response"]
+
+
+@pytest.mark.asyncio
 async def test_single_file_gate_passes_when_read(env, agent_stub):
     saved = []
     target = env["dir"] / "合同.txt"
@@ -424,13 +443,18 @@ async def test_single_file_gate_passes_when_read(env, agent_stub):
     assert result["response"] == "分析完成"
 
 
-@pytest.mark.asyncio
-async def test_large_directory_batches_instead_of_falling_back(env, agent_stub):
-    saved = []
+def _write_batch_files(env):
+    """造 206 个可分析文件（切两批），返回数据目录下的全部文件。"""
     for i in range(205):
         (env["dir"] / f"f{i:03d}.txt").write_text("x", encoding="utf-8")
     (env["dir"] / "zzz.txt").write_text("x", encoding="utf-8")
-    files = [p for p in env["dir"].iterdir() if p.is_file() and not p.name.startswith(".")]
+    return [p for p in env["dir"].iterdir() if p.is_file() and not p.name.startswith(".")]
+
+
+@pytest.mark.asyncio
+async def test_large_directory_batches_instead_of_falling_back(env, agent_stub):
+    saved = []
+    files = _write_batch_files(env)
     evidence = {str(p.resolve()): {"complete": True} for p in files}
     result = await _call_chat(env, agent_stub, STRICT_QUERY, evidence, saved)
     assert "文档读取清单" in result["response"]
@@ -440,3 +464,52 @@ async def test_large_directory_batches_instead_of_falling_back(env, agent_stub):
     result = await _call_chat(env, agent_stub, STRICT_QUERY, evidence, saved)
     assert "未读完" in result["response"]
     assert "第 2 批" in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_stream_large_directory_injects_plan_and_appends_summary(env, agent_stub):
+    """SSE 多批：执行 query 注入批次计划，回答末尾附读取清单。"""
+    files = _write_batch_files(env)
+    evidence = {str(p.resolve()): {"complete": True} for p in files}
+    events = await _collect_stream(env, agent_stub, STRICT_QUERY, evidence)
+
+    sent = agent_stub.run_conversation.call_args.args[0]
+    assert "[文档读取计划]" in sent
+    assert "第 1 批" in sent and "第 2 批" in sent
+
+    payloads = dict(events)
+    assert "analysis_gate" in payloads and "response" in payloads
+    assert "文档读取清单" in payloads["response"]
+    assert "共 2 批" in payloads["response"]
+
+
+@pytest.mark.asyncio
+async def test_stream_large_directory_incomplete_marks_batch(env, agent_stub):
+    """SSE 多批漏读：未读项带批次前缀，且不给分析结论。"""
+    files = _write_batch_files(env)
+    evidence = {str(p.resolve()): {"complete": True} for p in files}
+    evidence.pop(str((env["dir"] / "zzz.txt").resolve()))
+    events = await _collect_stream(env, agent_stub, STRICT_QUERY, evidence)
+
+    payloads = dict(events)
+    assert "未读完" in payloads["response"]
+    assert "第 2 批" in payloads["response"]
+
+
+def test_with_plan_prompt_only_for_multi_batch(tmp_path):
+    from agentbase.api.chat import _with_plan_prompt
+    from agentbase.document_task import DocumentPlan
+
+    one = tmp_path / "one.txt"
+    one.write_text("x", encoding="utf-8")
+    assert _with_plan_prompt("Q", DocumentPlan.from_files([str(one)])) == "Q"
+    assert _with_plan_prompt("Q", None) == "Q"
+
+    files = []
+    for i in range(205):
+        path = tmp_path / f"f{i:03d}.txt"
+        path.write_text("x", encoding="utf-8")
+        files.append(str(path))
+    injected = _with_plan_prompt("Q", DocumentPlan.from_files(files))
+    assert "[文档读取计划]" in injected
+    assert "请按批次逐个读取" in injected

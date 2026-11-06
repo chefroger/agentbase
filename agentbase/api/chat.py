@@ -26,7 +26,7 @@ from agentbase.document_task import (
     format_incomplete_report,
     should_enforce_document_gate,
 )
-from agentbase.helpers import _extract_explicit_paths, build_query, create_agent
+from agentbase.helpers import _extract_named_paths, build_query, create_agent
 from agentbase.hermes_compat import release_read_coverage, snapshot_read_coverage
 from agentbase.read_evidence import ReadEvidenceCollector
 from agentbase.workspace_context import bind_workspace
@@ -134,7 +134,7 @@ def _build_document_plan(query: str):
     """按用户点名的目录/文件建计划；无法可靠判定时返回 None（降级普通问答）。"""
     if not should_enforce_document_gate(query):
         return None
-    explicit = _extract_explicit_paths(query)
+    explicit = _extract_named_paths(query)
     dirs = [p for p in explicit if Path(p).is_dir()]
     if dirs:
         plan = DocumentPlan.from_root(dirs[0])
