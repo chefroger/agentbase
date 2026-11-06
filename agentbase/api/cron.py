@@ -67,7 +67,9 @@ def get_today_cron(_cid: int = Depends(require_workspace)):
     for task in tasks:
         task_name = task["name"]
         task_time = task["time"].split("-")[0] if "-" in task["time"] else task["time"]
-        output = _find_cron_output(task_name, today)
+        output = _find_cron_output(
+            task_name, today, job_id=task.get("job_id", "")
+        )
 
         if output:
             completed.append({
@@ -307,17 +309,23 @@ def api_update_skills(request: Request):
     return result
 
 
-def _find_cron_output(task_name: str, today: str) -> str | None:
-    if not _cron_output().is_dir():
+def _find_cron_output(task_name: str, today: str, job_id: str = "") -> str | None:
+    """只读任务自己的产出：cron/output/<job_id>/<YYYY-MM-DD_HH-MM-SS>.md。
+
+    任务身份用 job 目录（job_id）精确判定，日期取文件名前 10 位。旧实现按
+    「任务名出现在正文里」匹配 —— 别家任务的输出提到这个名字就会被误判完成
+    （审计 P2）。没有 job_id 时不猜：宁可显示待执行，也不做正文子串匹配。
+    """
+    if not job_id or not _cron_output().is_dir():
         return None
-    for job_dir in sorted(_cron_output().iterdir(), reverse=True):
-        if not job_dir.is_dir():
+    job_dir = _cron_output() / job_id
+    if not job_dir.is_dir():
+        return None
+    for output_file in sorted(job_dir.glob("*.md"), reverse=True):
+        if output_file.stem[:10] != today:
             continue
-        for output_file in sorted(job_dir.glob("*.md"), reverse=True):
-            try:
-                content = output_file.read_text(encoding="utf-8")
-                if task_name in content and today in output_file.stem[:10]:
-                    return content
-            except Exception:
-                continue
+        try:
+            return output_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
     return None
