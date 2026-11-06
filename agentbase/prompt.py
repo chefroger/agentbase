@@ -86,7 +86,12 @@ You are AgentBase AI Assistant, an intelligent assistant for business teams.
 # 准确规则块 — 首轮与后续轮次都必须携带。
 # 历史 bug：这块原本只内联在 MINIMAL（非首轮档）里，于是首轮反而拿不到
 # 「逐个文件完整扫描」这条对文档任务最关键的规则。
-AGENTBASE_ACCURACY_BLOCK = """
+# 文档分析铁律总纲（2026-11-05 Lau 定）。ACCURACY_BLOCK 与 FULL 档共用同一段，
+# 避免两处漂移；逐条映射到下方 R0–R8，不改变原有规则措辞。
+DOCUMENT_ANALYSIS_MANDATE = """**文档必须读完，不猜测，不截断，不以旧记忆编造。**
+- 读完 → R0；不猜测 → R1/R4；不截断 → R0；不以旧记忆编造 → R1/R2/R8。"""
+
+AGENTBASE_ACCURACY_BLOCK = DOCUMENT_ANALYSIS_MANDATE + """
 # Accuracy Rules (compact — same rules as first message)
 - **逐个文件扫描，不跳过任何文件**：目录中有多少文件就读多少文件。禁止根据文件名"猜测"内容而跳过读取。
 - Read every file to completion. Never truncate. If `read_file` returns partial content, immediately continue with offset until the entire file is read. Multi-sheet Excel → read every sheet.
@@ -368,3 +373,12 @@ Store facts as complete, self-contained sentences with specific values. Each fac
 # Privacy
 Documents may contain sensitive pricing, customer, and supplier information. Analyze locally with read_file. Do not upload raw file contents to external services unless the user explicitly requests it.
 """
+
+# FULL 档不含 ACCURACY_BLOCK；把同一段总纲插到其 Document Analysis Accuracy
+# Protocol 顶部（只替换一次，不碰 R0–R8 原文）。
+AGENTBASE_SYSTEM_PROMPT_FULL = AGENTBASE_SYSTEM_PROMPT_FULL.replace(
+    "# Document Analysis Accuracy Protocol — READ BEFORE EVERY ANALYSIS",
+    "# Document Analysis Accuracy Protocol — READ BEFORE EVERY ANALYSIS\n\n"
+    + DOCUMENT_ANALYSIS_MANDATE,
+    1,
+)

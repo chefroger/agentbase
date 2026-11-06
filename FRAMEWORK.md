@@ -155,6 +155,21 @@ skills:
 - `chat-memory` 是框架内置 skill，不走包机制，永远加载
 - 一个框架实例只加载**一个**主包
 
+### 3.5 文档分析铁律
+
+**文档必须读完，不猜测，不截断，不以旧记忆编造。**
+
+逐条落点（`agentbase/prompt.py`）：
+
+- 读完 → R0（Complete Read — Never Truncate）
+- 不猜测 → R1（Read Before Speak）/ R4（Unit Completeness）
+- 不截断 → R0
+- 不以旧记忆编造 → R1 / R2（Numerical Traceability）/ R8（List Integrity）
+
+运行时的完成度门禁在 `agentbase/document_task.py`：用户点名的目录或文件会被纳入
+读取清单，读完才放行；未读完时由 `format_incomplete_report` 拒绝给出分析结论。
+超过 200 个文件时按批次生成读取计划，全部批次完成才给结论。
+
 ---
 
 ## 4. 框架边界
