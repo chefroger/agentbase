@@ -977,27 +977,9 @@ def check_skill_pack_sync_once() -> dict:
 
     任何异常都转成 status=error 记录，不影响主服务。
     """
-    from agentbase.post_install.skills import (
-        check_skill_pack_update,
-        save_skill_pack_status,
-    )
+    from agentbase.post_install.skills import refresh_skill_pack_status
 
-    try:
-        status = check_skill_pack_update()
-    except Exception as exc:  # noqa: BLE001 — 检查失败不能影响服务
-        from datetime import datetime
-
-        status = {
-            "pack": "", "path": "", "local_commit": "", "remote_commit": "",
-            "upstream": "", "behind": None, "status": "error",
-            "error": str(exc),
-            "checked_at": datetime.now().isoformat(timespec="seconds"),
-        }
-    try:
-        save_skill_pack_status(status)
-    except Exception:
-        _logging.getLogger(__name__).exception("skill pack 状态落盘失败")
-    return status
+    return refresh_skill_pack_status()
 
 
 def background_github_skills_sync():

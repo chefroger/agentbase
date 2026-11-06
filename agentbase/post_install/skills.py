@@ -344,6 +344,10 @@ def update_skills() -> None:
     count = load_active_pack()
     print(f"[update_skills] 注册表已重载: {count} 个 skill")
 
+    # 更新成功后立即刷新状态，避免 doctor/设置页继续显示「有新提交」。
+    # 放在 pull 之后、同步之前：git 侧已经是最新，状态就该如实反映。
+    refresh_skill_pack_status()
+
     # 同步到 Hermes
     pack_skills = pack_dir / "skills"
     if not pack_skills.is_dir():
@@ -470,4 +474,31 @@ def check_skill_pack_update(*, timeout: int = 60) -> dict:
     except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
         status["status"] = "error"
         status["error"] = str(exc)
+    return status
+
+
+def refresh_skill_pack_status() -> dict:
+    """检查并落盘 skill pack 状态；任何异常都转成 error 记录，不向外抛。
+
+    供后台定时检查与「用户刚更新完」两条路径共用，保证 doctor/设置页
+    看到的状态不会过期。
+    """
+    try:
+        status = check_skill_pack_update()
+    except Exception as exc:  # noqa: BLE001 — 状态记录失败不能影响主流程
+        status = {
+            "pack": "",
+            "path": "",
+            "local_commit": "",
+            "remote_commit": "",
+            "upstream": "",
+            "behind": None,
+            "status": "error",
+            "error": str(exc),
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        }
+    try:
+        save_skill_pack_status(status)
+    except Exception:
+        pass  # 状态落盘失败不影响更新/启动
     return status

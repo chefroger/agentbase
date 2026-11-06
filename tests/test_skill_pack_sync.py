@@ -134,6 +134,33 @@ def test_background_check_once_records_status(pack_repo):
     assert _snapshot(pack_repo["pack"]) == before_files
 
 
+def test_update_skills_refreshes_status(pack_repo, monkeypatch):
+    """所有手动更新路径（CLI / 系统更新 / API）共用 update_skills：
+
+    更新成功后必须立刻刷新状态，doctor 不能继续显示「有新提交」。
+    """
+    from agentbase import skill_registry
+    from agentbase.post_install import skills as skills_mod
+
+    hermes = pack_repo["home"] / "hermes"
+    hermes.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes))
+    pack_repo["advance"]()
+
+    try:
+        skills_mod.update_skills()
+
+        stored = skills_mod.load_skill_pack_status()
+        assert stored is not None
+        assert stored["status"] == "up_to_date"
+        assert stored["behind"] == 0
+        assert stored["local_commit"] == stored["remote_commit"]
+        assert _git_out(pack_repo["pack"], "rev-parse", "HEAD") == stored["local_commit"]
+    finally:
+        monkeypatch.delenv("AGENTBASE_SKILL_PACK", raising=False)
+        skill_registry.load_active_pack()
+
+
 def test_manual_update_refreshes_status(monkeypatch):
     """用户手动更新成功后要立刻刷新状态，不能继续显示「有新提交」。"""
     import types
