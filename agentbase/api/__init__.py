@@ -21,6 +21,7 @@ from agentbase.api.meta import router as meta_router
 from agentbase.api.onboarding import router as onboarding_router
 from agentbase.api.packs import router as packs_router
 from agentbase.api.settings import router as settings_router
+from agentbase.api.workspaces import SWITCH_ROUTE_NAME
 from agentbase.api.workspaces import router as workspaces_router
 
 
@@ -48,8 +49,10 @@ def _enforce_workspace_binding(
     except ValueError:
         return  # 无效 ID 由 require_workspace 处理
 
-    # switch 端点允许携带不同于当前绑定的 workspace_id（因为它的语义就是切换）
-    if "/switch" in request.url.path:
+    # switch 端点允许携带不同于当前绑定的 workspace_id（因为它的语义就是切换）。
+    # 按路由名精确匹配：路径子串会让 /switcheroo 这类新端点自动豁免。
+    route = request.scope.get("route")
+    if getattr(route, "name", None) == SWITCH_ROUTE_NAME:
         return
 
     with _workspace_bind_lock:

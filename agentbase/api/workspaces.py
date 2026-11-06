@@ -119,7 +119,12 @@ def delete_workspace(
 
 # ── 工作区切换 ─────────────────────────────────────────────────────────────────
 
-@router.post("/workspaces/{workspace_id}/switch")
+# 路由名固定下来：绑定豁免按名字精确匹配（见 api/__init__.py），
+# 不依赖函数名，也不做路径子串判断。
+SWITCH_ROUTE_NAME = "switch_workspace"
+
+
+@router.post("/workspaces/{workspace_id}/switch", name=SWITCH_ROUTE_NAME)
 def switch_workspace(
     workspace_id: int,
     request: Request,
