@@ -10,6 +10,7 @@ conversations / usage_ledger 等框架表。
 import os
 import shutil
 import sqlite3
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -244,7 +245,29 @@ def _backup_db(db_path: Path) -> Path | None:
     backup_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = backup_dir / f"agentbase-{ts}.db"
-    shutil.copy2(str(db_path), str(backup_path))
+
+    # 库是 WAL 模式：裸拷主库文件会丢掉仍在 -wal 里的已提交事务。复用
+    # post_install/backup.py 的 VACUUM INTO 快照（同一套实现，不另写）。
+    # VACUUM INTO 要求目标文件不存在，所以先写临时文件再原子改名。
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=".agentbase-snapshot-", suffix=".tmp", dir=backup_dir
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    tmp_path.unlink()
+    try:
+        from agentbase.post_install.backup import snapshot_sqlite
+
+        snapshot_sqlite(db_path, tmp_path)
+        os.replace(tmp_path, backup_path)
+    except Exception as exc:
+        tmp_path.unlink(missing_ok=True)
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "数据库快照失败，跳过本次备份：%s", exc
+        )
+        return None
     prune_old_backups(backup_dir)
     return backup_path
 

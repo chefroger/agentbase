@@ -25,6 +25,22 @@ from agentbase.post_install.skills import _get_hermes_home, get_agent_home
 
 # ── 系统备份 ──────────────────────────────────────────────────────────────
 
+def snapshot_sqlite(db_path: str | Path, dest: str | Path) -> None:
+    """用 VACUUM INTO 生成 WAL 安全的一致性快照。
+
+    主库是 WAL 模式时，最近提交的事务可能只在 `-wal` 文件里，直接复制主库
+    文件会丢数据。VACUUM INTO 在一条读事务里把完整库写进 `dest`（目标文件
+    必须不存在）；失败时抛异常，由调用方决定降级策略。
+    """
+    import sqlite3
+
+    src = sqlite3.connect(str(db_path), timeout=30)
+    try:
+        src.execute("VACUUM INTO ?", (str(dest),))
+    finally:
+        src.close()
+
+
 def backup_agentbase(output_dir: str | None = None) -> str:
     """备份 AgentBase 系统数据为 tar.gz 压缩包。
 
@@ -70,15 +86,9 @@ def backup_agentbase(output_dir: str | None = None) -> str:
     snapshot_dir: Path | None = None
     if db_path.is_file():
         try:
-            import sqlite3
-
             snapshot_dir = Path(tempfile.mkdtemp(prefix="agentbase-db-snapshot-"))
             snapshot = snapshot_dir / "agentbase.db"
-            src = sqlite3.connect(str(db_path), timeout=30)
-            try:
-                src.execute("VACUUM INTO ?", (str(snapshot),))
-            finally:
-                src.close()
+            snapshot_sqlite(db_path, snapshot)
             sources.append((snapshot, ".agentbase/data/agentbase.db"))
         except Exception as exc:
             print(f"[backup] WARNING: SQLite 在线快照失败，回退直接复制主库：{exc}")
