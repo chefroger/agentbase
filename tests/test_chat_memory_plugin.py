@@ -125,7 +125,9 @@ class TestSearchHistoryE2E:
         insert(0, "今天的问题", "今天的回复")
         insert(1, "昨天的问题", "昨天的回复")
         insert(2, "前天的问题", "前天的回复")
-        insert(10, "上周的问题", "上周的回复")
+        # 40 天前：保证早于本月 1 日（最长月份 31 天），也早于本周和 7 天窗口。
+        # 原先写 10 天前，在每月 1–10 日会落到上个月，令“本月”断言随日期翻车。
+        insert(40, "更早的问题", "更早的回复")
         con.commit()
         return tmp_path
 
@@ -172,7 +174,7 @@ class TestSearchHistoryE2E:
         queries = {x["query"] for x in r}
         assert "今天的问题" in queries
         # 周一运行时"昨天"属于上周，不能假设它一定在本周
-        assert "上周的问题" not in queries
+        assert "更早的问题" not in queries
 
     def test_last_week_does_not_include_this_week(self, db_with_rows):
         """last_week 窗口不依赖“今天周几”：动态插入上周一的一行来验证。"""
@@ -208,7 +210,7 @@ class TestSearchHistoryE2E:
         from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all", recent_days=7)
-        # today/昨天/前天都在 7 天内；10 天前的不在
+        # today/昨天/前天都在 7 天内；40 天前的不在
         assert sorted(x["query"] for x in r) == sorted(["今天的问题", "昨天的问题", "前天的问题"])
 
     def test_recent_days_1_equals_today(self, db_with_rows):
@@ -230,8 +232,13 @@ class TestSearchHistoryE2E:
         from agentbase.chat_memory import search_history
 
         r = search_history(1, time_range="all", recent_months=1)
-        # 所有 4 条都在本月 → 全返
-        assert len(r) == 4
+        # 每月 1–2 日运行时，"昨天/前天"落在上个月，不能固定断言条数；
+        # 改为断言窗口语义：今天必返、40 天前必不返、返回项都在本月内。
+        names = {x["query"] for x in r}
+        assert "今天的问题" in names
+        assert "更早的问题" not in names
+        month_start = datetime.now().strftime("%Y-%m-01 00:00:00")
+        assert all(row["created_at"] >= month_start for row in r)
 
     def test_unknown_enum_falls_through_to_all(self, db_with_rows):
         from agentbase.chat_memory import search_history
