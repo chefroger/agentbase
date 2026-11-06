@@ -158,3 +158,68 @@ def test_pack_name_traversal_rejected(_isolated, tmp_path):
 
     with pytest.raises(HTTPException):
         activate_pack(ActivatePayload(name="../evil"))
+
+
+def test_write_env_failure_keeps_original_bytes(_isolated, monkeypatch):
+    """写入中途失败：原 .env 必须一字未动，临时文件必须清理。"""
+    from agentbase.api import settings
+
+    env = _isolated / ".env"
+    original = b"EXISTING=1\n"
+    env.write_bytes(original)
+
+    class _FailingOs:
+        chmod = staticmethod(os.chmod)
+
+        @staticmethod
+        def replace(*args, **kwargs):
+            raise OSError("disk full")
+
+    monkeypatch.setattr(settings, "os", _FailingOs)
+
+    with pytest.raises(OSError):
+        settings._write_env({"NEW_KEY": "v"})
+
+    assert env.read_bytes() == original
+    assert not (_isolated / ".env.tmp").exists(), "失败后临时文件必须清理"
+
+
+def test_write_env_concurrent_saves_do_not_lose_updates(_isolated, monkeypatch):
+    """并发保存必须串行化：两次更新都要落盘，不能互相覆盖或写交错。"""
+    import threading
+    import time
+
+    from agentbase.api import settings
+
+    env = _isolated / ".env"
+    env.write_text("BASE=0\n", encoding="utf-8")
+
+    real_read_text = Path.read_text
+
+    def _slow_read(self, *args, **kwargs):
+        text = real_read_text(self, *args, **kwargs)
+        if self == env:
+            # 放大「读完到写入」的窗口：没有锁时两个线程会同时读到旧内容
+            time.sleep(0.05)
+        return text
+
+    monkeypatch.setattr(Path, "read_text", _slow_read)
+
+    barrier = threading.Barrier(2)
+
+    def _worker(key):
+        barrier.wait()
+        settings._write_env({key: "v"})
+
+    threads = [
+        threading.Thread(target=_worker, args=(f"KEY_{i}",)) for i in (1, 2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    lines = env.read_text(encoding="utf-8").splitlines()
+    assert "BASE=0" in lines
+    assert "KEY_1=v" in lines and "KEY_2=v" in lines, "并发保存丢了更新"
+    assert all("=" in line for line in lines), ".env 出现交错残行"

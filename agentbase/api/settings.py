@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import re
 import stat
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -42,6 +43,10 @@ def _env_path() -> Path:
     return business_config.agent_home() / ".env"
 
 
+# 同进程内读-改-写 .env 的互斥锁：并发保存时不能交错/丢更新。
+_ENV_WRITE_LOCK = threading.Lock()
+
+
 def _read_env() -> dict[str, str]:
     path = _env_path()
     out: dict[str, str] = {}
@@ -57,30 +62,43 @@ def _read_env() -> dict[str, str]:
 
 
 def _write_env(updates: dict[str, str]) -> None:
-    """更新 .env：保留其它行与注释，只增改目标键。文件权限 0600。"""
+    """更新 .env：保留其它行与注释，只增改目标键。文件权限 0600。
+
+    读-改-写全程加模块级锁，并走「临时文件 + os.replace」原子替换：
+    中途崩溃或并发保存都不会截断用户的 Key 文件、也不会写交错。
+    """
     path = _env_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    existing = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    with _ENV_WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing = (
+            path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+        )
 
-    pending = dict(updates)
-    out: list[str] = []
-    for line in existing:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.partition("=")[0].strip()
-            if k in pending:
-                out.append(f"{k}={pending.pop(k)}")
-                continue
-        out.append(line)
+        pending = dict(updates)
+        out: list[str] = []
+        for line in existing:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k = stripped.partition("=")[0].strip()
+                if k in pending:
+                    out.append(f"{k}={pending.pop(k)}")
+                    continue
+            out.append(line)
 
-    for k, v in pending.items():
-        out.append(f"{k}={v}")
+        for k, v in pending.items():
+            out.append(f"{k}={v}")
 
-    path.write_text("\n".join(out) + "\n", encoding="utf-8")
-    try:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+            try:
+                os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            os.replace(tmp, path)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
 
 
 @router.get("/settings")
