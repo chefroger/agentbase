@@ -13,10 +13,12 @@ AgentBase — Skills 安装器。
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -352,3 +354,120 @@ def update_skills() -> None:
     installed = _copy_skills(pack_skills, hermes_skills_dir)
     print(f"[update_skills] 已同步 {len(installed)} 个 skill 到 {hermes_skills_dir}")
     print("Hermes 会在下一个请求时用上更新后的 skill。")
+
+
+# ── skill pack 更新检查（只读，绝不 pull） ────────────────────────────────
+
+_STATUS_FILE = "skill_pack_status.json"
+
+
+def skill_pack_status_path() -> Path:
+    """后台检查结果的落盘位置（doctor 与界面只读这里）。"""
+    return get_agent_home() / "data" / _STATUS_FILE
+
+
+def save_skill_pack_status(status: dict) -> None:
+    """原子写入检查结果，避免 doctor 读到半截 JSON。"""
+    path = skill_pack_status_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def load_skill_pack_status() -> dict | None:
+    """读取上次检查结果；没有或损坏时返回 None。"""
+    path = skill_pack_status_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _git_read(pack_dir: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+    """只读 git 调用：断掉交互式凭证提示，带超时。"""
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GCM_INTERACTIVE": "never",
+    }
+    return subprocess.run(
+        ["git", "-C", str(pack_dir), *args],
+        capture_output=True, text=True, env=env, timeout=timeout,
+    )
+
+
+def check_skill_pack_update(*, timeout: int = 60) -> dict:
+    """只读检查 skill pack 是否有远端更新：fetch 后比对，绝不 pull。
+
+    返回固定字段的状态记录（pack / path / local_commit / remote_commit /
+    upstream / behind / status / error / checked_at）。fetch 只更新 .git 引用，
+    不改工作区文件；任何失败都转成 status 记录，不抛异常。
+    """
+    status: dict = {
+        "pack": "",
+        "path": "",
+        "local_commit": "",
+        "remote_commit": "",
+        "upstream": "",
+        "behind": None,
+        "status": "error",
+        "error": "",
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    pack_dir = _active_pack_dir()
+    if pack_dir is None:
+        status["status"] = "no_pack"
+        return status
+    status["pack"] = pack_dir.name
+    status["path"] = str(pack_dir)
+    if not pack_dir.is_dir():
+        status["status"] = "missing"
+        status["error"] = "skill pack 目录不存在"
+        return status
+    if not (pack_dir / ".git").exists():
+        status["status"] = "not_git"
+        status["error"] = "不是 git 检出"
+        return status
+
+    try:
+        fetch = _git_read(pack_dir, "fetch", "--quiet", timeout=timeout)
+        if fetch.returncode != 0:
+            status["error"] = (fetch.stderr or fetch.stdout or "git fetch 失败").strip()
+            return status
+
+        local = _git_read(pack_dir, "rev-parse", "HEAD", timeout=timeout)
+        upstream = _git_read(
+            pack_dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}",
+            timeout=timeout,
+        )
+        if local.returncode != 0 or upstream.returncode != 0:
+            status["status"] = "no_upstream"
+            status["error"] = "未配置上游分支"
+            return status
+
+        status["local_commit"] = local.stdout.strip()
+        status["upstream"] = upstream.stdout.strip()
+
+        remote = _git_read(pack_dir, "rev-parse", status["upstream"], timeout=timeout)
+        behind = _git_read(
+            pack_dir, "rev-list", "--count", f"HEAD..{status['upstream']}",
+            timeout=timeout,
+        )
+        if remote.returncode != 0 or behind.returncode != 0:
+            status["error"] = "无法读取上游提交"
+            return status
+
+        status["remote_commit"] = remote.stdout.strip()
+        status["behind"] = int(behind.stdout.strip() or "0")
+        status["status"] = (
+            "update_available" if status["behind"] > 0 else "up_to_date"
+        )
+    except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+        status["status"] = "error"
+        status["error"] = str(exc)
+    return status

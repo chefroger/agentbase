@@ -436,6 +436,61 @@ def check_post_install() -> list[CheckResult]:
     return out
 
 
+def check_skill_pack_sync() -> list[CheckResult]:
+    """技能包更新状态：只读后台检查结果，不在自检里发起网络请求。
+
+    后台任务只 fetch/比对并落盘（见 bootstrap.check_skill_pack_sync_once）；
+    真正更新只能由用户在设置页显式触发，doctor 这里只负责让状态可见。
+    """
+    try:
+        from agentbase.post_install.skills import load_skill_pack_status
+
+        status = load_skill_pack_status()
+    except Exception as exc:  # noqa: BLE001 — 自检本身不能崩
+        return [CheckResult("技能包更新", STATUS_WARN, f"读取状态失败：{exc}")]
+
+    if status is None:
+        return [CheckResult(
+            "技能包更新", STATUS_WARN,
+            "尚未检查（后台任务启动 10 秒后自动检查；更新只能由用户手动触发）",
+        )]
+
+    pack = status.get("pack") or "未配置 skill pack"
+    checked_at = status.get("checked_at") or "未知时间"
+    state = status.get("status")
+
+    def _short(commit: str) -> str:
+        return (commit or "")[:8]
+
+    if state == "up_to_date":
+        return [CheckResult(
+            "技能包更新", STATUS_OK,
+            f"{pack} 已是最新（{_short(status.get('local_commit'))}，检查于 {checked_at}）",
+        )]
+    if state == "update_available":
+        behind = status.get("behind") or 0
+        return [CheckResult(
+            "技能包更新", STATUS_WARN,
+            f"{pack} 有 {behind} 个新提交（{_short(status.get('local_commit'))} → "
+            f"{_short(status.get('remote_commit'))}；可在设置页手动更新，不会自动 git pull）",
+        )]
+    if state == "no_pack":
+        return [CheckResult("技能包更新", STATUS_OK, "未配置 skill pack，只有框架内置 skill")]
+    if state == "not_git":
+        return [CheckResult("技能包更新", STATUS_WARN, f"{pack} 不是 git 检出，无法检查更新")]
+    if state == "missing":
+        return [CheckResult(
+            "技能包更新", STATUS_WARN,
+            f"skill pack 目录不存在：{status.get('path') or '未知路径'}",
+        )]
+    if state == "no_upstream":
+        return [CheckResult("技能包更新", STATUS_WARN, f"{pack} 未配置上游分支，无法检查更新")]
+    return [CheckResult(
+        "技能包更新", STATUS_WARN,
+        f"上次检查失败：{status.get('error') or '未知错误'}（{checked_at}）",
+    )]
+
+
 def check_estop(*, estop_path: Path | None = None) -> list[CheckResult]:
     """急停状态（ESTOP）：Hermes 被 `hermes pause` 暂停时，**定时任务会静默停跑**。
 
@@ -491,6 +546,7 @@ def run_doctor(*, deep: bool = True) -> list[CheckResult]:
     results += check_hermes_runtime()
     results += check_estop()
     results += check_post_install()
+    results += check_skill_pack_sync()
     if deep:
         results += check_vision()
         results += check_tavily()

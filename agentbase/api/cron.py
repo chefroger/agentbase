@@ -297,7 +297,14 @@ def api_update_skills(request: Request):
         raise HTTPException(status_code=429, detail="Skills 更新请求过于频繁，请稍后重试。")
 
     from agentbase.post_install import update_skills as _do_update
-    return _capture_output(_do_update)
+
+    result = _capture_output(_do_update)
+    if result.get("ok"):
+        # 用户手动更新成功后立刻刷新状态，避免 doctor/设置页继续显示「有新提交」。
+        from agentbase.bootstrap import check_skill_pack_sync_once
+
+        check_skill_pack_sync_once()
+    return result
 
 
 def _find_cron_output(task_name: str, today: str) -> str | None:

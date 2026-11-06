@@ -972,36 +972,64 @@ def _try_load_yaml(text: str):
         return None
 
 
-def background_github_skills_sync():
-    """后台 daemon 线程：启动后静默同步一次，此后每天中午 12:30 定时同步。
+def check_skill_pack_sync_once() -> dict:
+    """检查一次 skill pack 并落盘状态：只 fetch/比对，**绝不 pull**。
 
-    失败不影响服务运行，仅记录日志。
-    更新后 skill_router 的 mtime 缓存自动失效，下次请求热加载新内容，无需重启。
+    任何异常都转成 status=error 记录，不影响主服务。
+    """
+    from agentbase.post_install.skills import (
+        check_skill_pack_update,
+        save_skill_pack_status,
+    )
+
+    try:
+        status = check_skill_pack_update()
+    except Exception as exc:  # noqa: BLE001 — 检查失败不能影响服务
+        from datetime import datetime
+
+        status = {
+            "pack": "", "path": "", "local_commit": "", "remote_commit": "",
+            "upstream": "", "behind": None, "status": "error",
+            "error": str(exc),
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        }
+    try:
+        save_skill_pack_status(status)
+    except Exception:
+        _logging.getLogger(__name__).exception("skill pack 状态落盘失败")
+    return status
+
+
+def background_github_skills_sync():
+    """后台 daemon 线程：启动后检查一次，此后每天 12:30 检查一次。
+
+    只检查（fetch + 比对）并记录状态，**绝不 git pull**；实际更新只能由用户
+    在设置页「更新技能包」（POST /skills/update）显式触发。函数名保留历史叫法，
+    避免调用方与外部脚本失配。
     """
     import datetime as _dt
     import threading
     import time as _time
 
-    def _sync_once():
+    _log = _logging.getLogger(__name__)
+
+    def _check_once():
         try:
-            from agentbase.post_install import update_skills
-            update_skills()
-        except SystemExit:
-            pass  # update_skills 内部 sys.exit 转为静默返回
+            check_skill_pack_sync_once()
         except Exception:
-            pass  # 静默失败，不影响主服务
+            _log.exception("skill pack 后台检查失败")
 
     def _run():
         _time.sleep(10)  # 首次：等服务完全就绪
-        _sync_once()
-        # 此后：每天中午 12:30 定时同步（夜里电脑可能关机，选白天时段）
+        _check_once()
+        # 此后：每天中午 12:30 检查（夜里电脑可能关机，选白天时段）
         while True:
             now = _dt.datetime.now()
             next_run = now.replace(hour=12, minute=30, second=0, microsecond=0)
             if next_run <= now:
                 next_run += _dt.timedelta(days=1)
             _time.sleep((next_run - now).total_seconds())
-            _sync_once()
+            _check_once()
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
