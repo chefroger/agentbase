@@ -443,3 +443,47 @@ def test_incomplete_report_carries_coverage_note(tmp_path):
     assert result.status == "incomplete"
     assert result.coverage_note, "被拦下时也必须说明能力边界"
     assert result.coverage_note in format_incomplete_report(result)
+
+
+def test_from_files_single_file(tmp_path):
+    from agentbase.document_task import DocumentTask
+
+    path = tmp_path / "合同.txt"
+    path.write_text("甲\n乙\n", encoding="utf-8")
+    task = DocumentTask.from_files([str(path)])
+    assert task.root == tmp_path
+    assert [f.relative_path for f in task.files] == ["合同.txt"]
+    assert task.truncated is False
+
+
+def test_gate_triggers_for_existing_file_without_intent_words(tmp_path):
+    path = tmp_path / "合同.txt"
+    path.write_text("x", encoding="utf-8")
+    assert should_enforce_document_gate(f"看看 {path}") is True
+    assert should_enforce_document_gate("逐个介绍产品") is False
+    assert should_enforce_document_gate(f"看看 {tmp_path / 'nope.txt'}") is False
+
+
+def test_plan_batches_more_than_200_files(tmp_path):
+    from agentbase.document_task import DocumentPlan
+
+    for i in range(205):
+        (tmp_path / f"f{i:03d}.txt").write_text("x", encoding="utf-8")
+    plan = DocumentPlan.from_root(tmp_path)
+
+    assert plan.truncated is False
+    assert plan.total_files == 205
+    assert [len(b.files) for b in plan.batches] == [200, 5]
+    assert "第 1 批" in plan.todo_text() and "第 2 批" in plan.todo_text()
+
+    evidence = {
+        str(f.path): {"complete": True} for b in plan.batches for f in b.files
+    }
+    result = plan.evaluate(evidence)
+    assert result.status == "complete"
+
+    missing_path = str(plan.batches[1].files[0].path)
+    evidence.pop(missing_path)
+    result = plan.evaluate(evidence)
+    assert result.status == "incomplete"
+    assert any("第 2 批：" in name for name in result.missing)

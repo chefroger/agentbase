@@ -22,7 +22,7 @@ from agentbase import chat_memory
 from agentbase.api.deps import require_workspace
 from agentbase.api.models import ChatRequest
 from agentbase.document_task import (
-    DocumentTask,
+    DocumentPlan,
     format_incomplete_report,
     should_enforce_document_gate,
 )
@@ -112,8 +112,8 @@ def _extract_and_cache_skill(cid: int, full_query: str, skill_hint: str | None) 
             _last_skill_per_workspace[cid] = current_skill
     return current_skill
 
-def _document_gate(document_task, request_task_id: str, collector):
-    """取读取证据并判定完成度；两份来源都没有证据时返回 None（降级放行）。
+def _document_plan_gate(document_plan, request_task_id: str, collector):
+    """取读取证据并按批判定完成度；两份来源都没有证据时返回 None（降级放行）。
 
     优先用 Hermes 的读取快照（含页数/Sheet/扫描页等结构化信息）。公开版
     Hermes 没有这个对外接口，回退到工具回调自收集的证据，这样不依赖
@@ -121,13 +121,45 @@ def _document_gate(document_task, request_task_id: str, collector):
     """
     hermes_evidence = snapshot_read_coverage(request_task_id)
     if hermes_evidence:
-        return document_task.evaluate(hermes_evidence)
+        return document_plan.evaluate(hermes_evidence)
     if collector is not None:
         collected = collector.snapshot()
         if collected:
-            return document_task.evaluate(collected)
-    _log.warning("No read evidence available; document gate skipped")
+            return document_plan.evaluate(collected)
+    _log.warning("No read evidence available; document plan gate skipped")
     return None
+
+
+def _build_document_plan(query: str):
+    """按用户点名的目录/文件建计划；无法可靠判定时返回 None（降级普通问答）。"""
+    if not should_enforce_document_gate(query):
+        return None
+    explicit = _extract_explicit_paths(query)
+    dirs = [p for p in explicit if Path(p).is_dir()]
+    if dirs:
+        plan = DocumentPlan.from_root(dirs[0])
+    else:
+        files = [p for p in explicit if Path(p).is_file()]
+        if not files:
+            return None
+        plan = DocumentPlan.from_files(files)
+    if plan.truncated or not plan.batches:
+        _log.info("Document plan skipped (truncated=%s, batches=%d)",
+                  plan.truncated, len(plan.batches))
+        return None
+    return plan
+
+
+def _with_plan_prompt(full_query: str, plan) -> str:
+    """把分批计划注入执行 query；单批不改变既有行为。"""
+    if plan is None or len(plan.batches) <= 1:
+        return full_query
+    return (
+        full_query
+        + "\n\n[文档读取计划]\n"
+        + plan.todo_text()
+        + "\n请按批次逐个读取，全部批次读完后再给出结论。"
+    )
 
 
 # ── 同步聊天 ──────────────────────────────────────────────────────────────
@@ -161,17 +193,9 @@ async def app(
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
-    document_task = None
-    if should_enforce_document_gate(query):
-        # 没有文档库概念后，只有用户点名了**目录**时才做完整扫描校验。
-        _dirs = [p for p in _extract_explicit_paths(query) if Path(p).is_dir()]
-        if _dirs:
-            document_task = DocumentTask.from_root(_dirs[0])
-            if document_task.truncated or not document_task.files:
-                # 目录过大或没有可分析文件：无法可靠判定完整性，退回普通问答。
-                _log.info("Document gate skipped (truncated=%s, files=%d)",
-                          document_task.truncated, len(document_task.files))
-                document_task = None
+    document_plan = await asyncio.to_thread(_build_document_plan, query)
+    document_task = document_plan.as_task() if document_plan else None
+    full_query = _with_plan_prompt(full_query, document_plan)
 
     _MAX_AGENT_RETRIES = 2  # 最多重试 2 次（共 3 次尝试），与 SSE 流式端点保持一致
 
@@ -247,11 +271,19 @@ async def app(
     if document_task and request_task_id:
         try:
             if agent_ok:
-                gate_result = _document_gate(document_task, request_task_id, evidence)
+                gate_result = _document_plan_gate(
+                    document_plan, request_task_id, evidence
+                )
                 if gate_result is not None and gate_result.status == "incomplete":
                     # 不通过时把原因作为回答返回，既不丢用户提问也不给不完整结论。
                     incomplete = True
                     response = format_incomplete_report(gate_result)
+                elif (
+                    gate_result is not None
+                    and document_plan is not None
+                    and len(document_plan.batches) > 1
+                ):
+                    response += document_plan.summary_markdown(gate_result)
         finally:
             # 释放 Hermes 侧该请求的读取记录，避免长驻进程内无限累积。
             release_read_coverage(request_task_id)
@@ -310,18 +342,10 @@ async def chat_stream(
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
-    document_task = None
-    if should_enforce_document_gate(query):
-        # 没有文档库概念后，只有用户点名了**目录**时才做完整扫描校验。
-        _dirs = [p for p in _extract_explicit_paths(query) if Path(p).is_dir()]
-        if _dirs:
-            # 目录枚举是阻塞 I/O：放进线程，避免卡住整个 SSE 事件循环。
-            document_task = await asyncio.to_thread(DocumentTask.from_root, _dirs[0])
-            if document_task.truncated or not document_task.files:
-                # 目录过大或没有可分析文件：无法可靠判定完整性，退回普通问答。
-                _log.info("Document gate skipped (truncated=%s, files=%d)",
-                          document_task.truncated, len(document_task.files))
-                document_task = None
+    # 目录枚举是阻塞 I/O：放进线程，避免卡住整个 SSE 事件循环。
+    document_plan = await asyncio.to_thread(_build_document_plan, query)
+    document_task = document_plan.as_task() if document_plan else None
+    full_query = _with_plan_prompt(full_query, document_plan)
     request_task_id = f"agentbase-doc-{cid}-{time.time_ns()}" if document_task else None
     # 回调收集的证据：公开版 Hermes 没有对外读取快照接口，靠这个兜底。
     evidence = ReadEvidenceCollector() if document_task else None
@@ -422,11 +446,15 @@ async def chat_stream(
                 if document_task and request_task_id:
                     try:
                         if result:
-                            gate_result = _document_gate(document_task, request_task_id, evidence)
+                            gate_result = _document_plan_gate(
+                                document_plan, request_task_id, evidence
+                            )
                             if gate_result is not None:
                                 if gate_result.status == "incomplete":
                                     # 不通过时把原因作为回答下发，不报错也不给不完整结论。
                                     result = format_incomplete_report(gate_result)
+                                elif document_plan is not None and len(document_plan.batches) > 1:
+                                    result += document_plan.summary_markdown(gate_result)
                                 _emit_threadsafe("analysis_gate", {
                                     "status": gate_result.status,
                                     "files": gate_result.complete,

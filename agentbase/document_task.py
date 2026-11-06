@@ -154,6 +154,58 @@ class DocumentTask:
 
         return cls(root=root_path, files=analyzable, skipped=skipped, truncated=truncated)
 
+    @classmethod
+    def from_files(cls, paths: list[str] | tuple[str, ...]) -> DocumentTask:
+        """从用户点名的文件清单建任务，不枚举目录。
+
+        root 取所有文件的共同父目录（跨盘符等无法取共同祖先时退回第一个文件
+        的父目录），relative_path 用于给用户展示与证据比对。
+        """
+        candidates: list[Path] = []
+        seen: set[Path] = set()
+        for raw in paths or ():
+            try:
+                path = Path(raw).expanduser().resolve()
+            except (OSError, ValueError):
+                continue
+            if path in seen:
+                continue
+            seen.add(path)
+            candidates.append(path)
+        if not candidates:
+            return cls(root=Path.cwd(), files=[], skipped=[])
+
+        try:
+            root = Path(os.path.commonpath([str(p.parent) for p in candidates]))
+        except (ValueError, OSError):
+            root = candidates[0].parent
+
+        analyzable: list[DocumentFile] = []
+        skipped: list[SkippedFile] = []
+        for path in candidates:
+            try:
+                relative = path.relative_to(root).as_posix()
+            except ValueError:
+                relative = path.name
+            reason = cls._skip_reason(path)
+            if reason is not None:
+                skipped.append(SkippedFile(relative, reason))
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                skipped.append(SkippedFile(relative, "stat_failed"))
+                continue
+            analyzable.append(DocumentFile(
+                path=path,
+                relative_path=relative,
+                size=stat.st_size,
+                mtime_ns=stat.st_mtime_ns,
+            ))
+
+        # 显式清单不是无界枚举，不截断；超过 200 个交给 DocumentPlan 分批。
+        return cls(root=root, files=analyzable, skipped=skipped, truncated=False)
+
     @staticmethod
     def _skip_reason(path: Path) -> str | None:
         """返回跳过原因；None 表示该文件必须完整读取。"""
@@ -345,6 +397,177 @@ def format_incomplete_report(result: GateResult) -> str:
     return "\n".join(lines)
 
 
+# 分批读取：每批不超过 _MAX_MANIFEST_FILES；总量硬上限防止误点 Home/下载
+# 导致无界遍历（4000 文件 = 20 批，属正常范围）。
+_BATCH_SIZE = _MAX_MANIFEST_FILES
+_MAX_TOTAL_FILES = 10000
+
+
+@dataclass
+class DocumentBatch:
+    """一批待读文件（≤ _BATCH_SIZE）。"""
+
+    index: int
+    files: list[DocumentFile]
+
+
+@dataclass
+class DocumentPlan:
+    """大目录的分批读取计划；单批时行为与 DocumentTask 一致。"""
+
+    root: Path
+    batches: list[DocumentBatch]
+    skipped: list[SkippedFile]
+    truncated: bool = False
+
+    @property
+    def total_files(self) -> int:
+        return sum(len(batch.files) for batch in self.batches)
+
+    @classmethod
+    def from_root(cls, root: str | Path) -> DocumentPlan:
+        """完整枚举（有硬上限），按目录顺序、文件名排序切批。"""
+        root_path = Path(root).resolve()
+        files: list[DocumentFile] = []
+        skipped: list[SkippedFile] = []
+        truncated = False
+
+        for dirpath, dirnames, filenames in os.walk(root_path, followlinks=False):
+            dirnames.sort()
+            for name in sorted(filenames):
+                if len(files) + len(skipped) >= _MAX_TOTAL_FILES:
+                    truncated = True
+                    break
+                path = Path(dirpath) / name
+                try:
+                    relative = path.relative_to(root_path).as_posix()
+                except ValueError:
+                    continue
+                reason = DocumentTask._skip_reason(path)
+                if reason is not None:
+                    skipped.append(SkippedFile(relative, reason))
+                    continue
+                try:
+                    stat = path.stat()
+                except OSError:
+                    skipped.append(SkippedFile(relative, "stat_failed"))
+                    continue
+                files.append(DocumentFile(
+                    path=path, relative_path=relative,
+                    size=stat.st_size, mtime_ns=stat.st_mtime_ns,
+                ))
+            if truncated:
+                break
+
+        batches = [
+            DocumentBatch(index=i // _BATCH_SIZE + 1, files=files[i:i + _BATCH_SIZE])
+            for i in range(0, len(files), _BATCH_SIZE)
+        ]
+        return cls(root=root_path, batches=batches, skipped=skipped, truncated=truncated)
+
+    @classmethod
+    def from_files(cls, paths: list[str] | tuple[str, ...]) -> DocumentPlan:
+        """显式文件清单分批（超过 200 个时用）。"""
+        task = DocumentTask.from_files(paths)
+        files = task.files
+        batches = [
+            DocumentBatch(index=i // _BATCH_SIZE + 1, files=files[i:i + _BATCH_SIZE])
+            for i in range(0, len(files), _BATCH_SIZE)
+        ]
+        return cls(root=task.root, batches=batches, skipped=task.skipped)
+
+    def as_task(self) -> DocumentTask:
+        """合并成一个任务，用于 request_task_id / 读证据采集。"""
+        return DocumentTask(
+            root=self.root,
+            files=[f for batch in self.batches for f in batch.files],
+            skipped=self.skipped,
+        )
+
+    def todo_text(self, *, preview: int = 5) -> str:
+        """给用户和执行层看的批次清单（每批预览前几个文件）。"""
+        lines = [
+            f"文档读取计划：共 {len(self.batches)} 批、{self.total_files} 个文件",
+        ]
+        for batch in self.batches:
+            names = [f.relative_path for f in batch.files[:preview]]
+            more = "" if len(batch.files) <= preview else f" …等 {len(batch.files)} 个"
+            lines.append(
+                f"- 第 {batch.index} 批（{len(batch.files)} 个）："
+                + "、".join(names) + more
+            )
+        return "\n".join(lines)
+
+    def evaluate(self, evidence: dict[str, dict[str, Any]]) -> GateResult:
+        """逐批判定后汇总；任一文件缺失/出错 → 整单不通过。"""
+        complete: list[str] = []
+        missing: list[str] = []
+        errors: list[str] = []
+        skipped: list[dict] = []
+        coverage_note = ""
+        incomplete_batches: list[int] = []
+
+        multi = len(self.batches) > 1
+        for batch in self.batches:
+            task = DocumentTask(root=self.root, files=batch.files, skipped=[])
+            result = task.evaluate(evidence)
+            prefix = f"第 {batch.index} 批：" if multi else ""
+            complete.extend(result.complete)
+            missing.extend(f"{prefix}{name}" for name in result.missing)
+            errors.extend(f"{prefix}{e}" for e in result.errors)
+            skipped.extend({
+                "file": f"{prefix}{item['file']}", "reason": item["reason"],
+            } for item in result.skipped)
+            if result.status != "complete":
+                incomplete_batches.append(batch.index)
+            if not coverage_note:
+                coverage_note = result.coverage_note
+
+        skipped.extend(
+            {"file": item.relative_path, "reason": item.reason} for item in self.skipped
+        )
+        if not incomplete_batches:
+            status = "complete"
+        elif missing or errors:
+            status = "incomplete"
+        else:
+            status = "untracked"
+
+        return GateResult(
+            status=status,
+            complete=complete,
+            missing=missing,
+            errors=errors,
+            skipped=skipped,
+            coverage_note=coverage_note,
+        )
+
+    def summary_markdown(self, result: GateResult, *, limit: int = 50) -> str:
+        """最终回答附带的已读/未读/跳过清单（过长时截断并注明数量）。"""
+        def _fmt(title: str, items: list[str]) -> list[str]:
+            if not items:
+                return [f"### {title}（0）", "- 无"]
+            lines = [f"### {title}（{len(items)}）"]
+            lines.extend(f"- {name}" for name in items[:limit])
+            if len(items) > limit:
+                lines.append(f"- …其余 {len(items) - limit} 个")
+            return lines
+
+        batch_line = "、".join(
+            f"第 {b.index} 批（{len(b.files)}）" for b in self.batches
+        )
+        lines = [
+            "", "## 文档读取清单",
+            f"- 共 {len(self.batches)} 批 / {self.total_files} 个文件",
+            f"- 批次：{batch_line}",
+        ]
+        lines.extend(_fmt("已读", result.complete))
+        lines.extend(_fmt("未读", result.missing))
+        skipped_names = [f"{s['file']}（{_label(s['reason'])}）" for s in result.skipped]
+        lines.extend(_fmt("跳过", skipped_names))
+        return "\n".join(lines)
+
+
 def should_enforce_document_gate(query: str) -> bool:
     """判断用户是否明确要求读完整目录；普通聊天保持原有行为。
 
@@ -356,4 +579,13 @@ def should_enforce_document_gate(query: str) -> bool:
         return False
     has_scope = any(re.search(p, text, re.IGNORECASE) for p in _DIRECTORY_SCOPE_PATTERNS)
     has_intent = any(re.search(p, text, re.IGNORECASE) for p in _COMPLETENESS_INTENT_PATTERNS)
-    return has_scope and has_intent
+    if has_scope and has_intent:
+        return True
+    # 点名单个**真实存在的文件**本身就是明确范围，不依赖“完整读取”意图词。
+    # 不认文本关键词：没有真实路径的普通提问（如“逐个介绍产品”）不受影响。
+    try:
+        from agentbase.helpers import _extract_explicit_paths
+
+        return any(Path(p).is_file() for p in _extract_explicit_paths(query))
+    except Exception:
+        return False

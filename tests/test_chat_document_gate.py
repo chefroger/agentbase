@@ -51,7 +51,7 @@ def agent_stub():
     return stub
 
 
-async def _call_chat(env, agent_stub, query, evidence, saved):
+async def _call_chat(env, agent_stub, query, evidence, saved, *, with_dir=True):
     """调用同步聊天端点，返回结果或抛出的 HTTPException。"""
     import agentbase.api.chat as chat
     from agentbase.api.models import ChatRequest
@@ -65,7 +65,9 @@ async def _call_chat(env, agent_stub, query, evidence, saved):
          patch.object(chat, "snapshot_read_coverage", return_value=evidence), \
          patch("agentbase.license.check_license", return_value=(True, "")), \
          patch.object(chat.chat_memory, "save_with_context", side_effect=_save):
-        payload = ChatRequest(query=f"{query} {env['dir']}")
+        payload = ChatRequest(
+            query=f"{query} {env['dir']}" if with_dir else query
+        )
         return await chat.app(payload, env["cid"])
 
 
@@ -392,3 +394,49 @@ async def test_callback_evidence_discloses_coverage_note_in_payload(env, agent_s
     assert result["response"] == "分析完成", "文件都读了，不应被拦"
     assert result.get("analysis_note"), "必须披露无法逐 Sheet / 逐页核验"
     assert "Sheet" in result["analysis_note"] or "页" in result["analysis_note"]
+
+
+@pytest.mark.asyncio
+async def test_single_file_gate_blocks_when_not_read(env, agent_stub):
+    saved = []
+    target = env["dir"] / "合同.txt"
+    other = env["dir"] / "报价.xlsx"
+    evidence = {
+        str(other.resolve()): {
+            "complete": True, "document_metadata": {"kind": "xlsx", "sheets": ["Sheet1"]},
+        },
+    }
+    result = await _call_chat(
+        env, agent_stub, f"分析 {target}", evidence, saved, with_dir=False
+    )
+    assert "合同.txt" in result["response"]
+    assert "未读完" in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_single_file_gate_passes_when_read(env, agent_stub):
+    saved = []
+    target = env["dir"] / "合同.txt"
+    evidence = {str(target.resolve()): {"complete": True}}
+    result = await _call_chat(
+        env, agent_stub, f"分析 {target}", evidence, saved, with_dir=False
+    )
+    assert result["response"] == "分析完成"
+
+
+@pytest.mark.asyncio
+async def test_large_directory_batches_instead_of_falling_back(env, agent_stub):
+    saved = []
+    for i in range(205):
+        (env["dir"] / f"f{i:03d}.txt").write_text("x", encoding="utf-8")
+    (env["dir"] / "zzz.txt").write_text("x", encoding="utf-8")
+    files = [p for p in env["dir"].iterdir() if p.is_file() and not p.name.startswith(".")]
+    evidence = {str(p.resolve()): {"complete": True} for p in files}
+    result = await _call_chat(env, agent_stub, STRICT_QUERY, evidence, saved)
+    assert "文档读取清单" in result["response"]
+    assert "共 2 批" in result["response"]
+
+    evidence.pop(str((env["dir"] / "zzz.txt").resolve()))
+    result = await _call_chat(env, agent_stub, STRICT_QUERY, evidence, saved)
+    assert "未读完" in result["response"]
+    assert "第 2 批" in result["response"]
