@@ -447,6 +447,13 @@ def purge(workspace_id: int) -> bool:
         n = conn.execute(
             "DELETE FROM workspaces WHERE id = ?", (workspace_id,)
         ).rowcount
+        # 提取缓存按工作区清理：不整表清空，别的工作区的行必须保留。
+        try:
+            from agentbase.doc_cache import purge_tenant
+
+            purge_tenant(conn, workspace_id)
+        except Exception:
+            pass  # 缓存清理失败不阻断工作区删除（best-effort）
         conn.commit()
         if n > 0:
             # 清理文件系统：agentbase_workspaces.data_dir（仅当目录在 AGENT_HOME 下）
