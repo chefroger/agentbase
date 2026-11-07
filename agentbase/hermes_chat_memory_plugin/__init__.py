@@ -15,6 +15,9 @@ import logging
 # 用绝对路径而非相对导入 —— 相对导入 `from .tools` 在 importlib.util 直接加载时
 # 会报 `No module named 'chat_memory_plugin'`，因为单文件 spec 没有父包。
 # 绝对路径要求 agentbase 是 installed package（pip install -e . 满足）。
+from agentbase.hermes_chat_memory_plugin.doc_skip import (
+    on_pre_tool_call as on_doc_skip_pre_tool_call,
+)
 from agentbase.hermes_chat_memory_plugin.tools import (
     CHAT_MEMORY_LIST_SCHEMA,
     handle_chat_memory_list,
@@ -43,5 +46,10 @@ def register(ctx) -> None:
             check_fn=None,
             emoji=emoji,
         )
+    # 缓存命中文件：硬拦截重复读取。旧版宿主没有 register_hook 时降级
+    # （只少一层拦截，不影响工具注册）。
+    register_hook = getattr(ctx, "register_hook", None)
+    if callable(register_hook):
+        register_hook("pre_tool_call", on_doc_skip_pre_tool_call)
     logger.debug("chat-memory plugin registered tool: chat_memory_list")
 
