@@ -172,3 +172,11 @@ class TestLoadCacheHits:
         monkeypatch.setattr(chat, "resolve_extraction_model", lambda: ("p", "m", "p:m"))
         evidence, skip, prompt = chat._load_cache_hits(plan, 1, "full_read")
         assert (evidence, skip, prompt) == ({}, set(), "")
+
+    def test_cache_off_never_hits(self, tmp_path, monkeypatch, conn):
+        import agentbase.api.chat as chat
+
+        plan = DocumentPlan.from_root(tmp_path)
+        monkeypatch.setattr(chat, "resolve_extraction_model", lambda: ("p", "m", "p:m"))
+        monkeypatch.setenv("AGENTBASE_DOC_CACHE", "off")
+        assert chat._load_cache_hits(plan, 1, "summary") == ({}, set(), "")
