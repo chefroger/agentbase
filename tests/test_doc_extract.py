@@ -17,7 +17,7 @@ from agentbase import doc_cache, doc_extract
 # 改提示词或分类规则：必须递增 doc_cache.EXTRACTOR_VERSION 并补一条新映射；
 # 只改文本不改版本会直接失败（旧版本号对不上新指纹）。
 AGENTBASE_EXTRACTOR_FINGERPRINTS = {
-    "3": "d438a1e2ba5d6a561adac5b38cc28e78e994e3b58562d12c318ae8b13a10518d",
+    "4": "cf76545d1b606028417457b71c144171330efc438d096826b17ab079069436fb",
 }
 
 
@@ -246,6 +246,19 @@ class TestExtraction:
         result = await doc_extract.extract_document(txt_file)
         assert result.doc_kind == doc_cache.KIND_MONEY
         assert result.cacheable is False
+
+    async def test_price_word_alone_does_not_force_money(self, monkeypatch, tmp_path):
+        """只出现"价格"字样、没有金额结构时，保留模型给的 info（基准误杀修复）。"""
+        path = tmp_path / "intro.txt"
+        path.write_text("这是公司介绍，产品价格实惠，欢迎咨询。", encoding="utf-8")
+        _patch_model(monkeypatch, json.dumps({
+            "doc_kind": "info", "summary": "公司介绍", "facts": [],
+        }, ensure_ascii=False))
+
+        result = await doc_extract.extract_document(path)
+
+        assert result.doc_kind == doc_cache.KIND_INFO
+        assert result.cacheable is True
 
     async def test_unknown_kind_is_unclassified(self, monkeypatch, txt_file):
         _patch_model(monkeypatch, json.dumps({"doc_kind": "unknown", "summary": "x"}))
