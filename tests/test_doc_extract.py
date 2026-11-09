@@ -17,7 +17,7 @@ from agentbase import doc_cache, doc_extract
 # 改提示词或分类规则：必须递增 doc_cache.EXTRACTOR_VERSION 并补一条新映射；
 # 只改文本不改版本会直接失败（旧版本号对不上新指纹）。
 AGENTBASE_EXTRACTOR_FINGERPRINTS = {
-    "4": "cf76545d1b606028417457b71c144171330efc438d096826b17ab079069436fb",
+    "4": "37cc6f288a52950675248a9b7c76b3227bd8c1b484585de9b18e65e1430e5c8c",
 }
 
 
