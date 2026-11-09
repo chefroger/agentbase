@@ -596,12 +596,26 @@ async def chat_stream(
     _MAX_AGENT_RETRIES = 2
     cancel_event = threading.Event()  # 客户端断连时置位，阻止重试继续浪费 token
 
+    def _release_doc_state() -> None:
+        """异常/断连退出时也要释放读证据与缓存跳过集合。"""
+        if not (document_task and request_task_id):
+            return
+        try:
+            release_read_coverage(request_task_id)
+        except Exception:
+            _log.exception("release read coverage failed")
+        try:
+            release_doc_skip(request_task_id)
+        except Exception:
+            _log.exception("release doc skip failed")
+
     def _run_agent() -> str | None:
         last_error = ""
         for attempt in range(_MAX_AGENT_RETRIES + 1):
             # 客户端已断连，立即停止重试循环
             if cancel_event.is_set():
                 _log.info("Agent cancelled by client disconnect, attempt %d", attempt + 1)
+                _release_doc_state()
                 return None
             try:
                 if attempt == 0:
@@ -626,12 +640,7 @@ async def chat_stream(
                 # 的答案会污染后续历史注入）。
                 if cancel_event.is_set():
                     _log.info("Agent finished after client disconnect; dropping result")
-                    if document_task and request_task_id:
-                        try:
-                            release_read_coverage(request_task_id)
-                            release_doc_skip(request_task_id)
-                        except Exception:
-                            _log.exception("release read coverage / doc skip failed")
+                    _release_doc_state()
                     return None
 
                 if not result and attempt < _MAX_AGENT_RETRIES:
@@ -700,6 +709,7 @@ async def chat_stream(
                 return result
             except ImportError:
                 _emit_threadsafe("error", {"message": "AI Agent 模块未加载。"})
+                _release_doc_state()
                 return None
             except RuntimeError as e:
                 last_error = str(e)
@@ -708,6 +718,7 @@ async def chat_stream(
                     time.sleep(2 ** attempt)
                     continue
                 _emit_threadsafe("error", {"message": last_error})
+                _release_doc_state()
                 return None
             except Exception as e:
                 last_error = str(e) or f"Agent stream failed (attempt {attempt + 1})"
@@ -716,6 +727,7 @@ async def chat_stream(
                     time.sleep(2 ** attempt)
                     continue
                 _emit_threadsafe("error", {"message": f"⚠️ {last_error}"})
+                _release_doc_state()
                 return None
             except BaseException as e:
                 # Hermes 可能以 BaseException 结束 —— 例如 hermes_bootstrap 的
@@ -731,8 +743,10 @@ async def chat_stream(
                     "error",
                     {"message": f"⚠️ Agent 异常终止（{type(e).__name__}）：{e}"},
                 )
+                _release_doc_state()
                 return None
         _emit_threadsafe("error", {"message": "Agent 重试耗尽，请稍后重试。"})
+        _release_doc_state()
         return None
 
     async def _event_stream():
@@ -789,6 +803,9 @@ async def chat_stream(
                     await agent_task
                 except (asyncio.CancelledError, Exception):
                     pass
+            # 线程里的 release 可能赶在 error 事件之后才执行；这里兜底一次，
+            # 保证流结束（异常/断连/超时）时跳过集合一定被释放。
+            _release_doc_state()
             yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(

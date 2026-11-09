@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ from agentbase import doc_cache, doc_extract
 # 改提示词或分类规则：必须递增 doc_cache.EXTRACTOR_VERSION 并补一条新映射；
 # 只改文本不改版本会直接失败（旧版本号对不上新指纹）。
 AGENTBASE_EXTRACTOR_FINGERPRINTS = {
-    "2": "6bdb7ff44b3295da29309d8974134ae4b86e70f9c2f8edeb1efeefda45df8253",
+    "3": "d438a1e2ba5d6a561adac5b38cc28e78e994e3b58562d12c318ae8b13a10518d",
 }
 
 
@@ -102,6 +103,49 @@ class TestParsing:
         parsed = doc_extract.parse_document(path)
 
         assert parsed.truncated is True
+
+    def test_xlsx_facts_cap_is_truncated(self, tmp_path):
+        """facts 达到 500 条上限也是截断，不能写成 complete 缓存。"""
+        import openpyxl
+
+        path = tmp_path / "wide.xlsx"
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(["产品"] + [f"c{i}" for i in range(10)])
+        for row in range(80):
+            sheet.append([f"p{row}"] + [row * 10 + col for col in range(10)])
+        workbook.save(path)
+
+        parsed = doc_extract.parse_document(path)
+        assert parsed.truncated is True
+
+        result = asyncio.run(doc_extract.extract_document(path))
+        assert result.status == doc_cache.STATUS_FAILED
+        assert result.error_code == "truncated"
+
+    def test_xlsx_formula_without_cached_value_is_truncated(self, tmp_path):
+        """公式格没有缓存值时不能当成空单元格写 complete 缓存。"""
+        import openpyxl
+
+        path = tmp_path / "formula.xlsx"
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.append(["产品", "价格"])
+        sheet.append(["A", "=1+2"])
+        workbook.save(path)
+
+        parsed = doc_extract.parse_document(path)
+        assert parsed.truncated is True
+
+        result = asyncio.run(doc_extract.extract_document(path))
+        assert result.status == doc_cache.STATUS_FAILED
+        assert result.error_code == "truncated"
+
+    def test_table_facts_reports_cap(self):
+        rows = [["head", "value"]] + [[f"r{i}", i] for i in range(600)]
+        facts, truncated = doc_extract._table_facts(rows, sheet="s")
+        assert truncated is True
+        assert len(facts) == doc_extract._MAX_PARSED_FACTS
 
     def test_corrupt_xlsx_returns_error_not_exception(self, tmp_path):
         path = tmp_path / "broken.xlsx"

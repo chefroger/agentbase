@@ -496,6 +496,43 @@ async def test_stream_large_directory_incomplete_marks_batch(env, agent_stub):
     assert "第 2 批" in payloads["response"]
 
 
+@pytest.mark.asyncio
+async def test_stream_exception_releases_doc_skip(env, monkeypatch):
+    """SSE 异常退出也要释放缓存跳过集合，不能长驻进程累积。"""
+    import agentbase.api.chat as chat
+    from agentbase.api.models import ChatRequest
+    from agentbase.hermes_chat_memory_plugin import doc_skip
+
+    key = str((env["dir"] / "合同.txt").resolve())
+    doc_skip._skips.clear()
+    monkeypatch.setattr(chat, "detect_request_scope", lambda q: "summary")
+    monkeypatch.setattr(chat, "should_enforce_document_gate", lambda q: False)
+    monkeypatch.setattr(
+        chat, "_load_cache_hits",
+        lambda plan, tid, scope: (
+            {key: {"source": "cache", "cache_complete": True,
+                   "doc_kind": "info", "allowed_scope": ["summary", "locate"]}},
+            {key}, "cache block",
+        ),
+    )
+    monkeypatch.setattr(
+        chat, "create_agent",
+        lambda **kw: (_ for _ in ()).throw(ImportError("boom")),
+    )
+    monkeypatch.setattr(chat, "build_query", lambda *a, **k: ("Q", ""))
+    monkeypatch.setattr(chat, "snapshot_read_coverage", lambda tid: None)
+    monkeypatch.setattr("agentbase.license.check_license", lambda *a, **k: (True, ""))
+    monkeypatch.setattr(chat.chat_memory, "save_with_context", lambda **kw: {"id": 1})
+
+    response = await chat.chat_stream(
+        ChatRequest(query=f"介绍一下这个目录 {env['dir']}"), env["cid"]
+    )
+    async for _chunk in response.body_iterator:
+        pass
+
+    assert doc_skip._skips == {}, "异常退出后 skip 集合未释放"
+
+
 def test_with_plan_prompt_only_for_multi_batch(tmp_path):
     from agentbase.api.chat import _with_plan_prompt
     from agentbase.document_task import DocumentPlan
