@@ -616,10 +616,16 @@ async def chat_stream(
     _MAX_AGENT_RETRIES = 2
     cancel_event = threading.Event()  # 客户端断连时置位，阻止重试继续浪费 token
 
+    warm_started = False
+
     def _release_doc_state() -> None:
         """退出前按读取证据预热缓存，并释放读证据与跳过集合。"""
-        # 读到哪些就预热哪些（不依赖门禁是否通过）。
-        _warm_after_read(request_task_id, evidence, cid)
+        nonlocal warm_started
+        # 读到哪些就预热哪些（不依赖门禁是否通过）；每请求只预热一次，
+        # 避免 error 路径与 gate finally 各起一个线程重复提取（11-09 N1）。
+        if not warm_started:
+            warm_started = True
+            _warm_after_read(request_task_id, evidence, cid)
         if not (document_task and request_task_id):
             return
         try:

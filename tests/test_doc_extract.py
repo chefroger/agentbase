@@ -17,7 +17,7 @@ from agentbase import doc_cache, doc_extract
 # 改提示词或分类规则：必须递增 doc_cache.EXTRACTOR_VERSION 并补一条新映射；
 # 只改文本不改版本会直接失败（旧版本号对不上新指纹）。
 AGENTBASE_EXTRACTOR_FINGERPRINTS = {
-    "4": "37cc6f288a52950675248a9b7c76b3227bd8c1b484585de9b18e65e1430e5c8c",
+    "5": "455a20d8057c690584aee16efa30edc3eb5d8109a585b3ee17bcee3052af366a",
 }
 
 
@@ -246,6 +246,16 @@ class TestExtraction:
         result = await doc_extract.extract_document(txt_file)
         assert result.doc_kind == doc_cache.KIND_MONEY
         assert result.cacheable is False
+
+    async def test_bare_unit_price_marks_money(self, monkeypatch, tmp_path):
+        """「单价 3.5」没有货币符号也算金额结构（复审 P2-1）。"""
+        path = tmp_path / "price.txt"
+        path.write_text("产品A 单价 3.5", encoding="utf-8")
+        _patch_model(monkeypatch, json.dumps({
+            "doc_kind": "info", "summary": "价格", "facts": [],
+        }, ensure_ascii=False))
+        result = await doc_extract.extract_document(path)
+        assert result.doc_kind == doc_cache.KIND_MONEY
 
     async def test_price_word_alone_does_not_force_money(self, monkeypatch, tmp_path):
         """只出现"价格"字样、没有金额结构时，保留模型给的 info（基准误杀修复）。"""
