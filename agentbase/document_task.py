@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentbase.doc_scope import detect_request_scope, scope_allows_cache
+from agentbase.doc_scope import scope_allows_cache
 
 # AgentBase 认为「需要完整读取」的文档类型。Hermes 负责实际读取与解析，
 # 这里只决定哪些文件纳入强制范围。
@@ -347,7 +347,8 @@ class DocumentTask:
         # 走到这里的证据若全来自工具回调（原版 Hermes 就是这种情况），
         # 就如实说明完整性未经核验，而不是让用户以为已经逐 Sheet 逐页校验过。
         _has_structured = any(
-            rec.get("source") != "callbacks" for rec in normalized.values()
+            rec.get("source") not in ("callbacks", "cache")
+            for rec in normalized.values()
         )
         return GateResult(
             status=status,
@@ -613,10 +614,6 @@ def should_enforce_document_gate(query: str) -> bool:
     has_scope = any(re.search(p, text, re.IGNORECASE) for p in _DIRECTORY_SCOPE_PATTERNS)
     has_intent = any(re.search(p, text, re.IGNORECASE) for p in _COMPLETENESS_INTENT_PATTERNS)
     if has_scope and has_intent:
-        return True
-    # 概览/定位请求也要建计划（缓存只服务这两类）；没有点名路径时
-    # _build_document_plan 仍会返回 None，不会扫无范围的东西。
-    if scope_allows_cache(detect_request_scope(query)):
         return True
     # 点名单个**真实存在的文件**本身就是明确范围，不依赖“完整读取”意图词。
     # 不认文本关键词：没有真实路径的普通提问（如“逐个介绍产品”）不受影响。

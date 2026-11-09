@@ -154,9 +154,12 @@ def _document_plan_gate(
     return document_plan.evaluate(evidence, request_scope=request_scope)
 
 
-def _build_document_plan(query: str):
-    """按用户点名的目录/文件建计划；无法可靠判定时返回 None（降级普通问答）。"""
-    if not should_enforce_document_gate(query):
+def _build_document_plan(query: str, *, for_cache: bool = False):
+    """按用户点名的目录/文件建计划；无法可靠判定时返回 None（降级普通问答）。
+
+    `for_cache=True` 只用于概览/定位的缓存上下文：不参与门禁，也不扩大门禁范围。
+    """
+    if not for_cache and not should_enforce_document_gate(query):
         return None
     explicit = _extract_named_paths(query)
     dirs = [p for p in explicit if Path(p).is_dir()]
@@ -236,25 +239,35 @@ def _load_cache_hits(document_plan, tenant_id: int, request_scope: str):
     skip_paths: set[str] = set()
     lines: list[str] = [
         "[文档缓存（仅用于概览/定位）]",
-        "以下文件本次不重复读取，使用已有的提取摘要；"
-        "具体数字/条款/原文仍须本次全文核对，不得用缓存回答具体事实：",
+        "以下是已有提取摘要的文件；具体数字/条款/原文仍须本次全文核对，"
+        "不得用缓存回答具体事实：",
     ]
+    shown = 0
     for item, entry, digest in hits:
+        summary = (entry.summary_text or "").strip()[:_MAX_CACHE_SUMMARY_CHARS]
+        if not summary:
+            # 没有摘要就没有可注入的内容：不拦读取，让模型自己去读。
+            continue
+        if shown >= _MAX_CACHE_PROMPT_FILES:
+            break
         path_key = str(item.path)
+        lines.append(f"- {item.relative_path}：{summary}")
+        shown += 1
+        # 只有真正写进提示的文件才登记跳过/证据（审计 P1-3）。
         skip_paths.add(path_key)
         evidence[path_key] = {
             "source": "cache",
             "cache_complete": True,
             "doc_kind": entry.doc_kind,
             "allowed_scope": [SCOPE_SUMMARY, SCOPE_LOCATE],
+            "tenant_id": str(tenant_id),
             "sha256": digest,
             "model": entry.model,
             "extractor_version": entry.extractor_version,
             "extracted_at": entry.extracted_at,
         }
-        if len(lines) <= _MAX_CACHE_PROMPT_FILES:
-            summary = (entry.summary_text or "").strip()[:_MAX_CACHE_SUMMARY_CHARS]
-            lines.append(f"- {item.relative_path}：{summary or '（无摘要）'}")
+    if not shown:
+        return {}, set(), ""
     return evidence, skip_paths, "\n".join(lines)
 
 
@@ -307,20 +320,33 @@ async def app(
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
-    document_plan = await asyncio.to_thread(_build_document_plan, query)
-    document_task = document_plan.as_task() if document_plan else None
-    full_query = _with_plan_prompt(full_query, document_plan)
-
     request_scope = detect_request_scope(query)
+    gate_required = should_enforce_document_gate(query)
+    # 概览/定位只把缓存摘要当上下文，不参与门禁（2026-11-09 审计 P1-1）。
+    cache_context = bool(
+        not gate_required and doc_cache.cache_enabled()
+        and scope_allows_cache(request_scope)
+    )
+    document_plan = await asyncio.to_thread(
+        _build_document_plan, query, for_cache=cache_context
+    )
+    document_task = document_plan.as_task() if document_plan else None
+    if gate_required:
+        full_query = _with_plan_prompt(full_query, document_plan)
+
     cache_evidence: dict = {}
     skip_paths: set[str] = set()
-    if document_task is not None:
+    cache_block = ""
+    if document_task is not None and cache_context:
         # 哈希/查库是阻塞 I/O：放进线程，避免卡住事件循环。
         cache_evidence, skip_paths, cache_block = await asyncio.to_thread(
             _load_cache_hits, document_plan, cid, request_scope
         )
         if cache_block:
             full_query = full_query + "\n\n" + cache_block
+        # 只有概览才硬跳过；定位要自己判断关键词，不能拦读取。
+        if request_scope != SCOPE_SUMMARY:
+            skip_paths = set()
 
     _MAX_AGENT_RETRIES = 2  # 最多重试 2 次（共 3 次尝试），与 SSE 流式端点保持一致
 
@@ -395,7 +421,7 @@ async def app(
 
     gate_result = None
     incomplete = False
-    if document_task and request_task_id:
+    if gate_required and document_task and request_task_id:
         try:
             if agent_ok:
                 gate_result = _document_plan_gate(
@@ -421,21 +447,27 @@ async def app(
             release_read_coverage(request_task_id)
             release_doc_skip(request_task_id)
 
+    if cache_block and not gate_required:
+        response += (
+            f"\n\n（本次参考了 {len(cache_evidence)} 个文件的缓存摘要；"
+            "具体事实请以本次读取为准。）"
+        )
+
     conv = chat_memory.save_with_context(
         workspace_id=cid, query=query,
         response=response,
-        files_read=(
-            [{"file": path, "status": "complete"} for path in gate_result.complete]
-            + [{"file": path, "status": "cached"} for path in gate_result.cache_complete]
-        ) if gate_result else None,
+        files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
+                    if gate_result else None),
         context=payload.context or "",
         skill=current_skill or "",
     )
     payload_out = {"response": response, "conversation": conv}
+    if cache_evidence and not gate_required:
+        payload_out["analysis_cache_context"] = sorted(
+            Path(path).name for path in cache_evidence
+        )
     if gate_result is not None:
         payload_out["analysis_skipped"] = gate_result.skipped
-        if gate_result.cache_complete:
-            payload_out["analysis_cache"] = gate_result.cache_complete
         if gate_result.coverage_note:
             # 能力边界如实披露（原版 Hermes 无结构化读取快照时）
             payload_out["analysis_note"] = gate_result.coverage_note
@@ -479,21 +511,34 @@ async def chat_stream(
 
     # 从 full_query 或 skill_hint 中提取当前匹配的 skill 名称并缓存
     current_skill = _extract_and_cache_skill(cid, full_query, skill_hint)
-    # 目录枚举是阻塞 I/O：放进线程，避免卡住整个 SSE 事件循环。
-    document_plan = await asyncio.to_thread(_build_document_plan, query)
-    document_task = document_plan.as_task() if document_plan else None
-    full_query = _with_plan_prompt(full_query, document_plan)
-
     request_scope = detect_request_scope(query)
+    gate_required = should_enforce_document_gate(query)
+    # 概览/定位只把缓存摘要当上下文，不参与门禁（2026-11-09 审计 P1-1）。
+    cache_context = bool(
+        not gate_required and doc_cache.cache_enabled()
+        and scope_allows_cache(request_scope)
+    )
+    # 目录枚举是阻塞 I/O：放进线程，避免卡住整个 SSE 事件循环。
+    document_plan = await asyncio.to_thread(
+        _build_document_plan, query, for_cache=cache_context
+    )
+    document_task = document_plan.as_task() if document_plan else None
+    if gate_required:
+        full_query = _with_plan_prompt(full_query, document_plan)
+
     cache_evidence: dict = {}
     skip_paths: set[str] = set()
-    if document_task is not None:
+    cache_block = ""
+    if document_task is not None and cache_context:
         # 哈希/查库是阻塞 I/O：放进线程，避免卡住 SSE 事件循环。
         cache_evidence, skip_paths, cache_block = await asyncio.to_thread(
             _load_cache_hits, document_plan, cid, request_scope
         )
         if cache_block:
             full_query = full_query + "\n\n" + cache_block
+        # 只有概览才硬跳过；定位要自己判断关键词，不能拦读取。
+        if request_scope != SCOPE_SUMMARY:
+            skip_paths = set()
 
     request_task_id = f"agentbase-doc-{cid}-{time.time_ns()}" if document_task else None
     if document_task and request_task_id and skip_paths:
@@ -597,7 +642,7 @@ async def chat_stream(
                 gate_result = None
                 if document_task and request_task_id:
                     try:
-                        if result:
+                        if gate_required and result:
                             gate_result = _document_plan_gate(
                                 document_plan, request_task_id, evidence,
                                 request_scope=request_scope,
@@ -621,6 +666,11 @@ async def chat_stream(
                                     "skipped": gate_result.skipped,
                                     "coverage_note": gate_result.coverage_note,
                                 })
+                        elif result and cache_block and not gate_required:
+                            result += (
+                                f"\n\n（本次参考了 {len(cache_evidence)} 个文件的缓存摘要；"
+                                "具体事实请以本次读取为准。）"
+                            )
                     finally:
                         # 释放 Hermes 读记录与缓存跳过集合，避免长驻进程内累积。
                         release_read_coverage(request_task_id)
@@ -632,10 +682,8 @@ async def chat_stream(
                     conv = chat_memory.save_with_context(
                         workspace_id=cid,
                         query=query, response=result or "",
-                        files_read=(
-                            [{"file": path, "status": "complete"} for path in gate_result.complete]
-                            + [{"file": path, "status": "cached"} for path in gate_result.cache_complete]
-                        ) if gate_result else None,
+                        files_read=([{"file": path, "status": "complete"} for path in gate_result.complete]
+                                    if gate_result else None),
                         context=payload.context or "",
                         skill=current_skill or "",
                     )
