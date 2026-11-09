@@ -24,7 +24,7 @@ def _fresh_db(tmp_path: Path) -> Path:
     db = tmp_path / "agentbase.db"
     conn = sqlite3.connect(db)
     for table in ("workspaces", "agentbase_workspaces", "libraries", "customers",
-                  "customer_libraries", "conversations", "orders", "usage_ledger"):
+                  "customer_libraries", "conversations", "orders", "usage_ledger", "doc_extractions"):
         conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, extra1 TEXT, extra2 TEXT, extra3 TEXT)")
     conn.execute("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT)")
     conn.execute("ALTER TABLE conversations ADD COLUMN context TEXT DEFAULT ''")

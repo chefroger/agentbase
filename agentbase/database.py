@@ -198,6 +198,7 @@ def _add_context_column(conn: sqlite3.Connection) -> None:
 
 _EXPECTED_TABLES = frozenset({
     "workspaces", "agentbase_workspaces", "conversations", "usage_ledger",
+    "doc_extractions",
 })
 
 
