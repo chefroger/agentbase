@@ -1,22 +1,22 @@
 """文档提取缓存手工基准脚本 —— agentbase 版（路线 A：走完整聊天）。
 
-跑法（用 trade 的 venv，PYTHONPATH 指向本仓根目录即可，无需安装）：
+跑法（用外部 venv，PYTHONPATH 指向本仓根目录即可，无需安装）：
 
     AGENT_HOME=/tmp/agentbase-bench-run \
     PYTHONPATH=/Users/rogerlau/Desktop/agentbase-workspace/agentbase \
-    ~/.trade/venv/bin/python scripts/benchmark-doc-cache.py \
+    /path/to/venv/bin/python scripts/benchmark-doc-cache.py \
         --rounds 2 --home /tmp/agentbase-bench-run --out /tmp/bench-agentbase.json
 
-与 trade 版**同一文档集、同一问题集**，但有一处产品差异必须写进报告：
+与另一仓**同一文档集、同一问题集**，但有一处产品差异必须写进报告：
 
-- trade 用 `library_id` 挂文档库；**agentbase 没有文档库实体**，文档计划靠问句里
+- 另一仓用 `library_id` 挂文档库；**agentbase 没有文档库实体**，文档计划靠问句里
   点名路径（`agentbase/api/chat.py:_build_document_plan` → `helpers._extract_named_paths`）。
   因此 agentbase 每道题都在题面末尾带一个**中性固定**目录 `/tmp/agentbase-bench-docs`
   —— 路径里若带数字或「客户/报价」等词，`doc_scope` 会把 scope 判成 full_read，
   缓存旁路根本不会触发。
-- 题面因此比 trade 版多一个路径后缀，其余一致。
+- 题面因此比对照仓多一个路径后缀，其余一致。
 
-记录口径、Hermes 侧临时改动、缓存判定规则与 trade 版完全相同。
+记录口径、Hermes 侧临时改动、缓存判定规则与对照仓完全相同。
 脚本只做基准，不进产品逻辑。
 """
 from __future__ import annotations
@@ -35,67 +35,45 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ── 文档集（真实业务文档，不进仓库；只记文件名/分类/哈希）──────────────
 
-DOC_SOURCE_ROOT = Path.home() / "Desktop" / "外贸业务资料包" / "外贸业务资料包"
+DOC_SOURCE_ROOT = Path("")  # 由 manifest 的 doc_source_root 填充
 
 # agentbase 没有文档库实体：文档计划靠问句里点名路径。目录名必须中性且固定，
 # 路径里带数字或「客户/报价」等词会把 scope 判成 full_read。
 BENCH_DOCS_DIR = "/tmp/agentbase-bench-docs"
 
-DOCUMENTS = [
-    {
-        "key": "quotation",
-        "name": "产品报价单（外贸协议订单版本，含打版等复杂信息）1.xlsx",
-        "rel": "01-外贸报价模板/产品报价单（外贸协议订单版本，含打版等复杂信息）1.xlsx",
-        "role": "money 典型（金额结构）；改数验证对象",
-        "expect_kind": "money",
-        "parse": "ok",
-    },
-    {
-        "key": "ces_table",
-        "name": "万腾CES展产品表(最终确定版本-2018.12.22）.xlsx",
-        "rel": "06-更多销售技巧，模板拿下客户/有效沟通细节图工具/"
-               "万腾CES展产品表(最终确定版本-2018.12.22）.xlsx",
-        "role": "产品表：11-09 被金额兜底误判 money 的那类，分类观察点",
-        "expect_kind": "info",
-        "parse": "ok",
-    },
-    {
-        "key": "crm_big",
-        "name": "客户跟进管理系统-外贸.xlsx",
-        "rel": "03-客户盘点管理表/客户跟进管理系统-外贸.xlsx",
-        "role": "Excel 超大表（2.5MB）：截断口径观察点",
-        "expect_kind": None,
-        "parse": "truncated",
-    },
-    {
-        "key": "perf_stats",
-        "name": "个人业绩统计表.xlsx",
-        "rel": "07-外贸业务工作管理表格/个人业绩统计表.xlsx",
-        "role": "Excel 统计表：数字题主力",
-        "expect_kind": None,
-        "parse": "ok",
-    },
-    {
-        "key": "cold_email_docx",
-        "name": "高效开发信的全方位建议.docx",
-        "rel": "02-客户开发与订单管理/高效开发信的全方位建议.docx",
-        "role": "Word prose（无表格）：Word 抽取观察点",
-        "expect_kind": "info",
-        "parse": "ok",
-    },
-    {
-        "key": "negotiation_docx",
-        "name": "业务转化提升分享第二篇.docx",
-        "rel": "06-更多销售技巧，模板拿下客户/业务转化提升分享第二篇.docx",
-        "role": "Word 含数值（7000USD）：Word 数字题",
-        "expect_kind": None,
-        "parse": "ok",
-    },
-]
+# 文档清单**不进仓**：本仓门禁1 禁止业务词（.github/workflows/agentbase-gate.yml），
+# 而清单里必然含真实业务文件名。改为从仓外 manifest 读取：
+#   {"key": "...", "name": "...", "rel": "相对 DOC_SOURCE_ROOT 的路径",
+#    "role": "...", "expect_kind": "money|info|null", "parse": "ok|truncated"}
+# 用法：--docs-manifest /path/to/docs.json（或环境变量 BENCH_DOCS_MANIFEST）。
+DOCS_MANIFEST = os.environ.get("BENCH_DOCS_MANIFEST", "")
 
-# 报价单里用于改数验证的字面数值（M6 = 报价单号 2018123），改后核对答案。
-QUOTATION_ORIGINAL_TOTAL = 2018123
-QUOTATION_MUTATED_TOTAL = 2018999
+
+def _load_manifest() -> dict:
+    """读仓外基准配置（文档清单 + 题库 + 改数常量）。缺失时直接失败，不猜。"""
+    manifest_env = os.environ.get("BENCH_DOCS_MANIFEST", "")
+    path = Path(manifest_env) if manifest_env else None
+    if path is None or not path.is_file():
+        raise SystemExit(
+            "缺少基准配置：用 --docs-manifest / BENCH_DOCS_MANIFEST 指向一个 JSON 文件"
+        )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    global DOCUMENTS, QUESTIONS, DOC_SOURCE_ROOT
+    global QUOTATION_ORIGINAL_TOTAL, QUOTATION_MUTATED_TOTAL, MUTATION_QUESTION
+    DOCUMENTS = data.get("documents") or []
+    QUESTIONS = data.get("questions") or []
+    DOC_SOURCE_ROOT = Path(data.get("doc_source_root") or "")
+    mutation = data.get("mutation") or {}
+    MUTATION_QUESTION = mutation.get("question", "")
+    QUOTATION_ORIGINAL_TOTAL = int(mutation.get("old_value") or 0)
+    QUOTATION_MUTATED_TOTAL = int(mutation.get("new_value") or 0)
+    return data
+
+
+DOCUMENTS: list[dict] = []
+
+QUOTATION_ORIGINAL_TOTAL = 0
+QUOTATION_MUTATED_TOTAL = 0
 
 # ── 问题集（全文进报告）─────────────────────────────────────────────────
 #
@@ -108,52 +86,9 @@ QUOTATION_MUTATED_TOTAL = 2018999
 # 金额、客户、统计、比较……），否则会被判成 full_read、缓存根本不参与，
 # 测不出收益。数字题含具体数值 → 必然 full_read。
 
-QUESTIONS = [
-    # ── summary 类（库级概览）：6 道，覆盖全部 6 个文件 ──
-    {"id": "s1", "kind": "summary", "covers": "all",
-     "query": "请介绍一下这批文件"},
-    {"id": "s2", "kind": "summary", "covers": "all",
-     "query": "概述一下这些文件"},
-    {"id": "s3", "kind": "summary", "covers": "all",
-     "query": "请总结这批文件"},
-    {"id": "s4", "kind": "summary", "covers": "all",
-     "query": "介绍一下这批文件讲了什么"},
-    {"id": "s5", "kind": "summary", "covers": "all",
-     "query": "请介绍一下这些文件的内容"},
-    {"id": "s6", "kind": "summary", "covers": "all",
-     "query": "概览这批文件"},
+QUESTIONS: list[dict] = []
 
-    # ── locate 类（库级定位，每道指向一个文件的独有内容）：6 道 ──
-    {"id": "l1", "kind": "locate", "covers": ["quotation"],
-     "query": "哪些文件里有打版相关的内容"},
-    {"id": "l2", "kind": "locate", "covers": ["ces_table"],
-     "query": "哪些文件里谈到了 CES 展会"},
-    {"id": "l3", "kind": "locate", "covers": ["crm_big"],
-     "query": "哪些文件里有首页和基本设置表"},
-    {"id": "l4", "kind": "locate", "covers": ["perf_stats"],
-     "query": "哪些文件里记录了季度合计"},
-    {"id": "l5", "kind": "locate", "covers": ["cold_email_docx"],
-     "query": "哪些文件里谈到了开发信"},
-    {"id": "l6", "kind": "locate", "covers": ["negotiation_docx"],
-     "query": "哪些文件里谈到了商务谈判"},
-
-    # ── 具体数字题：每文件 1 道，必然 full_read ──
-    {"id": "n1", "kind": "number", "covers": ["quotation"],
-     "query": "这份报价单的总计金额是多少元？", "expect_number": "39703"},
-    {"id": "n2", "kind": "number", "covers": ["ces_table"],
-     "query": "产品表里曝光 198070 的那行，点击率是多少？"},
-    {"id": "n3", "kind": "number", "covers": ["crm_big"],
-     "query": "客户跟进管理系统里的合计客户数是多少？"},
-    {"id": "n4", "kind": "number", "covers": ["perf_stats"],
-     "query": "个人业绩统计表里一月份的实际业绩是多少美元？"},
-    {"id": "n5", "kind": "number", "covers": ["cold_email_docx"],
-     "query": "文档里提到一个月可以发多少封开发信？"},
-    {"id": "n6", "kind": "number", "covers": ["negotiation_docx"],
-     "query": "文档里提到当场给了多少美元的现场打样和小批试单？"},
-]
-
-# 改数验证用的题目（问的正是被改的那个字面值）
-MUTATION_QUESTION = "这份报价单的报价单号是多少？"
+MUTATION_QUESTION = ""
 
 _NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
@@ -210,8 +145,8 @@ def _prepare_agent_home(home: Path) -> dict:
     `skills/`（**复制**，不是 symlink —— curator 会往里写）。
     不复制：sessions / memories / backups（避免任何历史与记忆混入）。
 
-    副本上改的开关与 trade 版一致（background_review / MOA / max_turns / MCP），
-    理由见 trade 版同名函数。
+    副本上改的开关与对照仓一致（background_review / MOA / max_turns / MCP），
+    理由见对照仓同名函数。
     """
     import shutil
 
@@ -509,9 +444,9 @@ async def _run_questions(agentbase_chat, chat_request_cls, questions, workspace_
 
 
 def _mutate_quotation(path: Path, old_value: int, new_value: int) -> bool:
-    """改掉报价单里的一个**字面数值单元格**（zip 层改 XML）。
+    """改掉表里的一个**字面数值单元格**（zip 层改 XML）。
 
-    选 `M6`（报价单号 2018123）：它是普通字面值，不是公式结果。
+    选 `M6`（单号 2018123）：它是普通字面值，不是公式结果。
     改它不会让文档自相矛盾 —— 若改合计（`M30` 是 `=SUM(M20:M29)`），
     只改缓存值会让明细与合计对不上，模型会先指出矛盾再复算，
     那验证的就不是「答案跟着内容变」而是「模型怎么处理矛盾」。
@@ -556,7 +491,7 @@ def _mutate_quotation(path: Path, old_value: int, new_value: int) -> bool:
 
 
 def _restore_quotation(original_path: Path, work_path: Path) -> bool:
-    """把报价单恢复成原文件（改数验证后必须还原）。"""
+    """把被改的文件恢复成原件（改数验证后必须还原）。"""
     shutil.copy2(original_path, work_path)
     return True
 
@@ -610,6 +545,7 @@ async def _amain(args) -> dict:
     print(f"[bench] 已隔离并把开关写进副本：{sandbox_notes}", flush=True)
 
     _bootstrap_runtime()
+    _load_manifest()
 
     from agentbase import database
     from agentbase import workspace as workspace_module
@@ -800,9 +736,13 @@ def main() -> int:
                         help="结果 JSON 输出路径")
     parser.add_argument("--home", default="",
                         help="断点续跑：复用上次的临时 AGENT_HOME 目录")
+    parser.add_argument("--docs-manifest", default="",
+                        help="仓外基准配置 JSON（文档清单 + 题库 + 改数常量）")
     parser.add_argument("--mutation-only", action="store_true",
                         help="只补跑改数验证（复用已有两轮结果）")
     args = parser.parse_args()
+    if args.docs_manifest and not os.environ.get("BENCH_DOCS_MANIFEST"):
+        os.environ["BENCH_DOCS_MANIFEST"] = args.docs_manifest
 
     result = asyncio.run(_amain(args))
     out_path = Path(args.out)
