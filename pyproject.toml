@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentbase"
-version = "0.6.8"
+version = "0.7.0"
 description = "AgentBase — 可复用的智能体框架（聊天服务 + skill 路由 + 记忆层 + Web 面板）。"
 readme = "README.md"
 # 注意：**不要**因为「部署必须用 Python 3.14」就把这里抬到 >=3.14。
