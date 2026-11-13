@@ -18,10 +18,16 @@
 
 from __future__ import annotations
 
+import os
+import re
 import threading
 from pathlib import Path
 
 _MESSAGE = "该文件本次已由缓存提取覆盖（仅用于概览/定位），请勿重复读取。"
+
+# Windows 风格绝对路径（C:\... 或 C:/...）：在 POSIX 宿主上 Path 会当成相对路径，
+# 但它对 agent 来说仍然是绝对路径，必须当作绝对路径处理。
+_WIN_ABS_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 # 只返回目录项/元数据、不返回文件内容的工具：路径命中也不拦（避免误伤）。
 _NON_CONTENT_TOOLS = frozenset({"list_dir"})
@@ -37,23 +43,56 @@ def _resolve(path: str) -> str:
         return ""
 
 
+def _norm(text) -> str:
+    """把路径字面量归一到可比较的形式（needle 与 haystack 必须同样处理）。
+
+    同一个文件在不同写法下不是同一串字符：
+    - Windows 下 repr() 会把反斜杠写成两个（'C:\\\\Users\\\\x'）
+    - 命令里可能混用正斜杠
+    - Windows 文件名大小写不敏感
+    所以比较前先把分隔符统一、重复分隔符折叠，Windows 下再统一小写。
+    """
+    out = str(text).replace("\\", "/")
+    while "//" in out:
+        out = out.replace("//", "/")
+    if os.name == "nt":
+        out = out.lower()
+    return out
+
+
+def _is_absolute(path: Path, text: str) -> bool:
+    """绝对路径判定。
+
+    反斜杠写法（Windows 风格）在 POSIX 宿主上 `is_absolute()` 为假，
+    但归一后仍是绝对路径，必须按绝对路径处理。
+    """
+    try:
+        if path.is_absolute():
+            return True
+    except OSError:
+        pass
+    return _norm(text).startswith("/")
+
+
 def _variants(raw) -> set[str]:
     """同一路径的几种字面写法（resolved / 原绝对路径 / macOS /private 形式）。"""
+    text = str(raw)
+    if os.name != "nt" and _WIN_ABS_RE.match(text):
+        # Windows 风格绝对路径：在 POSIX 宿主上 resolve 只会拼上 cwd，没有意义，
+        # 只保留原字面量（归一后即 c:/... 形式）。
+        return {_norm(text)}
     try:
-        path = Path(str(raw)).expanduser()
+        path = Path(text).expanduser()
         resolved = str(path.resolve())
     except (OSError, TypeError, ValueError):
         return set()
     values = {resolved}
-    try:
-        if path.is_absolute():
-            values.add(str(path))
-    except OSError:
-        pass
+    if _is_absolute(path, text):
+        values.add(str(path))
     # macOS 下 /var/... 与 /private/var/... 指向同一文件；命令里可能写任一种。
     if resolved.startswith("/private/"):
         values.add(resolved[len("/private"):])
-    return values
+    return {_norm(v) for v in values}
 
 
 def register(task_id: str, paths) -> None:
@@ -78,7 +117,7 @@ def is_skipped(task_id: str, path: str) -> bool:
     key = str(task_id or "").strip()
     if not key:
         return False
-    target = _resolve(path)
+    target = _norm(_resolve(path))
     if not target:
         return False
     with _lock:
@@ -101,8 +140,10 @@ def _mentions_skipped(args, needles: frozenset[str]) -> bool:
     if not needles:
         return False
     for text in _iter_strings(args):
+        norm_text = _norm(text)
         for needle in needles:
-            if needle and needle in text:
+            norm_needle = _norm(needle)
+            if norm_needle and norm_needle in norm_text:
                 return True
     return False
 

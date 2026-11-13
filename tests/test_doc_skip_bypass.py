@@ -88,3 +88,34 @@ def test_release_stops_blocking(target):
 
 def test_fail_open_on_unexpected_args():
     assert doc_skip.on_pre_tool_call("terminal", object(), task_id="task-1") is None
+
+
+# ── 路径写法归一（Windows CI 真实失败过的用例）────────────────────────────
+# Windows 下 repr() 会把反斜杠写成两个（'C:\\Users\\x'），needle 与 haystack
+# 若不归一就永远匹配不上；命令里混用正斜杠同理。
+
+_WIN_PATH = r"C:\Users\runneradmin\AppData\Local\Temp\repro.txt"
+
+
+def test_windows_path_blocked_even_when_repr_escapes_backslashes():
+    doc_skip.register("task-win", [_WIN_PATH])
+    code = f"print(open({_WIN_PATH!r}).read())"
+    assert _blocked("execute_code", {"code": code}, task_id="task-win")
+
+
+def test_windows_path_blocked_when_written_with_forward_slashes():
+    doc_skip.register("task-win2", [_WIN_PATH])
+    forward = _WIN_PATH.replace("\\", "/")
+    assert _blocked("terminal", {"command": f"cat {forward}"}, task_id="task-win2")
+
+
+def test_separator_spelling_variant_blocked(target):
+    """同一文件用反斜杠写（Windows 风格）也要拦。"""
+    doc_skip.register("task-sep", [str(target).replace("/", "\\")])
+    assert _blocked("terminal", {"command": f"cat {target}"}, task_id="task-sep")
+
+
+def test_unrelated_windows_path_not_blocked():
+    doc_skip.register("task-win3", [_WIN_PATH])
+    other = r"C:\Users\runneradmin\AppData\Local\Temp\other.txt"
+    assert not _blocked("terminal", {"command": f"cat {other}"}, task_id="task-win3")
