@@ -463,10 +463,10 @@ async def app(
             release_doc_skip(request_task_id)
 
     if not gate_required:
-        # 没有门禁的普通请求：回调证据同样可以预热。
-        _warm_after_read(None, evidence, cid)
+        # 没有门禁的普通请求：回调证据同样可以预热（有 task_id 时也读快照）。
+        _warm_after_read(request_task_id, evidence, cid)
 
-    if cache_block and not gate_required:
+    if cache_block and not gate_required and agent_ok:
         response += (
             f"\n\n（本次参考了 {len(cache_evidence)} 个文件的缓存摘要；"
             "具体事实请以本次读取为准。）"
@@ -709,8 +709,10 @@ async def chat_stream(
                         # 预热本次读到的文件，再释放读记录与跳过集合。
                         _release_doc_state()
                 elif not gate_required:
-                    # 没有文档计划的普通请求：回调证据同样可以预热。
-                    _warm_after_read(None, evidence, cid)
+                    # 没有文档计划的普通请求：回调证据同样可以预热（有 task_id 时也读快照）。
+                    # 走 _release_doc_state 以复用 warm_started 一次性守卫，
+                    # 避免与后面的兜底 finally 重复预热（11-09 N1）。
+                    _release_doc_state()
 
                 # 先保存对话，再发送响应 —— 确保前端能拿到 conversation_id 做评分
                 conv_id = None
